@@ -43,15 +43,18 @@ namespace soaap {
 
 			findSandboxedMethods(M);
 
-			findSharedGlobalVariables(M);
+			if (sandboxesExist()) {
 
-			findSharedFileDescriptors(M);
+				findSharedGlobalVariables(M);
 
-			findCallgates(M);
+				findSharedFileDescriptors(M);
 
-			instrumentValgrindClientRequests(M);
+				findCallgates(M);
 
-			generateCallgateValgrindWrappers(M);
+				instrumentValgrindClientRequests(M);
+
+				generateCallgateValgrindWrappers(M);
+			}
 
 			return modified;
 
@@ -104,6 +107,10 @@ namespace soaap {
 				}
 			}
 
+		}
+
+		bool sandboxesExist() {
+			return !persistentSandboxFuncs.empty() || !ephemeralSandboxFuncs.empty();
 		}
 
 		/*
@@ -413,15 +420,21 @@ namespace soaap {
 		void instrumentValgrindClientRequests(Module& M) {
 
 			Function* mainFn = M.getFunction("main");
-			Instruction* mainFnFirstInst = mainFn->getEntryBlock().getFirstNonPHI();
+			Instruction* mainFnFirstInst = NULL;
 
-			/*
-			 * 1. Create sandbox at the start of main
-			 */
-			if (!persistentSandboxFuncs.empty() || !ephemeralSandboxFuncs.empty()) {
-				Function* createSandboxFn = M.getFunction("soaap_create_sandbox");
-				CallInst* createSandboxCall = CallInst::Create(createSandboxFn, ArrayRef<Value*>());
-				createSandboxCall->insertBefore(mainFnFirstInst);
+			if (mainFn != NULL) {
+
+				mainFnFirstInst = mainFn->getEntryBlock().getFirstNonPHI();
+
+				/*
+				 * 1. Create sandbox at the start of main
+				 */
+				if (!persistentSandboxFuncs.empty() || !ephemeralSandboxFuncs.empty()) {
+					Function* createSandboxFn = M.getFunction("soaap_create_sandbox");
+					CallInst* createSandboxCall = CallInst::Create(createSandboxFn, ArrayRef<Value*>());
+					createSandboxCall->insertBefore(mainFnFirstInst);
+				}
+
 			}
 
 			/*
@@ -461,8 +474,10 @@ namespace soaap {
 			/*
 			 * 3. Insert client requests for shared vars
 			 */
-			for (pair<GlobalVariable*,int> varPermPair : varToPerms) {
-				instrumentSharedVarValgrindClientRequest(M, varPermPair.first, varPermPair.second, mainFnFirstInst);
+			if (mainFn != NULL) {
+				for (pair<GlobalVariable*,int> varPermPair : varToPerms) {
+					instrumentSharedVarValgrindClientRequest(M, varPermPair.first, varPermPair.second, mainFnFirstInst);
+				}
 			}
 		}
 

@@ -5,7 +5,7 @@
  *      It is located here so that everyone will find it.
  */
 
-#include "taintgrind.h"
+#include "valgrind/taintgrind.h"
 #include <stdio.h>
 
 // types of sandboxes
