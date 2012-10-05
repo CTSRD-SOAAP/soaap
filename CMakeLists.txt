@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(CMAKE_CXX_COMPILER "clang")
+set(CMAKE_CXX_COMPILER ${LLVM_BINARY_DIR}/bin/clang)
 set(CMAKE_CXX_FLAGS "-Wno-c++11-extensions")
 
 # incorporate CMake features provided by LLVM:
