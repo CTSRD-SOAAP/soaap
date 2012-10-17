@@ -10,24 +10,29 @@
 #include "llvm/Type.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/IRBuilder.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Instruction.h"
+#include "llvm/Analysis/CallGraph.h"
+#include "llvm/DebugInfo.h"
 
 #include "soaap.h"
 
+#include <iostream>
 #include <vector>
 
 using namespace llvm;
 using namespace std;
 namespace soaap {
 
-	struct Soaap : public ModulePass {
+	struct SoaapPass : public ModulePass {
 
 		static char ID;
 
 		bool modified;
+		bool dynamic;
 		map<GlobalVariable*,int> varToPerms;
 		map<Argument*,int> fdToPerms;
 		SmallVector<Function*,16> persistentSandboxFuncs;
@@ -35,25 +40,39 @@ namespace soaap {
 		SmallVector<Function*,32> sandboxFuncs;
 		SmallVector<Function*,16> callgates;
 
-		Soaap() : ModulePass(ID) {
+		SmallSet<Function*,16> sandboxReachableMethods;
+
+		SoaapPass() : ModulePass(ID) {
 			modified = false;
+			dynamic = true;
+		}
+
+		virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+			if (!dynamic) {
+				AU.setPreservesCFG();
+			}
+			AU.addRequired<CallGraph>();
 		}
 
 		virtual bool runOnModule(Module& M) {
 
 			findSandboxedMethods(M);
 
-			if (sandboxesExist()) {
+			findSharedGlobalVariables(M);
 
-				findSharedGlobalVariables(M);
+			findSharedFileDescriptors(M);
 
-				findSharedFileDescriptors(M);
+			findCallgates(M);
 
-				findCallgates(M);
-
+			if (dynamic) {
+				// use valgrind
 				instrumentValgrindClientRequests(M);
-
 				generateCallgateValgrindWrappers(M);
+			}
+			else {
+				// do the checks statically
+				calculateSandboxReachableMethods(M);
+				checkGlobalVariables(M);
 			}
 
 			return modified;
@@ -107,10 +126,6 @@ namespace soaap {
 				}
 			}
 
-		}
-
-		bool sandboxesExist() {
-			return !persistentSandboxFuncs.empty() || !ephemeralSandboxFuncs.empty();
 		}
 
 		/*
@@ -429,7 +444,7 @@ namespace soaap {
 				/*
 				 * 1. Create sandbox at the start of main
 				 */
-				if (!persistentSandboxFuncs.empty() || !ephemeralSandboxFuncs.empty()) {
+				if (!sandboxFuncs.empty()) {
 					Function* createSandboxFn = M.getFunction("soaap_create_sandbox");
 					CallInst* createSandboxCall = CallInst::Create(createSandboxFn, ArrayRef<Value*>());
 					createSandboxCall->insertBefore(mainFnFirstInst);
@@ -438,8 +453,9 @@ namespace soaap {
 			}
 
 			/*
-			 * 2. Wrap sandboxed method calls with enter and exit sandbox calls
-			 *    and also tell valgrind which file descriptors are shared
+			 * 2. Insert calls to enter and exit sandbox at the entry and exit
+			 *    of sandboxed methods respectively and also tell valgrind which
+			 *    file descriptors are shared at the entry.
 			 */
 			Function* enterPersistentSandboxFn = M.getFunction("soaap_enter_persistent_sandbox");
 			Function* exitPersistentSandboxFn = M.getFunction("soaap_exit_persistent_sandbox");
@@ -447,28 +463,50 @@ namespace soaap {
 			Function* exitEphemeralSandboxFn = M.getFunction("soaap_exit_ephemeral_sandbox");
 
 			for (Function* F : sandboxFuncs) {
-				bool persistent = std::find(persistentSandboxFuncs.begin(), persistentSandboxFuncs.end(), F);
-				for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-					User* user = u.getUse().getUser();
-					if (isa<CallInst>(user)) {
-						CallInst* caller = dyn_cast<CallInst>(user);
-						CallInst* enterSandboxCall = CallInst::Create(persistent ? enterPersistentSandboxFn : enterEphemeralSandboxFn, ArrayRef<Value*>());
-						CallInst* exitSandboxCall = CallInst::Create(persistent ? exitPersistentSandboxFn : exitEphemeralSandboxFn, ArrayRef<Value*>());
-						enterSandboxCall->insertBefore(caller);
-						exitSandboxCall->insertAfter(caller);
-
-						/*
-						 * Before each call to enter_sandbox, also instrument
-						 * calls to tell valgrind which file descriptors are
-						 * shared and what accesses are allowed on them
-						 */
-						for (Argument& A : F->getArgumentList()) {
-							if (fdToPerms.find(&A) != fdToPerms.end()) {
-								instrumentSharedFileValgrindClientRequest(M, caller, &A, fdToPerms[&A], enterSandboxCall);
-							}
-						}
+				bool persistent = find(persistentSandboxFuncs.begin(), persistentSandboxFuncs.end(), F) != persistentSandboxFuncs.end();
+				Instruction* firstInst = F->getEntryBlock().getFirstNonPHI();
+				CallInst* enterSandboxCall = CallInst::Create(persistent ? enterPersistentSandboxFn : enterEphemeralSandboxFn, ArrayRef<Value*>());
+				enterSandboxCall->insertBefore(firstInst);
+				/*
+				 * Before each call to enter_sandbox, also instrument
+				 * calls to tell valgrind which file descriptors are
+				 * shared and what accesses are allowed on them
+				 */
+				for (Argument& A : F->getArgumentList()) {
+					if (fdToPerms.find(&A) != fdToPerms.end()) {
+						instrumentSharedFileValgrindClientRequest(M, &A, fdToPerms[&A], enterSandboxCall);
 					}
 				}
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					TerminatorInst* termInst = BB.getTerminator();
+					if (isa<ReturnInst>(termInst)) {
+						//BB is an exit block, insert an exit_sandbox() call
+						CallInst* exitSandboxCall = CallInst::Create(persistent ? exitPersistentSandboxFn : exitEphemeralSandboxFn, ArrayRef<Value*>());
+						exitSandboxCall->insertBefore(termInst);
+					}
+				}
+//				for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+//					User* user = u.getUse().getUser();
+//					if (isa<CallInst>(user)) {
+//						CallInst* caller = dyn_cast<CallInst>(user);
+//						CallInst* enterSandboxCall = CallInst::Create(persistent ? enterPersistentSandboxFn : enterEphemeralSandboxFn, ArrayRef<Value*>());
+//						CallInst* exitSandboxCall = CallInst::Create(persistent ? exitPersistentSandboxFn : exitEphemeralSandboxFn, ArrayRef<Value*>());
+//						enterSandboxCall->insertBefore(caller);
+//						exitSandboxCall->insertAfter(caller);
+//
+//						/*
+//						 * Before each call to enter_sandbox, also instrument
+//						 * calls to tell valgrind which file descriptors are
+//						 * shared and what accesses are allowed on them
+//						 */
+//						for (Argument& A : F->getArgumentList()) {
+//							if (fdToPerms.find(&A) != fdToPerms.end()) {
+//								instrumentSharedFileValgrindClientRequest(M, caller, &A, fdToPerms[&A], enterSandboxCall);
+//							}
+//						}
+//					}
+//				}
+
 			}
 
 			/*
@@ -487,17 +525,17 @@ namespace soaap {
 		 * the file descriptor value of fdvar or filevar is shared with
 		 * sandboxes and the permissions as defined by perms are allowed on it.
 		 */
-		void instrumentSharedFileValgrindClientRequest(Module& M, CallInst* caller, Argument* arg, int perms, Instruction* predInst) {
-			Value* args[] = { caller->getArgOperand(arg->getArgNo()), ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), perms) };
+		void instrumentSharedFileValgrindClientRequest(Module& M, Argument* arg, int perms, Instruction* predInst) {
+			Value* args[] = { arg, ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), perms) };
 			if (arg->getType()->isPointerTy()) {
 				Function* fileSharedFn = M.getFunction("soaap_shared_file");
 				CallInst* fileSharedCall = CallInst::Create(fileSharedFn, args);
-				fileSharedCall->insertBefore(predInst);
+				fileSharedCall->insertAfter(predInst);
 			}
 			else {
 				Function* fdSharedFn = M.getFunction("soaap_shared_fd");
 				CallInst* fdSharedCall = CallInst::Create(fdSharedFn, args);
-				fdSharedCall->insertBefore(predInst);
+				fdSharedCall->insertAfter(predInst);
 			}
 		}
 
@@ -533,13 +571,87 @@ namespace soaap {
 			varSharedCall->insertBefore(predInst);
 		}
 
+		void calculateSandboxReachableMethods(Module& M) {
+			CallGraphNode* cgRoot = getAnalysis<CallGraph>().getRoot();
+			calculateSandboxReachableMethodsHelper(cgRoot, false, SmallVector<CallGraphNode*,16>());
+		}
+
+
+		void calculateSandboxReachableMethodsHelper(CallGraphNode* node, bool collect, SmallVector<CallGraphNode*,16> visited) {
+//			cout << "Visiting " << node->getFunction()->getName().str() << endl;
+			if (collect) {
+//				cout << "-- Collecting" << endl;
+				sandboxReachableMethods.insert(node->getFunction());
+			}
+			else if (find(visited.begin(), visited.end(), node) != visited.end()) {
+				// cycle detected
+				return;
+			}
+//			cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
+			visited.push_back(node);
+			for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
+				CallGraphNode* calleeNode = I->second;
+				if (Function* calleeFunc = calleeNode->getFunction()) {
+					bool sandboxFunc = find(sandboxFuncs.begin(), sandboxFuncs.end(), calleeFunc) != sandboxFuncs.end();
+					calculateSandboxReachableMethodsHelper(calleeNode, collect || sandboxFunc, visited);
+				}
+			}
+		}
+
+		void checkGlobalVariables(Module& M) {
+
+			// find all uses of global variables and check that they are allowed
+			// as per the annotations
+			for (Function* F : sandboxReachableMethods) {
+				cout << "Sandboxed function: " << F->getName().str() << endl;
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					for (Instruction& I : BB.getInstList()) {
+//						I.dump();
+						if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+							if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
+								if (!(varToPerms[gv] & VAR_READ_MASK)) {
+									cout << " *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to" << endl;
+									if (MDNode *N = I.getMetadata("dbg")) {
+									   DILocation loc(N);
+									   cout << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << endl;
+									}
+									cout << endl;
+								}
+
+							}
+						}
+						else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+							if (GlobalVariable* gv = dyn_cast<GlobalVariable>(store->getPointerOperand())) {
+								// check that the programmer has annotated that this
+								// variable can be written to
+								if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
+									cout << " *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to" << endl;
+									if (MDNode *N = I.getMetadata("dbg")) {
+									   DILocation loc(N);
+									   cout << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << endl;
+									}
+									cout << endl;
+								}
+							}
+						}
+//						I.dump();
+//						cout << "Num operands: " << I.getNumOperands() << endl;
+//						for (int i=0; i<I.getNumOperands(); i++) {
+//							cout << "Operand " << i << ": " << endl;
+//							I.getOperand(i)->dump();
+//						}
+					}
+				}
+			}
+
+		}
 	};
 
-	char Soaap::ID = 0;
-	static RegisterPass<Soaap> X("soaap", "Soaap Pass", false, false);
+	char SoaapPass::ID = 0;
+	static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
 
 	void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  		PM.add(new Soaap);
+  		PM.add(new SoaapPass);
   	}
 
 	RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);

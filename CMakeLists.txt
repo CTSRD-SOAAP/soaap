@@ -15,4 +15,4 @@ include_directories( ${LLVM_BINARY_DIR}/include )
 include_directories( ${VALGRIND_BINARY_DIR}/include )
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/include )
 
-add_llvm_loadable_module(soaap Soaap.cpp)
+add_llvm_loadable_module(soaap SoaapPass.cpp soaap_valgrind.c)
