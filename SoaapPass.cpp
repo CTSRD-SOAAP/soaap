@@ -446,6 +446,11 @@ namespace soaap {
 				 */
 				if (!sandboxFuncs.empty()) {
 					Function* createSandboxFn = M.getFunction("soaap_create_sandbox");
+					if (!createSandboxFn) {
+						errs() << "Could not find create sandbox function symbol in LLVM module.";
+						return;
+					}
+
 					CallInst* createSandboxCall = CallInst::Create(createSandboxFn, ArrayRef<Value*>());
 					createSandboxCall->insertBefore(mainFnFirstInst);
 				}
@@ -461,6 +466,11 @@ namespace soaap {
 			Function* exitPersistentSandboxFn = M.getFunction("soaap_exit_persistent_sandbox");
 			Function* enterEphemeralSandboxFn = M.getFunction("soaap_enter_ephemeral_sandbox");
 			Function* exitEphemeralSandboxFn = M.getFunction("soaap_exit_ephemeral_sandbox");
+
+			if ( !enterPersistentSandboxFn || !exitPersistentSandboxFn || !enterEphemeralSandboxFn || !exitEphemeralSandboxFn ) {
+				errs() << "Could not find soaap function symbol in LLVM module.";
+				return;
+			}
 
 			for (Function* F : sandboxFuncs) {
 				bool persistent = find(persistentSandboxFuncs.begin(), persistentSandboxFuncs.end(), F) != persistentSandboxFuncs.end();
