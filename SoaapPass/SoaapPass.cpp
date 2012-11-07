@@ -73,6 +73,7 @@ namespace soaap {
 				// do the checks statically
 				calculateSandboxReachableMethods(M);
 				checkGlobalVariables(M);
+				checkFileDescriptors(M);
 			}
 
 			return modified;
@@ -645,6 +646,90 @@ namespace soaap {
 			}
 
 		}
+
+		void checkFileDescriptors(Module& M) {
+
+			/* Plan:
+			 * Find all operations on files (e.g. read, write, lseek etc) within
+			 * sandbox-reachable methods, obtain the file descriptor argument
+			 * and trace it back to the corresponding parameter. Check the param
+			 * for a file descriptor annotation. If it doesn't exist then trace
+			 * back further until we have reached the outermost sandbox method.
+			 */
+
+			for (Function* F : sandboxReachableMethods) {
+				cout << "Sandboxed function: " << F->getName().str() << endl;
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					for (Instruction& I : BB.getInstList()) {
+						if (CallInst* ci = dyn_cast<CallInst>(&I))  {
+							ci->dump();
+							Function* callee = ci->getCalledFunction();
+							if (callee->getName().equals("read")) {
+								Value* ifd = ci->getOperand(0);
+								// ifd is either a constant, local var, global
+								// var or function parameter
+								if (!checkFileDescriptorInTheContextOf(ifd, 0, F, VAR_READ_MASK)) {
+									cout << "Not allowed to read file descriptor" << endl;
+								}
+							}
+							callee->dump();
+						}
+					}
+				}
+			}
+		}
+
+		bool checkFileDescriptorInTheContextOf(Value* fd, int idx, Function* fn, int perm) {
+			if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), fn) == sandboxReachableMethods.end()) {
+				// fn is not sandbox-reachable
+				cout << fn->getName().str() << " does not execute in a sandbox!" << endl;
+				return false;
+			}
+
+			// perform necessary checks depending on whether fd is a local var,
+			// global var, constant or function param
+			if (isa<Argument>(fd)) {
+				Argument* arg = dyn_cast<Argument>(fd);
+				// function param
+				cout << "Function param!!" << endl;
+				// check if ifd has an annotation
+				if (fdToPerms.find(arg) == fdToPerms.end()) {
+					// no annotation, so we look higher up
+					// find all callers of F and perform this
+					// check recursively, until we reach a
+					// method that is not sandbox-reachable
+					bool allPathsAuthorise = true;
+					for (User::use_iterator i = fn->use_begin(), e = fn->use_end(); e!=i; i++) {
+						if (CallInst *ci = dyn_cast<CallInst>(*i)) {
+							Function* caller = ci->getParent()->getParent();
+							cout << "called by " << caller->getName().str() << endl;
+							Value* callerArg = ci->getArgOperand(idx);
+							allPathsAuthorise &= checkFileDescriptorInTheContextOf(callerArg, idx, caller, perm);
+						}
+					}
+					return allPathsAuthorise;
+				}
+				else if (!(fdToPerms[arg] & perm)) {
+					/*
+					 * Annotation exists for this fd, but no read access has
+					 * been granted.
+					 *
+					 * Note: if the same fd is annotated differently in different
+					 * methods of the same call chain then the question arises of
+					 * whether we all annotations should be considered or just
+					 * the one closest to the posix call (e.g. read or write)?
+					 * I think probably the closest one as the programmer may
+					 * want to specify that a method have only a subset of the
+					 */
+
+				}
+			}
+			else {
+				// either a global var, local var or constant
+			}
+			return false;
+		}
+
 	};
 
 	char SoaapPass::ID = 0;
