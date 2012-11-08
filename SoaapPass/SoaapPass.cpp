@@ -19,6 +19,7 @@
 #include "llvm/DebugInfo.h"
 
 #include "soaap.h"
+#include "soaap_perf.h"
 
 #include <iostream>
 #include <vector>
@@ -33,6 +34,8 @@ namespace soaap {
 
 		bool modified;
 		bool dynamic;
+		bool emPerf;
+
 		map<GlobalVariable*,int> varToPerms;
 		map<Argument*,int> fdToPerms;
 		SmallVector<Function*,16> persistentSandboxFuncs;
@@ -44,7 +47,8 @@ namespace soaap {
 
 		SoaapPass() : ModulePass(ID) {
 			modified = false;
-			dynamic = true;
+			dynamic = false;
+			emPerf = true;
 		}
 
 		virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -64,16 +68,20 @@ namespace soaap {
 
 			findCallgates(M);
 
-			if (dynamic) {
+			if (dynamic && !emPerf) {
 				// use valgrind
 				instrumentValgrindClientRequests(M);
 				generateCallgateValgrindWrappers(M);
 			}
-			else {
+			else if (!dynamic && !emPerf)
+			{
 				// do the checks statically
 				calculateSandboxReachableMethods(M);
 				checkGlobalVariables(M);
 				checkFileDescriptors(M);
+			}
+			else if (!dynamic && emPerf) {
+				instrumentPerfEmul(M);
 			}
 
 			return modified;
@@ -447,6 +455,11 @@ namespace soaap {
 				 */
 				if (!sandboxFuncs.empty()) {
 					Function* createSandboxFn = M.getFunction("soaap_create_sandbox");
+					if (!createSandboxFn) {
+						errs() << "Could not find create sandbox function symbol in LLVM module.";
+						return;
+					}
+
 					CallInst* createSandboxCall = CallInst::Create(createSandboxFn, ArrayRef<Value*>());
 					createSandboxCall->insertBefore(mainFnFirstInst);
 				}
@@ -462,6 +475,11 @@ namespace soaap {
 			Function* exitPersistentSandboxFn = M.getFunction("soaap_exit_persistent_sandbox");
 			Function* enterEphemeralSandboxFn = M.getFunction("soaap_enter_ephemeral_sandbox");
 			Function* exitEphemeralSandboxFn = M.getFunction("soaap_exit_ephemeral_sandbox");
+
+			if ( !enterPersistentSandboxFn || !exitPersistentSandboxFn || !enterEphemeralSandboxFn || !exitEphemeralSandboxFn ) {
+				errs() << "Could not find soaap function symbol in LLVM module.";
+				return;
+			}
 
 			for (Function* F : sandboxFuncs) {
 				bool persistent = find(persistentSandboxFuncs.begin(), persistentSandboxFuncs.end(), F) != persistentSandboxFuncs.end();
@@ -730,6 +748,145 @@ namespace soaap {
 			return false;
 		}
 
+		void instrumentPerfEmul(Module& M) {
+			/*
+			 * Get the var.annotation intrinsic function from the current
+			 * module.
+			 */
+			Function* FVA = M.getFunction("llvm.var.annotation");
+
+			/* Insert instrumentation for emulating performance */
+			Function* enterPersistentSandboxFn
+				= M.getFunction("soaap_perf_enter_persistent_sbox");
+			Function* enterEphemeralSandboxFn
+				= M.getFunction("soaap_perf_enter_ephemeral_sbox");
+
+
+			/*
+			 * Iterate through sandboxed functions and apply the necessary
+			 * instrumentation to emulate performance overhead.
+			 */
+			for (Function* F : sandboxFuncs) {
+				CallInst* enterSandboxCall = NULL;
+				Argument* data_in = NULL;
+				Argument* data_out = NULL;
+				bool persistent = find(persistentSandboxFuncs.begin(),
+					persistentSandboxFuncs.end(), F) !=
+					persistentSandboxFuncs.end();
+				Instruction* firstInst = F->getEntryBlock().getFirstNonPHI();
+
+				/*
+				 * Check if there are annotated parameters to sandboxed
+				 * functions.
+				 */
+				if (FVA) {
+					for (User::use_iterator u = FVA->use_begin(),
+						e = FVA->use_end(); e!=u; u++) {
+						User* user = u.getUse().getUser();
+						if (isa<IntrinsicInst>(user)) {
+							IntrinsicInst* annotateCall
+								= dyn_cast<IntrinsicInst>(user);
+
+							/* Get the enclosing function */
+							Function* enclosingFunc
+								= annotateCall->getParent()->getParent();
+
+							/*
+							 * If the enclosing function does not match the
+							 * current sandboxed function in the outer loop
+							 * continue.
+							 */
+							if (enclosingFunc != F)
+								continue;
+
+							/* Get the annotated variable as LLVM::Value */
+							Value* annotatedVar
+								= dyn_cast<Value>
+								(annotateCall->getOperand(0)->stripPointerCasts());
+
+							/* Get the annotation as string */
+							GlobalVariable* annotationStrVar
+								= dyn_cast<GlobalVariable>
+								(annotateCall->getOperand(1)->stripPointerCasts());
+							ConstantDataArray* annotationStrValArray
+								= dyn_cast<ConstantDataArray>
+								(annotationStrVar->getInitializer());
+							StringRef annotationStrValCString
+								= annotationStrValArray->getAsCString();
+
+							/*
+							 * Record which param was annotated. We have to do
+							 * this because llvm creates a local var for the
+							 * param by appending .addrN to the end of the param
+							 * name and associates the annotation with the newly
+							 * created local var i.e. see ifd and ifd.addr1
+							 * above
+							 */
+							Argument* annotatedArg = NULL;
+
+							for (Argument &arg : enclosingFunc->getArgumentList()) {
+								if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
+									annotatedArg = &arg;
+								}
+							}
+
+							if (annotatedArg != NULL) {
+								if (annotationStrValCString == DATA_IN) {
+									cout << "__DATA_IN annotated parameter"
+										" found!\n";
+									if (data_in) {
+										errs() << "[XXX] Only one parameter "
+											"should be annotated with __data_in"
+											" attribute";
+										return;
+									}
+									/* Get the data_in param */
+									data_in = annotatedArg;
+								}
+								else if (annotationStrValCString == DATA_OUT) {
+									cout << "__DATA_OUT annotated parameter"
+										" found!\n";
+									if (data_out) {
+										errs() << "[XXX] Only one parameter "
+											"should be annotated with __data_out"
+											" attribute";
+										return;
+									}
+									/* Get the data_in param */
+									data_out = annotatedArg;
+								}
+							}
+						}
+					}
+				}
+
+				/*
+				 * Pick the appropriate function to inject based on the
+				 * annotations and perform the actual instrumentation in the
+				 * sandboxed function prologue.
+				 * NOTE: At the moment, we do not handle __data_out.
+				 */
+				if (data_in) {
+					enterPersistentSandboxFn
+						= M.getFunction("soaap_perf_enter_datain_persistent_sbox");
+					enterEphemeralSandboxFn
+						= M.getFunction("soaap_perf_enter_datain_ephemeral_sbox");
+					enterSandboxCall = CallInst::Create(persistent
+						? enterPersistentSandboxFn : enterEphemeralSandboxFn,
+						ArrayRef<Value*>(data_in));
+					enterSandboxCall->insertBefore(firstInst);
+				} else {
+					enterPersistentSandboxFn
+						= M.getFunction("soaap_perf_enter_persistent_sbox");
+					enterEphemeralSandboxFn
+						= M.getFunction("soaap_perf_enter_ephemeral_sbox");
+					enterSandboxCall = CallInst::Create(persistent
+						? enterPersistentSandboxFn : enterEphemeralSandboxFn,
+						ArrayRef<Value*>());
+					enterSandboxCall->insertBefore(firstInst);
+				}
+			}
+		}
 	};
 
 	char SoaapPass::ID = 0;
