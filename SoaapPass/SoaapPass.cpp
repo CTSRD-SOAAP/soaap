@@ -863,6 +863,13 @@ namespace soaap {
 					}
 				}
 
+				// Get terminator instruction of the current basic block.
+				BasicBlock& entryBlock = F->getEntryBlock();
+				TerminatorInst *lastInst = entryBlock.getTerminator();
+				if(!lastInst) {
+					errs() << "[XXX] Badly formed basic block!";
+					return;
+				}
 
 				/*
 				 * Get type of "struct timespec" from the current module.
@@ -871,53 +878,10 @@ namespace soaap {
 				 * inconvenient to use it here.
 				 *
 				 */
-				BasicBlock& entryBlock = F->getEntryBlock();
-				TerminatorInst *lastInst = entryBlock.getTerminator();
-				if(!lastInst) {
-					errs() << "[XXX] Badly formed basic block!";
-					return;
-				}
-
-				//IRBuilder<> builder(&entryBlock);
-				//AllocaInst* timespecAllocInst = builder.CreateAlloca(timespecTy,
-					//0, Twine("soaap_tic"));
 				StructType* timespecTy = M.getTypeByName("struct.timespec");
 				AllocaInst *tic = new AllocaInst(dyn_cast<Type>(timespecTy),
 					Twine("soaap_tic"), firstInst);
 				Value *argTic = dyn_cast <Value> (tic);
-
-				/*
-				 * Add a struct timespec decl, which is needed for measurements.
-				 * First get the target architecture.
-				 */
-				StringRef targetArch
-					= StringRef(M.getTargetTriple()).split('-').first;
-				cout << "Target architecture is " << targetArch.str() << ".\n";
-				SmallVector<Type*,2> structTy_timespec_fields;
-
-				/*
-				 * "struct timespec" elements are arch-dependent{time_t, long}.
-				 * There might be a way to get type definitions in LLVM IR, but
-				 * the following should also work(given no changes in
-				 * sys/timespec.h).
-				 *
-				 * For future reference, another way to implement this is to
-				 * declare "struct timespec unused" and getTypeByName in the
-				 * current module.
-				 */
-				if(targetArch == "i386") {
-					structTy_timespec_fields.push_back(Type::getInt32Ty(C));
-					structTy_timespec_fields.push_back(Type::getInt32Ty(C));
-				} else if (targetArch == "x86_64") {
-					structTy_timespec_fields.push_back(Type::getInt64Ty(C));
-					structTy_timespec_fields.push_back(Type::getInt64Ty(C));
-				}
-
-				/* We need get() for sized structs. */
-				//StructType *timespec = StructType::get(C,
-					//structTy_timespec_fields);
-				//AllocaInst *tic = new AllocaInst(dyn_cast<Type>(timespec),
-					//Twine("soaap_tic"), firstInst);
 
 				/*
 				 * Instrument block prologue to measure the sandboxing overhead.
