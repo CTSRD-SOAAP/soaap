@@ -15,6 +15,7 @@
 #include "llvm/IRBuilder.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Instruction.h"
+#include "llvm/Instructions.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/DebugInfo.h"
 
@@ -749,6 +750,9 @@ namespace soaap {
 		}
 
 		void instrumentPerfEmul(Module& M) {
+			/* Get LLVM context */
+			LLVMContext &C = M.getContext();
+
 			/*
 			 * Get the var.annotation intrinsic function from the current
 			 * module.
@@ -767,7 +771,6 @@ namespace soaap {
 			 * instrumentation to emulate performance overhead.
 			 */
 			for (Function* F : sandboxFuncs) {
-				CallInst* enterSandboxCall = NULL;
 				Argument* data_in = NULL;
 				Argument* data_out = NULL;
 				bool persistent = find(persistentSandboxFuncs.begin(),
@@ -860,12 +863,78 @@ namespace soaap {
 					}
 				}
 
+
+				/*
+				 * Get type of "struct timespec" from the current module.
+				 * Unfortunately, IRbuilder's CreateAlloca() method does not
+				 * support inserting *before* a basic block and thus it is
+				 * inconvenient to use it here.
+				 *
+				 */
+				BasicBlock& entryBlock = F->getEntryBlock();
+				TerminatorInst *lastInst = entryBlock.getTerminator();
+				if(!lastInst) {
+					errs() << "[XXX] Badly formed basic block!";
+					return;
+				}
+
+				//IRBuilder<> builder(&entryBlock);
+				//AllocaInst* timespecAllocInst = builder.CreateAlloca(timespecTy,
+					//0, Twine("soaap_tic"));
+				StructType* timespecTy = M.getTypeByName("struct.timespec");
+				AllocaInst *tic = new AllocaInst(dyn_cast<Type>(timespecTy),
+					Twine("soaap_tic"), firstInst);
+				Value *argTic = dyn_cast <Value> (tic);
+
+				/*
+				 * Add a struct timespec decl, which is needed for measurements.
+				 * First get the target architecture.
+				 */
+				StringRef targetArch
+					= StringRef(M.getTargetTriple()).split('-').first;
+				cout << "Target architecture is " << targetArch.str() << ".\n";
+				SmallVector<Type*,2> structTy_timespec_fields;
+
+				/*
+				 * "struct timespec" elements are arch-dependent{time_t, long}.
+				 * There might be a way to get type definitions in LLVM IR, but
+				 * the following should also work(given no changes in
+				 * sys/timespec.h).
+				 *
+				 * For future reference, another way to implement this is to
+				 * declare "struct timespec unused" and getTypeByName in the
+				 * current module.
+				 */
+				if(targetArch == "i386") {
+					structTy_timespec_fields.push_back(Type::getInt32Ty(C));
+					structTy_timespec_fields.push_back(Type::getInt32Ty(C));
+				} else if (targetArch == "x86_64") {
+					structTy_timespec_fields.push_back(Type::getInt64Ty(C));
+					structTy_timespec_fields.push_back(Type::getInt64Ty(C));
+				}
+
+				/* We need get() for sized structs. */
+				//StructType *timespec = StructType::get(C,
+					//structTy_timespec_fields);
+				//AllocaInst *tic = new AllocaInst(dyn_cast<Type>(timespec),
+					//Twine("soaap_tic"), firstInst);
+
+				/*
+				 * Instrument block prologue to measure the sandboxing overhead.
+				 */
+				Function *perfOverheadFn
+					= M.getFunction("soaap_perf_tic");
+				CallInst *perfOverheadCall
+					= CallInst::Create(perfOverheadFn, ArrayRef<Value*>(argTic));
+				perfOverheadCall->insertBefore(firstInst);
+
 				/*
 				 * Pick the appropriate function to inject based on the
 				 * annotations and perform the actual instrumentation in the
 				 * sandboxed function prologue.
 				 * NOTE: At the moment, we do not handle __data_out.
 				 */
+				CallInst* enterSandboxCall = NULL;
 				if (data_in) {
 					enterPersistentSandboxFn
 						= M.getFunction("soaap_perf_enter_datain_persistent_sbox");
@@ -885,6 +954,24 @@ namespace soaap {
 						ArrayRef<Value*>());
 					enterSandboxCall->insertBefore(firstInst);
 				}
+
+				/*
+				 * Inject instrumentation after the sandboxing emulation in
+				 * order to measure the absolute overhead.
+				 */
+				perfOverheadFn = M.getFunction("soaap_perf_overhead_toc");
+				perfOverheadCall = CallInst::Create(perfOverheadFn,
+					ArrayRef<Value*>(argTic));
+				perfOverheadCall->insertBefore(firstInst);
+
+				/*
+				 * Inject instrumentation after the sandboxing emulation in
+				 * order to measure the total execution time.
+				 */
+				perfOverheadFn = M.getFunction("soaap_perf_total_toc");
+				perfOverheadCall = CallInst::Create(perfOverheadFn,
+					ArrayRef<Value*>(argTic));
+				perfOverheadCall->insertBefore(lastInst);
 			}
 		}
 	};
