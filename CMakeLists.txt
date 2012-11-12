@@ -19,5 +19,6 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/include )
 
 add_llvm_loadable_module(libcep CallEdgeProfiling/CallEdgeProfiling.cpp CallEdgeProfiling/CallEdgeProfiling.c)
 add_library(cep_rt SHARED CallEdgeProfiling/CallEdgeProfiling.c)
-add_llvm_loadable_module(libsoaap SoaapPass/SoaapPass.cpp SoaapPass/soaap_valgrind.c)
+add_llvm_loadable_module(libsoaap SoaapPass/SoaapPass.cpp)
+add_library(soaap_rt SHARED SoaapPass/soaap_valgrind.c)
 add_llvm_loadable_module(libdotdyncg DOTDynCG/DOTDynCG.cpp)

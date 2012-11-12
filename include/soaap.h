@@ -37,39 +37,38 @@
 #define __indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
 #define __fd_write __attribute__((annotate(FD_WRITE)))
 #define __callgates(fns...) \
-	void __declare_callgates() { \
+	static void __declare_callgates() { \
 		__declare_callgates_helper(0, fns); \
 	}
 
-extern void __declare_callgates_helper(int unused, ...);
+void __declare_callgates_helper(int unused, ...);
 
-extern void soaap_create_sandbox();
-extern void soaap_enter_persistent_sandbox();
-extern void soaap_exit_persistent_sandbox();
-extern void soaap_enter_ephemeral_sandbox();
-extern void soaap_exit_ephemeral_sandbox();
+void soaap_create_sandbox();
+void soaap_enter_persistent_sandbox();
+void soaap_exit_persistent_sandbox();
+void soaap_enter_ephemeral_sandbox();
+void soaap_exit_ephemeral_sandbox();
 
-extern void soaap_shared_var(char* var_name, int perms);
-extern void soaap_shared_fd(int fd, int perms);
-extern void soaap_shared_file(FILE* file, int perms);
+void soaap_shared_var(char* var_name, int perms);
+void soaap_shared_fd(int fd, int perms);
+void soaap_shared_file(FILE* file, int perms);
 
-extern void soaap_enter_callgate();
-extern void soaap_exit_callgate();
-extern void soaap_printf(char* str);
+void soaap_exit_callgate();
+void soaap_printf(char* str);
 
-extern int printf(const char*, ...);
+int printf(const char*, ...);
 
 // functions for valgrind-function-wrapping
 // (see http://valgrind.org/docs/manual/manual-core-adv.html#manual-core-adv.wrapping)
-extern void valgrind_get_orig_fn(OrigFn* fn);
+void valgrind_get_orig_fn(OrigFn* fn);
 
-extern void call_unwrapped_function_w_v(OrigFn* fn, unsigned long* retval);
-extern void call_unwrapped_function_w_w(OrigFn* fn, unsigned long* retval, unsigned long arg1);
-extern void call_unwrapped_function_w_ww(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2);
-extern void call_unwrapped_function_w_www(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3);
-extern void call_unwrapped_function_w_wwww(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4);
-extern void call_unwrapped_function_w_5w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
-extern void call_unwrapped_function_w_6w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6);
-extern void call_unwrapped_function_w_7w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6, unsigned long arg7);
+void call_unwrapped_function_w_v(OrigFn* fn, unsigned long* retval);
+void call_unwrapped_function_w_w(OrigFn* fn, unsigned long* retval, unsigned long arg1);
+void call_unwrapped_function_w_ww(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2);
+void call_unwrapped_function_w_www(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3);
+void call_unwrapped_function_w_wwww(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4);
+void call_unwrapped_function_w_5w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
+void call_unwrapped_function_w_6w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6);
+void call_unwrapped_function_w_7w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6, unsigned long arg7);
 
 #endif /* SOAAP_H */
