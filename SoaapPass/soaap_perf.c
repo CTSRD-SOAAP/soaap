@@ -178,3 +178,55 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
 		wait(NULL);
 	}
 }
+
+void
+soaap_perf_tic(struct timespec *start_ts)
+{
+
+	DPRINTF("SANDBOXED FUNCTION PROLOGUE -- TIC!");
+	clock_gettime(CLOCK_MONOTONIC, start_ts);
+}
+
+void
+soaap_perf_overhead_toc(struct timespec *sbox_ts)
+{
+	DPRINTF("SANDBOXED FUNCTION OVERHEAD -- SBOX_TOC!");
+	clock_gettime(CLOCK_MONOTONIC, sbox_ts);
+}
+
+void
+soaap_perf_total_toc(struct timespec *start_ts, struct timespec *sbox_ts)
+{
+	struct timespec end_ts, diff_ts;
+	unsigned long ns_total, ns_sbox;
+
+	ns_total = ns_sbox = 0;
+
+	/* Get the final timestamp */
+	clock_gettime(CLOCK_MONOTONIC, &end_ts);
+
+	/* Calculate total execution time of sandboxed function */
+	diff_ts.tv_sec = end_ts.tv_sec - start_ts->tv_sec;
+	diff_ts.tv_nsec = end_ts.tv_nsec - start_ts->tv_nsec;
+
+	ns_total = diff_ts.tv_nsec;
+	while(diff_ts.tv_sec) {
+		diff_ts.tv_sec--;
+		ns_total += 1000000000;
+	}
+
+	/* Calculate the time spent in sandboxing mechanisms */
+	diff_ts.tv_sec = sbox_ts->tv_sec - start_ts->tv_sec;
+	diff_ts.tv_nsec = sbox_ts->tv_nsec - start_ts->tv_nsec;
+
+	ns_sbox = diff_ts.tv_nsec;
+	while(diff_ts.tv_sec) {
+		diff_ts.tv_sec--;
+		ns_sbox += 1000000000;
+	}
+
+	DPRINTF("[Total Execution Time]: %lu ns, [Sandboxing Time] %lu ns, "
+		"[Sandboxing Overhead] %f%%", ns_total, ns_sbox,
+		((double)ns_sbox/(double)ns_total)*100);
+
+}
