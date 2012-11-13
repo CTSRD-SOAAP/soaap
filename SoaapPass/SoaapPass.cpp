@@ -38,7 +38,7 @@ namespace soaap {
     bool emPerf;
 
     map<GlobalVariable*,int> varToPerms;
-    map<Argument*,int> fdToPerms;
+    map<Value*,int> fdToPerms;
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
     SmallVector<Function*,32> sandboxFuncs;
@@ -48,7 +48,7 @@ namespace soaap {
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
-      dynamic = true;
+      dynamic = false;
       emPerf = false;
     }
 
@@ -86,7 +86,6 @@ namespace soaap {
       }
 
       return modified;
-
     }
 
     /*
@@ -250,6 +249,93 @@ namespace soaap {
                 fdToPerms[annotatedArg] |= FD_WRITE_MASK;
               }
             }
+          }
+        }
+      }
+
+    }
+
+    /*
+     * Propagate the file descriptor annotations using def-use chains.
+     * Iterate through each def-use chain starting from each annotated arg.
+     * We use a worklist based algorithm.
+     *
+     * Start with the annotated parameters, and then iteratively propagate to 
+     * all defs that use them. If the user is a call instruction, then propagate
+     * to the corresponding parameter Argument object.
+     *
+     * Carry on this iteration until the worklist is empty.
+     */
+    void checkFileDescriptors(Module& M) {
+
+      // initialise
+      std::list<Value*> worklist;
+      for (map<Value*,int>::iterator I=fdToPerms.begin(), E=fdToPerms.end(); I != E; I++) {
+        worklist.push_back(I->first);
+      }
+
+      // perform propagation until fixed point is reached
+      while (!worklist.empty()) {
+        Value* V = worklist.front();
+        worklist.pop_front();
+        DEBUG(outs() << "** Popped " << V->getName() << "\n");
+        for (Value::use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
+          Value* V2;
+          DEBUG(VI->dump());
+          if (StoreInst* SI = dyn_cast<StoreInst>(*VI)) {
+            if (V == SI->getPointerOperand()) // to avoid infinite looping
+              continue;
+            V2 = SI->getPointerOperand();
+          }
+          else if (CallInst* CI = dyn_cast<CallInst>(*VI)) {
+            // propagate to the callee function's argument
+            // find the index of the use position
+            int idx;
+            if (Function* callee = CI->getCalledFunction()) {
+              for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
+                if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
+                // now find the parameter object. Annoyingly there is no way
+                // of getting the Argument at a particular index, so...
+                  for (Function::arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++) {
+                  //outs() << "arg no: " << AI->getArgNo() << "\n";
+                    if (AI->getArgNo() == idx) {
+                      //outs() << "Pushing arg " << AI->getName() << "\n";
+                      worklist.push_back(AI);
+                      fdToPerms[AI] = fdToPerms[V]; // propagate permissions
+                    }
+                  }
+                }
+              }
+            }
+            continue;
+          }
+          else {
+            V2 = *VI;
+          }
+          worklist.push_back(V2);
+          fdToPerms[V2] = fdToPerms[V]; // propagate permissions
+          //outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n";
+        }
+      }
+
+      // find all calls to read 
+      validateDescriptorAccesses(M, "read", FD_READ_MASK);
+      validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
+    }
+
+    /*
+     * Validate that the necessary permissions propagate to the syscall
+     */
+    void validateDescriptorAccesses(Module& M, string syscall, int required_perm) {
+      if (Function* syscallFn = M.getFunction(syscall)) {
+        for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end(); I != E; I++) {
+          CallInst* call = cast<CallInst>(*I);
+          Value* fd = call->getArgOperand(0);
+          if (fdToPerms[fd] & required_perm) {
+            outs() << syscall << ": OK!\n";
+          }
+          else {
+            outs() << syscall << ": Insufficient privileges\n";
           }
         }
       }
@@ -683,89 +769,6 @@ namespace soaap {
         }
       }
 
-    }
-
-    void checkFileDescriptors(Module& M) {
-
-      /* Plan:
-       * Find all operations on files (e.g. read, write, lseek etc) within
-       * sandbox-reachable methods, obtain the file descriptor argument
-       * and trace it back to the corresponding parameter. Check the param
-       * for a file descriptor annotation. If it doesn't exist then trace
-       * back further until we have reached the outermost sandbox method.
-       */
-
-      for (Function* F : sandboxReachableMethods) {
-        cout << "Sandboxed function: " << F->getName().str() << endl;
-        for (BasicBlock& BB : F->getBasicBlockList()) {
-          for (Instruction& I : BB.getInstList()) {
-            if (CallInst* ci = dyn_cast<CallInst>(&I))  {
-              //ci->dump();
-              Function* callee = ci->getCalledFunction();
-              if (callee->getName().equals("read")) {
-                Value* ifd = ci->getOperand(0);
-                // ifd is either a constant, local var, global
-                // var or function parameter
-                if (!checkFileDescriptorInTheContextOf(ifd, 0, F, VAR_READ_MASK)) {
-                  cout << "Not allowed to read file descriptor" << endl;
-                }
-              }
-              //callee->dump();
-            }
-          }
-        }
-      }
-    }
-
-    bool checkFileDescriptorInTheContextOf(Value* fd, int idx, Function* fn, int perm) {
-      if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), fn) == sandboxReachableMethods.end()) {
-        // fn is not sandbox-reachable
-        cout << fn->getName().str() << " does not execute in a sandbox!" << endl;
-        return false;
-      }
-
-      // perform necessary checks depending on whether fd is a local var,
-      // global var, constant or function param
-      if (isa<Argument>(fd)) {
-        Argument* arg = dyn_cast<Argument>(fd);
-        // function param
-        cout << "Function param!!" << endl;
-        // check if ifd has an annotation
-        if (fdToPerms.find(arg) == fdToPerms.end()) {
-          // no annotation, so we look higher up
-          // find all callers of F and perform this
-          // check recursively, until we reach a
-          // method that is not sandbox-reachable
-          bool allPathsAuthorise = true;
-          for (User::use_iterator i = fn->use_begin(), e = fn->use_end(); e!=i; i++) {
-            if (CallInst *ci = dyn_cast<CallInst>(*i)) {
-              Function* caller = ci->getParent()->getParent();
-              cout << "called by " << caller->getName().str() << endl;
-              Value* callerArg = ci->getArgOperand(idx);
-              allPathsAuthorise &= checkFileDescriptorInTheContextOf(callerArg, idx, caller, perm);
-            }
-          }
-          return allPathsAuthorise;
-        }
-        else if (!(fdToPerms[arg] & perm)) {
-          /*
-           * Annotation exists for this fd, but no read access has
-           * been granted.
-           *
-           * Note: if the same fd is annotated differently in different
-           * methods of the same call chain then the question arises of
-           * whether we all annotations should be considered or just
-           * the one closest to the posix call (e.g. read or write)?
-           * I think probably the closest one as the programmer may
-           * want to specify that a method have only a subset of the
-           */
-
-        }
-      }
-      else {
-        // either a global var, local var or constant
-      }
-      return false;
     }
 
     void instrumentPerfEmul(Module& M) {
