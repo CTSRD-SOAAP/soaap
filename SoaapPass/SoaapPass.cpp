@@ -700,7 +700,7 @@ namespace soaap {
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
             if (CallInst* ci = dyn_cast<CallInst>(&I))  {
-              ci->dump();
+              //ci->dump();
               Function* callee = ci->getCalledFunction();
               if (callee->getName().equals("read")) {
                 Value* ifd = ci->getOperand(0);
@@ -710,7 +710,7 @@ namespace soaap {
                   cout << "Not allowed to read file descriptor" << endl;
                 }
               }
-              callee->dump();
+              //callee->dump();
             }
           }
         }

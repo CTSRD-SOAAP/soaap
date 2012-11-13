@@ -84,7 +84,7 @@ namespace soaap {
               // this information so we just construct a fake one
               if (DynamicInstruction == NULL) {
                   DEBUG(dbgs() << "Initialising DynamicInstruciton\n");
-                  DynamicInstruction = constructDummyCallInst(M, F2);
+                  DynamicInstruction = constructDummyCallInst(M);
               }
               F1Node->addCalledFunction(CallSite(DynamicInstruction), F2Node);
               //F1Node->removeAnyCallEdgeTo(CG.getCallsExternalNode());
@@ -97,12 +97,24 @@ namespace soaap {
         return true;
     }
 
-    CallInst* constructDummyCallInst(Module& M, Function* Callee) {
+    /* 
+     * Create a dummy call instruction:
+     *
+     * void DummyFunc() {
+     *   call @DummyFunc();
+     *   return;
+     * }
+     * 
+     * We have to create a new function because the call instruction must
+     * be used (i.e. appear in a BasicBlocK), otherwise it won't work.
+     */
+
+    CallInst* constructDummyCallInst(Module& M) {
       std::vector<Type*> FuncParamTypes;
       FunctionType* FuncType = FunctionType::get(Type::getVoidTy(M.getContext()), FuncParamTypes, false);
       Function* DummyFunc = Function::Create(FuncType, GlobalValue::ExternalLinkage, "DummyFunc", &M);
       BasicBlock* BB = BasicBlock::Create(M.getContext(), "", DummyFunc, 0);
-      CallInst* CI = CallInst::Create(Callee, "", BB);
+      CallInst* CI = CallInst::Create(DummyFunc, "", BB);
       ReturnInst::Create(M.getContext(), BB);
       return CI;
     }
