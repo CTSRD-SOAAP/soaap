@@ -879,17 +879,20 @@ namespace soaap {
 				 *
 				 */
 				StructType* timespecTy = M.getTypeByName("struct.timespec");
-				AllocaInst *tic = new AllocaInst(dyn_cast<Type>(timespecTy),
-					Twine("soaap_tic"), firstInst);
-				Value *argTic = dyn_cast <Value> (tic);
+				AllocaInst *start_ts = new AllocaInst(dyn_cast<Type>(timespecTy),
+					Twine("soaap_start_ts"), firstInst);
+				AllocaInst *sbox_ts = new AllocaInst(dyn_cast<Type>(timespecTy),
+					Twine("soaap_sbox_ts"), firstInst);
+				Value *argStartTs = dyn_cast <Value> (start_ts);
+				Value *argSboxTs = dyn_cast <Value> (sbox_ts);
 
 				/*
 				 * Instrument block prologue to measure the sandboxing overhead.
 				 */
 				Function *perfOverheadFn
 					= M.getFunction("soaap_perf_tic");
-				CallInst *perfOverheadCall
-					= CallInst::Create(perfOverheadFn, ArrayRef<Value*>(argTic));
+				CallInst *perfOverheadCall = CallInst::Create(perfOverheadFn,
+					ArrayRef<Value*>(argStartTs));
 				perfOverheadCall->insertBefore(firstInst);
 
 				/*
@@ -922,19 +925,23 @@ namespace soaap {
 				/*
 				 * Inject instrumentation after the sandboxing emulation in
 				 * order to measure the absolute overhead.
+				 * Before that create the vector with the arguments needed.
 				 */
 				perfOverheadFn = M.getFunction("soaap_perf_overhead_toc");
 				perfOverheadCall = CallInst::Create(perfOverheadFn,
-					ArrayRef<Value*>(argTic));
+					ArrayRef<Value*>(argSboxTs));
 				perfOverheadCall->insertBefore(firstInst);
 
 				/*
 				 * Inject instrumentation after the sandboxing emulation in
 				 * order to measure the total execution time.
 				 */
+				SmallVector<Value*, 2> soaap_perf_overhead_args;
+				soaap_perf_overhead_args.push_back(argStartTs);
+				soaap_perf_overhead_args.push_back(argSboxTs);
 				perfOverheadFn = M.getFunction("soaap_perf_total_toc");
 				perfOverheadCall = CallInst::Create(perfOverheadFn,
-					ArrayRef<Value*>(argTic));
+					ArrayRef<Value*>(soaap_perf_overhead_args));
 				perfOverheadCall->insertBefore(lastInst);
 			}
 		}
