@@ -22,6 +22,7 @@
 #include "llvm/Analysis/ProfileInfoLoader.h"
 #include "llvm/Constants.h"
 #include "Transforms/Instrumentation/ProfilingUtils.h"
+#include "llvm/Support/InstIterator.h"
 
 #include <iostream>
 #include <vector>
@@ -55,7 +56,7 @@ namespace soaap {
 
       outs() << "Adding counters array\n";
 
-      int numFuncs = 0;
+      unsigned numFuncs = 0;
       for (Function& F : M.getFunctionList()) {
         if (F.isDeclaration()) continue; // skip functions that are ony declared
         numFuncs++;
@@ -63,11 +64,21 @@ namespace soaap {
 
       outs() << "Number of functions: " << numFuncs << "\n";
 
+      unsigned numCalls = 0;
+      for (Function& F : M.getFunctionList()) {
+        for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+          if (isa<CallInst>(*I))
+            numCalls++;
+        }
+      }
+
+      outs() << "Number of calls: " << numCalls << "\n";
+
       // create 2D array of dimension [numFuncs x numFuncs], to store
       // call edge counts. We don't know which edges will be traversed
       // and so therefore need to create the full NxN array
 
-      Type *ATy = ArrayType::get(Type::getInt32Ty(M.getContext()), (numFuncs+1)*(numFuncs+1));
+      Type *ATy = ArrayType::get(Type::getInt32Ty(M.getContext()), (numFuncs+1)*(numCalls+1));
 
       GlobalVariable *Counters =
           new GlobalVariable(M, ATy, false, GlobalValue::InternalLinkage,
@@ -82,6 +93,7 @@ namespace soaap {
 
       outs() << "Instrumenting all function entries\n";
 
+      unsigned callId = 1;
       unsigned funcId = 1;
       for (Function& F : M.getFunctionList()) {
         if (F.isDeclaration()) continue; // skip functions that are ony declared
@@ -95,7 +107,8 @@ namespace soaap {
         for (BasicBlock& BB : F.getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
             if (isa<CallInst>(&I)) {
-              new StoreInst(FuncIdVal, callerVar, &I);
+              Constant* CallIdVal = ConstantInt::get(callerVarType, callId++);
+              new StoreInst(CallIdVal, callerVar, &I);
               Instruction* resetCallerFunc = new StoreInst(ConstantInt::get(Type::getInt32Ty(M.getContext()), 0), callerVar);
               resetCallerFunc->insertAfter(&I);
             }
@@ -121,7 +134,7 @@ namespace soaap {
                             "CallerCalleeElemIdx", InsertPos);
 
         // Create the GEP instruction
-          std::vector<Value*> Indices(2);
+        std::vector<Value*> Indices(2);
         Indices[0] = Constant::getNullValue(Type::getInt32Ty(M.getContext()));
         Indices[1] = CallerCalleeElemIdx;
         GetElementPtrInst* GEP = GetElementPtrInst::Create(Counters, Indices, "", InsertPos);

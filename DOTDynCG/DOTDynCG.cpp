@@ -23,6 +23,7 @@
 #include "llvm/Analysis/ProfileInfoLoader.h"
 #include "llvm/Analysis/ProfileInfo.h"
 #include "llvm/Support/GraphWriter.h"
+#include "llvm/Support/InstIterator.h"
 
 #include <iostream>
 #include <vector>
@@ -65,29 +66,29 @@ namespace soaap {
       }
       DEBUG(dbgs() << "\n\n");
 
+      // addCalledFunction requires the call-site. we don't have
+      // this information so we just construct a fake one
+      DEBUG(dbgs() << "Initialising DynamicInstruction\n");
+      DynamicInstruction = constructDummyCallInst(M);
+
       // dynamic call graph edges
       DEBUG(dbgs() << "Dynamic callgraph edges:\n");
       for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
           if (F1->isDeclaration()) continue;
           //outs() << "F1: " << F1->getName() << "\n";
-          for (Module::iterator F2 = M.begin(), E2 = M.end(); F2 != E2; ++F2) {
-            //outs() << "    F2: " << F2->getName() << "\n";
-            if (F2->isDeclaration()) continue;
-            ProfileInfo::CallEdge edge = std::make_pair(F1, F2);
-            int count = (int)PI.getCallEdgeCount(edge);
-            if (count > 0) {
-              DEBUG(dbgs() << "Inserting edge for " << F1->getName() << " -> " << F2->getName() << "\n");
-              // add edge to CallGraph if not already present:
-              CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
-              CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
-              // addCalledFunction requires the call-site. we don't have
-              // this information so we just construct a fake one
-              if (DynamicInstruction == NULL) {
-                  DEBUG(dbgs() << "Initialising DynamicInstruciton\n");
-                  DynamicInstruction = constructDummyCallInst(M);
+          for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
+            if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+              for (Module::iterator F2 = M.begin(), E2 = M.end(); F2 != E2; ++F2) {
+                //outs() << "    F2: " << F2->getName() << "\n";
+                if (F2->isDeclaration()) continue;
+                if (PI.isDynamicCallEdge(C, F2)) {
+                  // add dynamic edge to CallGraph
+                  DEBUG(dbgs() << "Inserting dynamic edge for " << F1->getName() << " -> " << F2->getName() << "\n");
+                  CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
+                  CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
+                  F1Node->addCalledFunction(CallSite(DynamicInstruction), F2Node);
+                }
               }
-              F1Node->addCalledFunction(CallSite(DynamicInstruction), F2Node);
-              //F1Node->removeAnyCallEdgeTo(CG.getCallsExternalNode());
             }
           }
         }
@@ -98,15 +99,24 @@ namespace soaap {
     }
 
     /* 
-     * Create a dummy call instruction:
+     * Create a dummy call instruction for using to identify a dynamic call edge 
      *
      * void DummyFunc() {
      *   call @DummyFunc();
      *   return;
      * }
      * 
-     * We have to create a new function because the call instruction must
-     * be used (i.e. appear in a BasicBlocK), otherwise it won't work.
+     * We have to create a new function to contain this dummy call because otherwise
+     * the function's destructor will fail as a use of the function will still exist,
+     * namely this dummy call we are creating. Function destructors are called by the
+     * Module destructor. Before the Module does this though, it ensures that Users 
+     * drop their references thus allowing Functions to be deleted. Otherwise, LLVM
+     * will spit out the following error:
+     *
+     *   While deleting: void ()* %DummyFunc
+     *    Use still stuck around after Def is destroyed:  call void @DummyFunc()
+     *    Assertion failed: (use_empty() && "Uses remain when a value is destroyed!"), 
+     *    function ~Value, file lib/VMCore/Value.cpp, line 75.
      */
 
     CallInst* constructDummyCallInst(Module& M) {

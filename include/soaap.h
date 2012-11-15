@@ -6,7 +6,7 @@
  */
 
 #ifndef SOAAP_H
-#define SOAAP_H 1
+#define SOAAP_H
 
 #include "valgrind/taintgrind.h"
 #include <stdio.h>
