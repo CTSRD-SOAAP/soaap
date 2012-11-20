@@ -18,12 +18,15 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Analysis/ProfileInfo.h"
+#include "llvm/Support/InstIterator.h"
 
 #include "soaap.h"
 #include "soaap_perf.h"
 
 #include <iostream>
 #include <vector>
+#include <climits>
 
 using namespace llvm;
 using namespace std;
@@ -32,19 +35,21 @@ namespace soaap {
   struct SoaapPass : public ModulePass {
 
     static char ID;
+    static const int UNINITIALISED = INT_MAX;
 
     bool modified;
     bool dynamic;
     bool emPerf;
 
     map<GlobalVariable*,int> varToPerms;
-    map<Value*,int> fdToPerms;
+    map<const Value*,int> fdToPerms;
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
     SmallVector<Function*,32> sandboxFuncs;
     SmallVector<Function*,16> callgates;
 
     SmallSet<Function*,16> sandboxReachableMethods;
+    SmallSet<Function*,16> syscallReachableMethods;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -57,35 +62,133 @@ namespace soaap {
         AU.setPreservesCFG();
       }
       AU.addRequired<CallGraph>();
+      AU.addRequired<ProfileInfo>();
     }
 
     virtual bool runOnModule(Module& M) {
 
+      outs() << "Running " << getPassName() << "\n";
+
+      outs() << "Finding sandbox methods\n";
       findSandboxedMethods(M);
 
+      outs() << "Finding global variables\n";
       findSharedGlobalVariables(M);
 
+      outs() << "Finding file descriptors\n";
       findSharedFileDescriptors(M);
 
+      outs() << "Finding callgates\n";
       findCallgates(M);
 
-      if (dynamic && !emPerf) {
-        // use valgrind
-        instrumentValgrindClientRequests(M);
-        generateCallgateValgrindWrappers(M);
-      }
-      else if (!dynamic && !emPerf)
-      {
-        // do the checks statically
-        calculateSandboxReachableMethods(M);
-        checkGlobalVariables(M);
-        checkFileDescriptors(M);
-      }
-      else if (!dynamic && emPerf) {
-        instrumentPerfEmul(M);
+      if (!sandboxFuncs.empty()) {
+        if (dynamic && !emPerf) {
+          // use valgrind
+          instrumentValgrindClientRequests(M);
+          generateCallgateValgrindWrappers(M);
+        }
+        else if (!dynamic && !emPerf) {
+          // do the checks statically
+          outs() << "Adding dynamic call edges to callgraph (if available)\n";
+          loadDynamicCallEdges(M);
+
+          outs() << "Calculating sandbox-reachable methods\n";
+          calculateSandboxReachableMethods(M);
+          outs() << "  " << sandboxReachableMethods.size() << " methods found\n";
+
+          outs() << "Checking global variable accesses\n";
+          checkGlobalVariables(M);
+
+          outs() << "Checking file descriptor accesses\n";
+          outs() << "  Calculating syscall-reachable methods\n";
+          calculateSyscallReachableMethods(M);
+          outs() << "  Found " << syscallReachableMethods.size() << " methods\n";
+          checkFileDescriptors(M);
+        }
+        else if (!dynamic && emPerf) {
+          instrumentPerfEmul(M);
+        }
       }
 
       return modified;
+    }
+
+    void loadDynamicCallEdges(Module& M) {
+      ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
+      if (PI) {
+        CallGraph& CG = getAnalysis<CallGraph>();
+        for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
+          if (F1->isDeclaration()) continue;
+          for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
+            if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+              for (Module::iterator F2 = M.begin(), E2 = M.end(); F2 != E2; ++F2) {
+                if (F2->isDeclaration()) continue;
+                if (PI->isDynamicCallEdge(C, F2)) {
+                  CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
+                  CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
+                  F1Node->addCalledFunction(CallSite(C), F2Node);
+                  DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    /*
+     * Find functions from which system calls are reachable.
+     * This is so that when propagating capabilities through the callgraph
+     * we can prune methods from which system calls are not reachable.
+     * 
+     * pre: calculateSandboxReachableMethods() has been run
+     */
+    void calculateSyscallReachableMethods(Module& M) {
+      list<Function*> worklist;
+      if (Function* read = M.getFunction("read"))
+        worklist.push_back(read);
+      if (Function* write = M.getFunction("write"))
+        worklist.push_back(write);
+
+      ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
+
+      /* process functions in worklist backwards from uses all the way back
+         to outermost sandbox functions */
+      while (!worklist.empty()) {
+        Function* F = worklist.front();
+        worklist.pop_front();
+
+        // prune out functions not reachable from a sandbox
+        if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), F) == sandboxReachableMethods.end())
+          continue;
+
+        // prune out functions already visited
+        if (find(syscallReachableMethods.begin(), syscallReachableMethods.end(), F) != syscallReachableMethods.end()) 
+          continue;
+
+        if (!F->isDeclaration()) { // ignore the syscall itself (it will be declaration-only)
+          DEBUG(dbgs() << "Adding " << F->getName() << " to syscallReachableMethods\n");
+          syscallReachableMethods.insert(F);
+        }
+
+        // Find all functions that call F and add them to the worklist.
+        // Normally we could do this with the use_iterator, however there
+        // may be dynamic edges too.
+        for (Value::use_iterator I = F->use_begin(), E = F->use_end(); I != E; I++) {
+          if (CallInst* C = dyn_cast<CallInst>(*I)) {
+            Function* Caller = C->getParent()->getParent();
+            if (find(worklist.begin(), worklist.end(), Caller) == worklist.end())
+              worklist.push_back(Caller);
+          }
+        }
+        if (PI) {
+          for (const CallInst* C : PI->getDynamicCallers(F)) {
+            Function* Caller = const_cast<Function*>(C->getParent()->getParent());
+            if (find(worklist.begin(), worklist.end(), Caller) == worklist.end())
+              worklist.push_back(Caller);
+          }
+        }
+      }
     }
 
     /*
@@ -269,52 +372,59 @@ namespace soaap {
     void checkFileDescriptors(Module& M) {
 
       // initialise
-      std::list<Value*> worklist;
-      for (map<Value*,int>::iterator I=fdToPerms.begin(), E=fdToPerms.end(); I != E; I++) {
+      std::list<const Value*> worklist;
+      for (map<const Value*,int>::iterator I=fdToPerms.begin(), E=fdToPerms.end(); I != E; I++) {
         worklist.push_back(I->first);
       }
 
       // perform propagation until fixed point is reached
+      CallGraph& CG = getAnalysis<CallGraph>();
       while (!worklist.empty()) {
-        Value* V = worklist.front();
+        const Value* V = worklist.front();
         worklist.pop_front();
-        DEBUG(outs() << "** Popped " << V->getName() << "\n");
-        for (Value::use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
-          Value* V2;
+        DEBUG(outs() << "*** Popped " << V->getName() << "\n");
+        for (Value::const_use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
+          const Value* V2;
           DEBUG(VI->dump());
-          if (StoreInst* SI = dyn_cast<StoreInst>(*VI)) {
+          if (const StoreInst* SI = dyn_cast<const StoreInst>(*VI)) {
             if (V == SI->getPointerOperand()) // to avoid infinite looping
               continue;
             V2 = SI->getPointerOperand();
           }
-          else if (CallInst* CI = dyn_cast<CallInst>(*VI)) {
+          else if (const CallInst* CI = dyn_cast<const CallInst>(*VI)) {
             // propagate to the callee function's argument
             // find the index of the use position
-            int idx;
-            if (Function* callee = CI->getCalledFunction()) {
-              for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
-                if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
-                // now find the parameter object. Annoyingly there is no way
-                // of getting the Argument at a particular index, so...
-                  for (Function::arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++) {
-                  //outs() << "arg no: " << AI->getArgNo() << "\n";
-                    if (AI->getArgNo() == idx) {
-                      //outs() << "Pushing arg " << AI->getName() << "\n";
-                      worklist.push_back(AI);
-                      fdToPerms[AI] = fdToPerms[V]; // propagate permissions
-                    }
-                  }
+            //outs() << "CALL: ";
+            //CI->dump();
+            //Function* Caller = const_cast<Function*>(CI->getParent()->getParent());
+            //outs() << "CALLER: " << Caller->getName() << "\n";
+            if (Function* Callee = CI->getCalledFunction()) {
+              propagateToCallee(CI, Callee, worklist, V);
+            }
+            else if (const Value* FP = CI->getCalledValue())  { // dynamic callees
+              ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
+              if (PI) {
+                DEBUG(dbgs() << "dynamic call edge propagation\n");
+                DEBUG(CI->dump());
+                std::list<const Function*> Callees = PI->getDynamicCallees(CI);
+                DEBUG(dbgs() << "number of dynamic callees: " << Callees.size() << "\n");
+                for (const Function* Callee : Callees) {
+                  DEBUG(dbgs() << "  " << Callee->getName() << "\n");
+                  propagateToCallee(CI, Callee, worklist, V);
                 }
               }
-            }
+            } 
             continue;
           }
           else {
             V2 = *VI;
           }
-          worklist.push_back(V2);
-          fdToPerms[V2] = fdToPerms[V]; // propagate permissions
-          //outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n";
+          if (propagateFDPerms(V,V2)) { // propagate permissions
+            if (find(worklist.begin(), worklist.end(), V2) == worklist.end()) {
+              worklist.push_back(V2);
+            }
+          }
+          DEBUG(outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
         }
       }
 
@@ -323,19 +433,66 @@ namespace soaap {
       validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
     }
 
+    bool propagateFDPerms(const Value* From, const Value* To) {
+      if (fdToPerms.find(To) == fdToPerms.end()) {
+        fdToPerms[To] = fdToPerms[From];
+        return true; // return true to allow perms to propagate through
+                     // regardless of whether the value was non-zero
+      }
+      else {
+        int old = fdToPerms[To];
+        fdToPerms[To] &= fdToPerms[From];
+        return fdToPerms[To] != old;
+      }
+    }
+
+    void propagateToCallee(const CallInst* CI, const Function* Callee, std::list<const Value*>& worklist, const Value* V) {
+      // propagate only to methods from which sys call are reachable from 
+      if (find(syscallReachableMethods.begin(), syscallReachableMethods.end(), Callee) != syscallReachableMethods.end()) {
+        DEBUG(outs() << "Propagating to callee " << Callee->getName() << "\n");
+        int idx;
+        for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
+          if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
+          // now find the parameter object. Annoyingly there is no way
+          // of getting the Argument at a particular index, so...
+            for (Function::const_arg_iterator AI=Callee->arg_begin(), AE=Callee->arg_end(); AI!=AE; AI++) {
+            //outs() << "arg no: " << AI->getArgNo() << "\n";
+              if (AI->getArgNo() == idx) {
+                //outs() << "Pushing arg " << AI->getName() << "\n";
+                if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
+                  worklist.push_back(AI);
+                  propagateFDPerms(V,AI); // propagate permissions
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     /*
      * Validate that the necessary permissions propagate to the syscall
      */
     void validateDescriptorAccesses(Module& M, string syscall, int required_perm) {
       if (Function* syscallFn = M.getFunction(syscall)) {
         for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end(); I != E; I++) {
-          CallInst* call = cast<CallInst>(*I);
-          Value* fd = call->getArgOperand(0);
+          CallInst* Call = cast<CallInst>(*I);
+          Function* Caller = cast<Function>(Call->getParent()->getParent());
+          outs() << Caller->getName();
+          if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
+            DILocation Loc(N);                      // DILocation is in DebugInfo.h
+            unsigned Line = Loc.getLineNumber();
+            StringRef File = Loc.getFilename();
+            StringRef Dir = Loc.getDirectory();
+            outs() << ":" << File << ":" << Line;
+          }
+
+          Value* fd = Call->getArgOperand(0);
           if (fdToPerms[fd] & required_perm) {
-            outs() << syscall << ": OK!\n";
+            outs() << " - necessary privileges for " << syscall << "\n";
           }
           else {
-            outs() << syscall << ": Insufficient privileges\n";
+            outs() << " - insufficient privileges for " << syscall << "\n";
           }
         }
       }
@@ -697,28 +854,33 @@ namespace soaap {
     }
 
     void calculateSandboxReachableMethods(Module& M) {
-      CallGraphNode* cgRoot = getAnalysis<CallGraph>().getRoot();
-      calculateSandboxReachableMethodsHelper(cgRoot, false, SmallVector<CallGraphNode*,16>());
+      CallGraph& CG = getAnalysis<CallGraph>();
+      for (Function* F : sandboxFuncs) {
+        CallGraphNode* Node = CG.getOrInsertFunction(F);
+        calculateSandboxReachableMethodsHelper(Node);
+      }
     }
 
 
-    void calculateSandboxReachableMethodsHelper(CallGraphNode* node, bool collect, SmallVector<CallGraphNode*,16> visited) {
-//      cout << "Visiting " << node->getFunction()->getName().str() << endl;
-      if (collect) {
-//        cout << "-- Collecting" << endl;
-        sandboxReachableMethods.insert(node->getFunction());
-      }
-      else if (find(visited.begin(), visited.end(), node) != visited.end()) {
+    void calculateSandboxReachableMethodsHelper(CallGraphNode* node) {
+
+      Function* F = node->getFunction();
+
+      DEBUG(dbgs() << "Visiting " << F->getName() << "\n");
+       
+      if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), F) != sandboxReachableMethods.end()) {
         // cycle detected
         return;
       }
+
+      sandboxReachableMethods.insert(F);
+
 //      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
-      visited.push_back(node);
       for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
+        Value* V = I->first;
         CallGraphNode* calleeNode = I->second;
         if (Function* calleeFunc = calleeNode->getFunction()) {
-          bool sandboxFunc = find(sandboxFuncs.begin(), sandboxFuncs.end(), calleeFunc) != sandboxFuncs.end();
-          calculateSandboxReachableMethodsHelper(calleeNode, collect || sandboxFunc, visited);
+          calculateSandboxReachableMethodsHelper(calleeNode);
         }
       }
     }
@@ -728,7 +890,7 @@ namespace soaap {
       // find all uses of global variables and check that they are allowed
       // as per the annotations
       for (Function* F : sandboxReachableMethods) {
-        cout << "Sandboxed function: " << F->getName().str() << endl;
+        DEBUG(dbgs() << "Sandbox-reachable function: " << F->getName().str() << "\n");
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
 //            I.dump();
