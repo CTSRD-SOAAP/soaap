@@ -943,6 +943,38 @@ namespace soaap {
 				perfOverheadCall = CallInst::Create(perfOverheadFn,
 					ArrayRef<Value*>(soaap_perf_overhead_args));
 				perfOverheadCall->insertBefore(lastInst);
+
+			}
+
+			/*
+			 * If there are running persistent sandboxed terminate them before
+			 * exiting the program.  This is achieved when calling specific
+			 * library function with -1 as argument.
+			 */
+			if (persistentSandboxFuncs.size()) {
+				Function* mainFn = M.getFunction("main");
+				BasicBlock& mainEntryBlock = mainFn->getEntryBlock();
+				TerminatorInst *mainLastInst
+					= mainEntryBlock.getTerminator();
+				if(!mainLastInst) {
+					errs() << "[XXX] Badly formed basic block!";
+					return;
+				}
+
+				ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
+					-1, true);
+
+				Function* terminatePersistentSandbox
+					= M.getFunction("soaap_perf_enter_datain_persistent_sbox");
+				CallInst* terminateCall
+					= CallInst::Create(terminatePersistentSandbox,
+						ArrayRef<Value*>(dyn_cast<Value>(arg)));
+				//CallInst* terminateCall
+				//= CallInst::Create(terminatePersistentSandbox,
+				//ArrayRef<Value*>());
+				terminateCall->setTailCall();
+				terminateCall->insertBefore(mainLastInst);
+
 			}
 		}
 	};
