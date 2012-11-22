@@ -6,6 +6,7 @@
  */
 
 #include "Profiling.h"
+#include <stdlib.h>
 
 static unsigned* ArrayStart;
 static unsigned NumElements;
