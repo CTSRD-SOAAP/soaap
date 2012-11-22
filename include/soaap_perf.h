@@ -6,6 +6,7 @@
 
 #define __data_in __attribute__((annotate(DATA_IN)))
 #define __data_out  __attribute__((annotate(DATA_OUT)))
+#define __sandbox_overhead(A) __attribute((annotate("perf_overhead_(" #A ")")))
 
 void soaap_perf_enter_persistent_sbox(void);
 void soaap_perf_enter_ephemeral_sbox(void);

@@ -2,6 +2,7 @@
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Regex.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/PassManager.h"
 #include "llvm/ADT/ilist.h"
@@ -39,6 +40,7 @@ namespace soaap {
 
 		map<GlobalVariable*,int> varToPerms;
 		map<Argument*,int> fdToPerms;
+		map<Function*, int> sandboxFuncToOverhead;
 		SmallVector<Function*,16> persistentSandboxFuncs;
 		SmallVector<Function*,16> ephemeralSandboxFuncs;
 		SmallVector<Function*,32> sandboxFuncs;
@@ -94,6 +96,9 @@ namespace soaap {
 		 * ephemeral sandboxes
 		 */
 		void findSandboxedMethods(Module& M) {
+			Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)",
+				true);
+			SmallVector<StringRef, 4> matches;
 
 			/*
 			 * Function annotations are added to the global intrinsic array
@@ -131,6 +136,14 @@ namespace soaap {
 						else if (annotationStrArrayCString == SANDBOX_EPHEMERAL) {
 							ephemeralSandboxFuncs.push_back(annotatedFunc);
 							sandboxFuncs.push_back(annotatedFunc);
+						}
+						else if (sboxPerfRegex->match(annotationStrArrayCString,
+							&matches)) {
+							int overhead;
+							cout << "Threshold set to " << matches[1].str() <<
+								"%\n";
+							matches[1].getAsInteger(0, overhead);
+							sandboxFuncToOverhead[annotatedFunc] = overhead;
 						}
 					}
 				}
@@ -765,7 +778,6 @@ namespace soaap {
 			Function* enterEphemeralSandboxFn
 				= M.getFunction("soaap_perf_enter_ephemeral_sbox");
 
-
 			/*
 			 * Iterate through sandboxed functions and apply the necessary
 			 * instrumentation to emulate performance overhead.
@@ -871,6 +883,12 @@ namespace soaap {
 					return;
 				}
 
+				int perfThreshold = 0;
+				if (sandboxFuncToOverhead.find(F) !=
+					sandboxFuncToOverhead.end()) {
+					perfThreshold = sandboxFuncToOverhead[F];
+				}
+
 				/*
 				 * Get type of "struct timespec" from the current module.
 				 * Unfortunately, IRbuilder's CreateAlloca() method does not
@@ -932,6 +950,11 @@ namespace soaap {
 					ArrayRef<Value*>(argSboxTs));
 				perfOverheadCall->insertBefore(firstInst);
 
+				ConstantInt *argPerfThreshold = NULL;
+				if (perfThreshold)
+					argPerfThreshold = ConstantInt::get(Type::getInt32Ty(C),
+						perfThreshold, false);
+
 				/*
 				 * Inject instrumentation after the sandboxing emulation in
 				 * order to measure the total execution time.
@@ -939,19 +962,25 @@ namespace soaap {
 				SmallVector<Value*, 2> soaap_perf_overhead_args;
 				soaap_perf_overhead_args.push_back(argStartTs);
 				soaap_perf_overhead_args.push_back(argSboxTs);
-				perfOverheadFn = M.getFunction("soaap_perf_total_toc");
+				if (perfThreshold) {
+					soaap_perf_overhead_args.push_back(dyn_cast<Value>
+						(argPerfThreshold));
+					perfOverheadFn = M.getFunction("soaap_perf_total_toc_thres");
+
+				} else {
+					perfOverheadFn = M.getFunction("soaap_perf_total_toc");
+				}
 				perfOverheadCall = CallInst::Create(perfOverheadFn,
 					ArrayRef<Value*>(soaap_perf_overhead_args));
 				perfOverheadCall->insertBefore(lastInst);
-
 			}
 
 			/*
 			 * If there are running persistent sandboxed terminate them before
-			 * exiting the program.  This is achieved when calling specific
-			 * library function with -1 as argument.
+			 * exiting the program.  This is achieved when calling the
+			 * appropriate library function with -1 as argument.
 			 */
-			if (persistentSandboxFuncs.size()) {
+			if (!persistentSandboxFuncs.empty()) {
 				Function* mainFn = M.getFunction("main");
 				BasicBlock& mainEntryBlock = mainFn->getEntryBlock();
 				TerminatorInst *mainLastInst
