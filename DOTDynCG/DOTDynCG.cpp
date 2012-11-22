@@ -78,7 +78,7 @@ namespace soaap {
           //outs() << "F1: " << F1->getName() << "\n";
           for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
             if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-              for (Module::iterator F2 = M.begin(), E2 = M.end(); F2 != E2; ++F2) {
+              for (const Function* F2 : PI.getDynamicCallees(C)) {
                 //outs() << "    F2: " << F2->getName() << "\n";
                 if (F2->isDeclaration()) continue;
                 if (PI.isDynamicCallEdge(C, F2)) {
