@@ -27,6 +27,7 @@
 #include <iostream>
 #include <vector>
 #include <climits>
+#include <functional>
 
 using namespace llvm;
 using namespace std;
@@ -36,7 +37,8 @@ namespace soaap {
 
     static char ID;
     static const int UNINITIALISED = INT_MAX;
-
+    static const int ORIGIN_PRIV = 0;
+    static const int ORIGIN_SANDBOX = 1;
     bool modified;
     bool dynamic;
     bool emPerf;
@@ -45,11 +47,14 @@ namespace soaap {
     map<const Value*,int> fdToPerms;
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
-    SmallVector<Function*,32> sandboxFuncs;
+    SmallVector<Function*,32> sandboxEntryPoints;
     SmallVector<Function*,16> callgates;
+    SmallVector<Function*,16> privilegedMethods;
 
-    SmallSet<Function*,16> sandboxReachableMethods;
+    SmallSet<Function*,16> sandboxedMethods;
     SmallSet<Function*,16> syscallReachableMethods;
+
+    map<const Value*,int> origin;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -67,21 +72,21 @@ namespace soaap {
 
     virtual bool runOnModule(Module& M) {
 
-      outs() << "Running " << getPassName() << "\n";
+      outs() << "* Running " << getPassName() << "\n";
 
-      outs() << "Finding sandbox methods\n";
+      outs() << "* Finding sandbox methods\n";
       findSandboxedMethods(M);
 
-      outs() << "Finding global variables\n";
+      outs() << "* Finding global variables\n";
       findSharedGlobalVariables(M);
 
-      outs() << "Finding file descriptors\n";
+      outs() << "* Finding file descriptors\n";
       findSharedFileDescriptors(M);
 
-      outs() << "Finding callgates\n";
+      outs() << "* Finding callgates\n";
       findCallgates(M);
 
-      if (!sandboxFuncs.empty()) {
+      if (!sandboxEntryPoints.empty()) {
         if (dynamic && !emPerf) {
           // use valgrind
           instrumentValgrindClientRequests(M);
@@ -89,21 +94,27 @@ namespace soaap {
         }
         else if (!dynamic && !emPerf) {
           // do the checks statically
-          outs() << "Adding dynamic call edges to callgraph (if available)\n";
+          outs() << "* Adding dynamic call edges to callgraph (if available)\n";
           loadDynamicCallEdges(M);
 
-          outs() << "Calculating sandbox-reachable methods\n";
-          calculateSandboxReachableMethods(M);
-          outs() << "  " << sandboxReachableMethods.size() << " methods found\n";
+          outs() << "* Calculating sandboxed methods\n";
+          calculateSandboxedMethods(M);
+          outs() << "   " << sandboxedMethods.size() << " methods found\n";
 
-          outs() << "Checking global variable accesses\n";
+          outs() << "* Checking global variable accesses\n";
           checkGlobalVariables(M);
 
-          outs() << "Checking file descriptor accesses\n";
-          outs() << "  Calculating syscall-reachable methods\n";
+          outs() << "* Checking file descriptor accesses\n";
+          outs() << "   Calculating syscall-reachable methods\n";
           calculateSyscallReachableMethods(M);
-          outs() << "  Found " << syscallReachableMethods.size() << " methods\n";
+          outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
           checkFileDescriptors(M);
+
+          outs() << "* Calculating privileged methods\n";
+          calculatePrivilegedMethods(M);
+
+          outs() << "* Checking propagation of data from sandboxes to privileged components\n";
+          checkOriginOfAccesses(M);
         }
         else if (!dynamic && emPerf) {
           instrumentPerfEmul(M);
@@ -121,14 +132,11 @@ namespace soaap {
           if (F1->isDeclaration()) continue;
           for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
             if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-              for (Module::iterator F2 = M.begin(), E2 = M.end(); F2 != E2; ++F2) {
-                if (F2->isDeclaration()) continue;
-                if (PI->isDynamicCallEdge(C, F2)) {
-                  CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
-                  CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
-                  F1Node->addCalledFunction(CallSite(C), F2Node);
-                  DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
-                }
+              for (const Function* F2 : PI->getDynamicCallees(C)) {
+                CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
+                CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
+                F1Node->addCalledFunction(CallSite(C), F2Node);
+                DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
               }
             }
           }
@@ -141,7 +149,7 @@ namespace soaap {
      * This is so that when propagating capabilities through the callgraph
      * we can prune methods from which system calls are not reachable.
      * 
-     * pre: calculateSandboxReachableMethods() has been run
+     * pre: calculateSandboxedMethods() has been run
      */
     void calculateSyscallReachableMethods(Module& M) {
       list<Function*> worklist;
@@ -159,7 +167,7 @@ namespace soaap {
         worklist.pop_front();
 
         // prune out functions not reachable from a sandbox
-        if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), F) == sandboxReachableMethods.end())
+        if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) == sandboxedMethods.end())
           continue;
 
         // prune out functions already visited
@@ -189,6 +197,121 @@ namespace soaap {
           }
         }
       }
+    }
+
+    void performDataflowAnalysis(Module& M, function<bool (const Value*, const Value*)> propagate, list<const Value*>& worklist) {
+
+      // perform propagation until fixed point is reached
+      CallGraph& CG = getAnalysis<CallGraph>();
+      while (!worklist.empty()) {
+        const Value* V = worklist.front();
+        worklist.pop_front();
+        DEBUG(outs() << "*** Popped " << V->getName() << "\n");
+        for (Value::const_use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
+          const Value* V2;
+          DEBUG(VI->dump());
+          if (const StoreInst* SI = dyn_cast<const StoreInst>(*VI)) {
+            if (V == SI->getPointerOperand()) // to avoid infinite looping
+              continue;
+            V2 = SI->getPointerOperand();
+          }
+          else if (const CallInst* CI = dyn_cast<const CallInst>(*VI)) {
+            // propagate to the callee function's argument
+            // find the index of the use position
+            //outs() << "CALL: ";
+            //CI->dump();
+            //Function* Caller = const_cast<Function*>(CI->getParent()->getParent());
+            //outs() << "CALLER: " << Caller->getName() << "\n";
+            if (Function* Callee = CI->getCalledFunction()) {
+              propagateToCallee(CI, Callee, worklist, V, propagate);
+            }
+            else if (const Value* FP = CI->getCalledValue())  { // dynamic callees
+              ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
+              if (PI) {
+                DEBUG(dbgs() << "dynamic call edge propagation\n");
+                DEBUG(CI->dump());
+                list<const Function*> Callees = PI->getDynamicCallees(CI);
+                DEBUG(dbgs() << "number of dynamic callees: " << Callees.size() << "\n");
+                for (const Function* Callee : Callees) {
+                  DEBUG(dbgs() << "  " << Callee->getName() << "\n");
+                  propagateToCallee(CI, Callee, worklist, V, propagate);
+                }
+              }
+            } 
+            continue;
+          }
+          else {
+            V2 = *VI;
+          }
+          if (propagate(V,V2)) { // propagate permissions
+            if (find(worklist.begin(), worklist.end(), V2) == worklist.end()) {
+              worklist.push_back(V2);
+            }
+          }
+          DEBUG(outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
+        }
+      }
+    }
+
+    void checkOriginOfAccesses(Module& M) {
+
+      // initialise worklist with values returned from sandboxes
+      list<const Value*> worklist;
+      for (Function* F : sandboxEntryPoints) {
+        // find calls of F, if F actually returns something!
+        if (!F->getReturnType()->isVoidTy()) {
+          for (Value::use_iterator I=F->use_begin(), E=F->use_end(); I!=E; I++) {
+            if (CallInst* C = dyn_cast<CallInst>(*I)) {
+              worklist.push_back(C);
+              origin[C] = ORIGIN_SANDBOX;
+            }
+          }
+        }
+      }
+
+      // define transfer function
+      function<bool (const Value*, const Value*)> propagateOrigin = [this](const Value* From, const Value* To)  {
+        if (this->origin.find(To) == this->origin.end()) {
+          this->origin[To] = this->origin[From];
+          return true; // return true to allow perms to propagate through
+                       // regardless of whether the value was non-zero
+        }
+        else {
+          int old = this->origin[To];
+          this->origin[To] = this->origin[From];
+          return this->origin[To] != old;
+        }
+      };
+      
+      // compute fixed point
+      performDataflowAnalysis(M, propagateOrigin, worklist);
+
+      // look for untrusted function pointer calls
+      checkPrivilegedFunctionPointerCalls(M);
+    }
+
+    // check that no untrusted function pointers are called in privileged methods
+    void checkPrivilegedFunctionPointerCalls(Module& M) {
+      for (Function* F : privilegedMethods) {
+        for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
+          if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+            if (C->getCalledFunction() == NULL) {
+              if (origin[C->getCalledValue()] == ORIGIN_SANDBOX) {
+                Function* Caller = cast<Function>(C->getParent()->getParent());
+                outs() << "\n *** Untrusted function pointer call in " << Caller->getName() << "\n";
+                if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
+                  DILocation Loc(N);                      // DILocation is in DebugInfo.h
+                  unsigned Line = Loc.getLineNumber();
+                  StringRef File = Loc.getFilename();
+                  StringRef Dir = Loc.getDirectory();
+                  outs() << " +++ Line " << Line << " of file " << File << "\n";
+                }
+              }
+            }
+          }
+        }
+      }
+      outs() << "\n";
     }
 
     /*
@@ -227,15 +350,15 @@ namespace soaap {
           if (isa<Function>(annotatedVal)) {
             Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
             if (annotationStrArrayCString == SANDBOX_PERSISTENT) {
-              dbgs() << "Found persistent sandbox " << annotatedFunc->getName() << "\n";
+              outs() << "   Found persistent sandbox " << annotatedFunc->getName() << "\n";
               persistentSandboxFuncs.push_back(annotatedFunc);
-              sandboxFuncs.push_back(annotatedFunc);
+              sandboxEntryPoints.push_back(annotatedFunc);
             }
             else if (annotationStrArrayCString == SANDBOX_EPHEMERAL) {
-              dbgs() << "Found ephemeral sandbox " << annotatedFunc->getName() << "\n";
+              outs() << "   Found ephemeral sandbox " << annotatedFunc->getName() << "\n";
               persistentSandboxFuncs.push_back(annotatedFunc);
               ephemeralSandboxFuncs.push_back(annotatedFunc);
-              sandboxFuncs.push_back(annotatedFunc);
+              sandboxEntryPoints.push_back(annotatedFunc);
             }
           }
         }
@@ -372,84 +495,37 @@ namespace soaap {
     void checkFileDescriptors(Module& M) {
 
       // initialise
-      std::list<const Value*> worklist;
+      list<const Value*> worklist;
       for (map<const Value*,int>::iterator I=fdToPerms.begin(), E=fdToPerms.end(); I != E; I++) {
         worklist.push_back(I->first);
       }
 
-      // perform propagation until fixed point is reached
-      CallGraph& CG = getAnalysis<CallGraph>();
-      while (!worklist.empty()) {
-        const Value* V = worklist.front();
-        worklist.pop_front();
-        DEBUG(outs() << "*** Popped " << V->getName() << "\n");
-        for (Value::const_use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
-          const Value* V2;
-          DEBUG(VI->dump());
-          if (const StoreInst* SI = dyn_cast<const StoreInst>(*VI)) {
-            if (V == SI->getPointerOperand()) // to avoid infinite looping
-              continue;
-            V2 = SI->getPointerOperand();
-          }
-          else if (const CallInst* CI = dyn_cast<const CallInst>(*VI)) {
-            // propagate to the callee function's argument
-            // find the index of the use position
-            //outs() << "CALL: ";
-            //CI->dump();
-            //Function* Caller = const_cast<Function*>(CI->getParent()->getParent());
-            //outs() << "CALLER: " << Caller->getName() << "\n";
-            if (Function* Callee = CI->getCalledFunction()) {
-              propagateToCallee(CI, Callee, worklist, V);
-            }
-            else if (const Value* FP = CI->getCalledValue())  { // dynamic callees
-              ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
-              if (PI) {
-                DEBUG(dbgs() << "dynamic call edge propagation\n");
-                DEBUG(CI->dump());
-                std::list<const Function*> Callees = PI->getDynamicCallees(CI);
-                DEBUG(dbgs() << "number of dynamic callees: " << Callees.size() << "\n");
-                for (const Function* Callee : Callees) {
-                  DEBUG(dbgs() << "  " << Callee->getName() << "\n");
-                  propagateToCallee(CI, Callee, worklist, V);
-                }
-              }
-            } 
-            continue;
-          }
-          else {
-            V2 = *VI;
-          }
-          if (propagateFDPerms(V,V2)) { // propagate permissions
-            if (find(worklist.begin(), worklist.end(), V2) == worklist.end()) {
-              worklist.push_back(V2);
-            }
-          }
-          DEBUG(outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
+      // define transformer function
+      function<bool (const Value*, const Value*)> propagateFDPerms = [this](const Value* From, const Value* To) {
+        if (this->fdToPerms.find(To) == this->fdToPerms.end()) {
+          this->fdToPerms[To] = this->fdToPerms[From];
+          return true; // return true to allow perms to propagate through
+                       // regardless of whether the value was non-zero
         }
-      }
+        else {
+          int old = this->fdToPerms[To];
+          this->fdToPerms[To] &= this->fdToPerms[From];
+          return this->fdToPerms[To] != old;
+        }
+      };
+
+      // compute fixed point
+      performDataflowAnalysis(M, propagateFDPerms, worklist);
 
       // find all calls to read 
       validateDescriptorAccesses(M, "read", FD_READ_MASK);
       validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
     }
 
-    bool propagateFDPerms(const Value* From, const Value* To) {
-      if (fdToPerms.find(To) == fdToPerms.end()) {
-        fdToPerms[To] = fdToPerms[From];
-        return true; // return true to allow perms to propagate through
-                     // regardless of whether the value was non-zero
-      }
-      else {
-        int old = fdToPerms[To];
-        fdToPerms[To] &= fdToPerms[From];
-        return fdToPerms[To] != old;
-      }
-    }
-
-    void propagateToCallee(const CallInst* CI, const Function* Callee, std::list<const Value*>& worklist, const Value* V) {
+    void propagateToCallee(const CallInst* CI, const Function* Callee, list<const Value*>& worklist, const Value* V, function<bool (const Value*, const Value*)> propagateTaint){
       // propagate only to methods from which sys call are reachable from 
       if (find(syscallReachableMethods.begin(), syscallReachableMethods.end(), Callee) != syscallReachableMethods.end()) {
-        DEBUG(outs() << "Propagating to callee " << Callee->getName() << "\n");
+        DEBUG(dbgs() << "Propagating to callee " << Callee->getName() << "\n");
         int idx;
         for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
           if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
@@ -461,7 +537,7 @@ namespace soaap {
                 //outs() << "Pushing arg " << AI->getName() << "\n";
                 if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
                   worklist.push_back(AI);
-                  propagateFDPerms(V,AI); // propagate permissions
+                  propagateTaint(V,AI); // propagate taint
                 }
               }
             }
@@ -477,25 +553,21 @@ namespace soaap {
       if (Function* syscallFn = M.getFunction(syscall)) {
         for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end(); I != E; I++) {
           CallInst* Call = cast<CallInst>(*I);
-          Function* Caller = cast<Function>(Call->getParent()->getParent());
-          outs() << Caller->getName();
-          if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
-            DILocation Loc(N);                      // DILocation is in DebugInfo.h
-            unsigned Line = Loc.getLineNumber();
-            StringRef File = Loc.getFilename();
-            StringRef Dir = Loc.getDirectory();
-            outs() << ":" << File << ":" << Line;
-          }
-
           Value* fd = Call->getArgOperand(0);
-          if (fdToPerms[fd] & required_perm) {
-            outs() << " - necessary privileges for " << syscall << "\n";
-          }
-          else {
-            outs() << " - insufficient privileges for " << syscall << "\n";
+          if (!(fdToPerms[fd] & required_perm)) {
+            Function* Caller = cast<Function>(Call->getParent()->getParent());
+            outs() << "\n *** Insufficient privileges for " << syscall << "() in " << Caller->getName() << "\n";
+            if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
+              DILocation Loc(N);                      // DILocation is in DebugInfo.h
+              unsigned Line = Loc.getLineNumber();
+              StringRef File = Loc.getFilename();
+              StringRef Dir = Loc.getDirectory();
+              outs() << " +++ Line " << Line << " of file " << File << "\n";
+            }
           }
         }
       }
+      outs() << "\n";
     }
 
     /*
@@ -699,7 +771,7 @@ namespace soaap {
      */
     void instrumentValgrindClientRequests(Module& M) {
   
-      if (sandboxFuncs.empty()) {
+      if (sandboxEntryPoints.empty()) {
         return;
       }  
 
@@ -730,7 +802,7 @@ namespace soaap {
       Function* enterEphemeralSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_enter_ephemeral_sandbox", VoidNoArgsFuncType));
       Function* exitEphemeralSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_exit_ephemeral_sandbox", VoidNoArgsFuncType));
 
-      for (Function* F : sandboxFuncs) {
+      for (Function* F : sandboxEntryPoints) {
         bool persistent = find(persistentSandboxFuncs.begin(), persistentSandboxFuncs.end(), F) != persistentSandboxFuncs.end();
         Instruction* firstInst = F->getEntryBlock().getFirstNonPHI();
         CallInst* enterSandboxCall = CallInst::Create(persistent ? enterPersistentSandboxFn : enterEphemeralSandboxFn, ArrayRef<Value*>());
@@ -853,34 +925,61 @@ namespace soaap {
       varSharedCall->insertBefore(predInst);
     }
 
-    void calculateSandboxReachableMethods(Module& M) {
+    void calculateSandboxedMethods(Module& M) {
       CallGraph& CG = getAnalysis<CallGraph>();
-      for (Function* F : sandboxFuncs) {
+      for (Function* F : sandboxEntryPoints) {
         CallGraphNode* Node = CG.getOrInsertFunction(F);
-        calculateSandboxReachableMethodsHelper(Node);
+        calculateSandboxedMethodsHelper(Node);
       }
     }
 
 
-    void calculateSandboxReachableMethodsHelper(CallGraphNode* node) {
+    void calculateSandboxedMethodsHelper(CallGraphNode* node) {
 
       Function* F = node->getFunction();
 
       DEBUG(dbgs() << "Visiting " << F->getName() << "\n");
        
-      if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), F) != sandboxReachableMethods.end()) {
+      if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
         // cycle detected
         return;
       }
 
-      sandboxReachableMethods.insert(F);
+      sandboxedMethods.insert(F);
 
 //      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
       for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
         Value* V = I->first;
         CallGraphNode* calleeNode = I->second;
         if (Function* calleeFunc = calleeNode->getFunction()) {
-          calculateSandboxReachableMethodsHelper(calleeNode);
+          calculateSandboxedMethodsHelper(calleeNode);
+        }
+      }
+    }
+
+    void calculatePrivilegedMethods(Module& M) {
+      CallGraph& CG = getAnalysis<CallGraph>();
+      if (Function* MainFunc = M.getFunction("main")) {
+        CallGraphNode* MainNode = CG[MainFunc];
+        calculatePrivilegedMethodsHelper(MainNode);
+      }
+    }
+
+    void calculatePrivilegedMethodsHelper(CallGraphNode* Node) {
+      if (Function* F = Node->getFunction()) {
+        // if a sandbox entry point, then ignore
+        if (find(sandboxEntryPoints.begin(), sandboxEntryPoints.end(), F) != sandboxEntryPoints.end())
+          return;
+        
+        // if already visited this function, then ignore as cycle detected
+        if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
+          return;
+  
+        privilegedMethods.push_back(F);
+  
+        // recurse on callees
+        for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
+          calculatePrivilegedMethodsHelper(I->second);
         }
       }
     }
@@ -889,7 +988,7 @@ namespace soaap {
 
       // find all uses of global variables and check that they are allowed
       // as per the annotations
-      for (Function* F : sandboxReachableMethods) {
+      for (Function* F : sandboxedMethods) {
         DEBUG(dbgs() << "Sandbox-reachable function: " << F->getName().str() << "\n");
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
@@ -897,12 +996,11 @@ namespace soaap {
             if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
                 if (!(varToPerms[gv] & VAR_READ_MASK)) {
-                  cout << " *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to" << endl;
+                  outs() << "\n *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                      DILocation loc(N);
-                     cout << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << endl;
+                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                   }
-                  cout << endl;
                 }
 
               }
@@ -912,12 +1010,11 @@ namespace soaap {
                 // check that the programmer has annotated that this
                 // variable can be written to
                 if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
-                  cout << " *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to" << endl;
+                  outs() << "\n *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                      DILocation loc(N);
-                     cout << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << endl;
+                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << "\n";
                   }
-                  cout << endl;
                 }
               }
             }
@@ -930,7 +1027,7 @@ namespace soaap {
           }
         }
       }
-
+      outs() << "\n";
     }
 
     void instrumentPerfEmul(Module& M) {
@@ -951,7 +1048,7 @@ namespace soaap {
        * Iterate through sandboxed functions and apply the necessary
        * instrumentation to emulate performance overhead.
        */
-      for (Function* F : sandboxFuncs) {
+      for (Function* F : sandboxEntryPoints) {
         CallInst* enterSandboxCall = NULL;
         Argument* data_in = NULL;
         Argument* data_out = NULL;
