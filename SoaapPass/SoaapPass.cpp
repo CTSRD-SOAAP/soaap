@@ -19,6 +19,7 @@
 #include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Analysis/ProfileInfo.h"
+#include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/InstIterator.h"
 
 #include "soaap.h"
@@ -122,6 +123,62 @@ namespace soaap {
       }
 
       return modified;
+    }
+
+    void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
+      if (Function* MainFn = M.getFunction("main")) {
+        list<CallGraphNode::CallRecord> trace = findPathToInstruction(I, MainFn);
+        prettyPrintTrace(trace);
+      }
+    }
+
+    list<CallGraphNode::CallRecord> findPathToInstruction(Instruction* I, Function* EntryPointFunc) {
+      Function* EnclosingFunc = I->getParent()->getParent();
+      // find paths from EntryPointFunc to EnclosingFunc
+      CallGraph& CG = getAnalysis<CallGraph>();
+      CallGraphNode* EntryPointFuncNode = CG[EntryPointFunc];
+      CallGraphNode* EnclosingFuncNode = CG[EnclosingFunc];
+      list<CallGraphNode*> visited;
+      list<CallGraphNode::CallRecord> trace;
+      findPathToInstructionHelper(EntryPointFuncNode, EnclosingFuncNode, trace, visited);
+      return trace;
+    }
+
+    bool findPathToInstructionHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<CallGraphNode::CallRecord>& trace, list<CallGraphNode*>& visited) {
+      if (CurrNode == FinalNode)
+        return true;
+      else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
+        return false;
+      else if (find(visited.begin(), visited.end(), CurrNode) != visited.end()) // cycle
+        return false;
+      else {
+        visited.push_back(CurrNode);
+        for (CallGraphNode::iterator I = CurrNode->begin(), E = CurrNode->end(); I!=E; I++) {
+          CallGraphNode* CalleeNode = I->second;
+          if (findPathToInstructionHelper(CalleeNode, FinalNode, trace, visited)) {
+            // CurrNode is on a path to FinalNode, so prepend to the trace
+            trace.push_back(*I);
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+
+    void prettyPrintTrace(list<CallGraphNode::CallRecord>& trace) {
+      outs() << "  Possible trace:\n";
+      for (CallGraphNode::CallRecord R : trace) {
+        CallInst* C = cast<CallInst>(R.first);
+        Function* EnclosingFunc = cast<Function>(C->getParent()->getParent());
+        if (MDNode *N = C->getMetadata("dbg")) {
+          DILocation Loc(N);
+          unsigned Line = Loc.getLineNumber();
+          StringRef File = Loc.getFilename();
+          unsigned FileOnlyIdx = File.find_last_of("/");
+          StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+          outs() << "    " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
+        }
+      }
     }
 
     void loadDynamicCallEdges(Module& M) {
@@ -306,6 +363,7 @@ namespace soaap {
                   StringRef Dir = Loc.getDirectory();
                   outs() << " +++ Line " << Line << " of file " << File << "\n";
                 }
+                printPrivilegedPathToInstruction(C, M);
               }
             }
           }
@@ -1013,7 +1071,7 @@ namespace soaap {
                   outs() << "\n *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                      DILocation loc(N);
-                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << "\n";
+                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                   }
                 }
               }
