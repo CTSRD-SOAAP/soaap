@@ -56,6 +56,7 @@ namespace soaap {
     SmallSet<Function*,16> syscallReachableMethods;
 
     map<const Value*,int> origin;
+    SmallVector<CallInst*,16> untrustedSources;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -127,24 +128,43 @@ namespace soaap {
 
     void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
       if (Function* MainFn = M.getFunction("main")) {
-        list<CallGraphNode::CallRecord> trace = findPathToInstruction(I, MainFn);
-        prettyPrintTrace(trace);
+        // Find privileged path to instruction I, via a function that calls a sandboxed callee
+        Function* Target = I->getParent()->getParent();
+        CallGraph& CG = getAnalysis<CallGraph>();
+        CallGraphNode* TargetNode = CG[Target];
+
+        outs() << "  Possible causes\n";
+        for (CallInst* C : untrustedSources ) {
+          Function* Via = C->getParent()->getParent();
+          DEBUG(outs() << MainFn->getName() << " -> " << Via->getName() << " -> " << Target->getName() << "\n");
+          list<Instruction*> trace1 = findPathToFunc(MainFn, Via, NULL, -1);
+          list<Instruction*> trace2 = findPathToFunc(Via, Target, &origin, ORIGIN_SANDBOX);
+          // check that we have successfully been able to find a full trace!
+          if (!trace1.empty() && !trace2.empty()) {
+            printTaintSource(C);
+            // append target instruction I and trace1, to the end of trace2
+            trace2.push_front(I);
+            trace2.insert(trace2.end(), trace1.begin(), trace1.end());
+            prettyPrintTrace(trace2);
+            outs() << "\n";
+          }
+        }
+
+        outs() << "Unable to find a trace\n";
       }
     }
 
-    list<CallGraphNode::CallRecord> findPathToInstruction(Instruction* I, Function* EntryPointFunc) {
-      Function* EnclosingFunc = I->getParent()->getParent();
-      // find paths from EntryPointFunc to EnclosingFunc
+    list<Instruction*> findPathToFunc(Function* From, Function* To, map<const Value*,int>* shadow, int taint) {
       CallGraph& CG = getAnalysis<CallGraph>();
-      CallGraphNode* EntryPointFuncNode = CG[EntryPointFunc];
-      CallGraphNode* EnclosingFuncNode = CG[EnclosingFunc];
+      CallGraphNode* FromNode = CG[From];
+      CallGraphNode* ToNode = CG[To];
       list<CallGraphNode*> visited;
-      list<CallGraphNode::CallRecord> trace;
-      findPathToInstructionHelper(EntryPointFuncNode, EnclosingFuncNode, trace, visited);
+      list<Instruction*> trace;
+      findPathToFuncHelper(FromNode, ToNode, trace, visited, shadow, taint);
       return trace;
     }
 
-    bool findPathToInstructionHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<CallGraphNode::CallRecord>& trace, list<CallGraphNode*>& visited) {
+    bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited, map<const Value*,int>* shadow, int taint) {
       if (CurrNode == FinalNode)
         return true;
       else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
@@ -154,29 +174,54 @@ namespace soaap {
       else {
         visited.push_back(CurrNode);
         for (CallGraphNode::iterator I = CurrNode->begin(), E = CurrNode->end(); I!=E; I++) {
-          CallGraphNode* CalleeNode = I->second;
-          if (findPathToInstructionHelper(CalleeNode, FinalNode, trace, visited)) {
-            // CurrNode is on a path to FinalNode, so prepend to the trace
-            trace.push_back(*I);
-            return true;
+          Value* V = I->first;
+          if(CallInst* Call = dyn_cast_or_null<CallInst>(V)) {
+            CallGraphNode* CalleeNode = I->second;
+            bool proceed = true;
+            if (shadow) {
+              // check that Call has at least one tainted arg
+              int idx;
+              for (idx = 0; idx < Call->getNumArgOperands(); idx++) {
+                if((proceed = ((*shadow)[Call->getArgOperand(idx)->stripPointerCasts()] == taint))) {
+                  break;
+                }
+              }
+            }
+            if (proceed && findPathToFuncHelper(CalleeNode, FinalNode, trace, visited, shadow, taint)) {
+              // CurrNode is on a path to FinalNode, so prepend to the trace
+              trace.push_back(Call);
+              return true;
+            }
           }
         }
         return false;
       }
     }
 
-    void prettyPrintTrace(list<CallGraphNode::CallRecord>& trace) {
-      outs() << "  Possible trace:\n";
-      for (CallGraphNode::CallRecord R : trace) {
-        CallInst* C = cast<CallInst>(R.first);
-        Function* EnclosingFunc = cast<Function>(C->getParent()->getParent());
-        if (MDNode *N = C->getMetadata("dbg")) {
+    void printTaintSource(CallInst* C) {
+      outs() << "    Source of untrusted data:\n";
+      Function* EnclosingFunc = cast<Function>(C->getParent()->getParent());
+      if (MDNode *N = C->getMetadata("dbg")) {
+        DILocation Loc(N);
+        unsigned Line = Loc.getLineNumber();
+        StringRef File = Loc.getFilename();
+        unsigned FileOnlyIdx = File.find_last_of("/");
+        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+        outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
+      }
+    }
+
+    void prettyPrintTrace(list<Instruction*>& trace) {
+      outs() << "    Possible trace to untrusted function pointer call:\n";
+      for (Instruction* I : trace) {
+        Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
+        if (MDNode *N = I->getMetadata("dbg")) {
           DILocation Loc(N);
           unsigned Line = Loc.getLineNumber();
           StringRef File = Loc.getFilename();
           unsigned FileOnlyIdx = File.find_last_of("/");
           StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-          outs() << "    " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
+          outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
         }
       }
     }
@@ -321,6 +366,7 @@ namespace soaap {
             if (CallInst* C = dyn_cast<CallInst>(*I)) {
               worklist.push_back(C);
               origin[C] = ORIGIN_SANDBOX;
+              untrustedSources.push_back(C);
             }
           }
         }
