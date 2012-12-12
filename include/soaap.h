@@ -27,16 +27,16 @@
 #define FD_WRITE "FD_WRITE"
 #define FD_WRITE_MASK 0x2
 
-#define __sandbox __sandbox_persistent
-#define __sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
-#define __sandbox_ephemeral __attribute__((annotate(SANDBOX_EPHEMERAL))) __attribute__((noinline))
-#define __var_read __attribute__((annotate(VAR_READ)))
-#define __var_write __attribute__((annotate(VAR_WRITE)))
-#define __fd_read __attribute__((annotate(FD_READ)))
-#define __indirect_fd_read(F) __attribute__((annotate(F##"_"##FD_READ)))
-#define __indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
-#define __fd_write __attribute__((annotate(FD_WRITE)))
-#define __callgates(fns...) \
+#define __soaap_sandbox __sandbox_persistent
+#define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
+#define __soaap_sandbox_ephemeral __attribute__((annotate(SANDBOX_EPHEMERAL))) __attribute__((noinline))
+#define __soaap_var_allow_read __attribute__((annotate(VAR_READ)))
+#define __soaap_var_allow_write __attribute__((annotate(VAR_WRITE)))
+#define __soaap_fd_allow_read __attribute__((annotate(FD_READ)))
+#define __soaap_indirect_fd_read(F) __attribute__((annotate(F##"_"##FD_READ)))
+#define __soaap_indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
+#define __soaap_fd_allow_write __attribute__((annotate(FD_WRITE)))
+#define __soaap_callgates(fns...) \
 	static void __declare_callgates() { \
 		__declare_callgates_helper(0, fns); \
 	}
