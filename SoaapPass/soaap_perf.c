@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "soaap_perf.h"
@@ -16,6 +17,8 @@
 #else
 #define DPRINTF(...)
 #endif
+
+#define PIPES
 
 void
 soaap_perf_enter_persistent_sbox()
@@ -39,7 +42,8 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
 	int nbytes = 0;
 	static char *buf;
 	static pid_t pid;
-	static int pfds[2], flag, buflen;
+	static int flag, buflen;
+	static int pfds[2]; /* Paired descriptors used for both sockets and pipes */
 
 	DPRINTF("Emulating performance of using persistent sandbox.");
 
@@ -47,8 +51,15 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
 		buflen = getpagesize();
 		buf = malloc(buflen*sizeof(char));
 
+#ifdef PIPES
 		/* Use pipes for IPC */
 		pipe(pfds);
+#elif defined (UDSOCKETS)
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, pfds) == -1) {
+			perror("socketpair");
+			exit(1);
+		}
+#endif
 
 		pid = fork();
 		if (pid == -1) {
@@ -124,8 +135,15 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
 
 	DPRINTF("Emulating performance of using ephemeral sandbox.");
 
+#ifdef PIPES
 	/* Use pipes for IPC */
 	pipe(pfds);
+#elif defined (UDSOCKETS)
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pfds) == -1) {
+		perror("socketpair");
+		exit(1);
+	}
+#endif
 
 	/* Allocate resources */
 	buflen = getpagesize();
