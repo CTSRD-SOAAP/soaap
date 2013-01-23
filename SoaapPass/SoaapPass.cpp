@@ -875,14 +875,6 @@ namespace soaap {
 					}
 				}
 
-				// Get terminator instruction of the current basic block.
-				BasicBlock& entryBlock = F->getEntryBlock();
-				TerminatorInst *lastInst = entryBlock.getTerminator();
-				if(!lastInst) {
-					errs() << "[XXX] Badly formed basic block!";
-					return;
-				}
-
 				int perfThreshold = 0;
 				if (sandboxFuncToOverhead.find(F) !=
 					sandboxFuncToOverhead.end()) {
@@ -970,9 +962,18 @@ namespace soaap {
 				} else {
 					perfOverheadFn = M.getFunction("soaap_perf_total_toc");
 				}
+
 				perfOverheadCall = CallInst::Create(perfOverheadFn,
 					ArrayRef<Value*>(soaap_perf_overhead_args));
-				perfOverheadCall->insertBefore(lastInst);
+
+				// Get terminator instruction of the current basic block.
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					TerminatorInst* termInst = BB.getTerminator();
+					if (isa<ReturnInst>(termInst)) {
+						//BB is an exit block, instrument ret
+						perfOverheadCall->insertBefore(termInst);
+					}
+				}
 			}
 
 			/*
@@ -982,13 +983,6 @@ namespace soaap {
 			 */
 			if (!persistentSandboxFuncs.empty()) {
 				Function* mainFn = M.getFunction("main");
-				BasicBlock& mainEntryBlock = mainFn->getEntryBlock();
-				TerminatorInst *mainLastInst
-					= mainEntryBlock.getTerminator();
-				if(!mainLastInst) {
-					errs() << "[XXX] Badly formed basic block!";
-					return;
-				}
 
 				ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
 					-1, true);
@@ -1002,7 +996,15 @@ namespace soaap {
 				//= CallInst::Create(terminatePersistentSandbox,
 				//ArrayRef<Value*>());
 				terminateCall->setTailCall();
-				terminateCall->insertBefore(mainLastInst);
+
+				// Iterate over main's BasicBlocks and instrument all ret points
+				for (BasicBlock& BB : mainFn->getBasicBlockList()) {
+					TerminatorInst* mainLastInst = BB.getTerminator();
+					if (isa<ReturnInst>(mainLastInst)) {
+						//BB is an exit block, instrument ret
+						terminateCall->insertBefore(mainLastInst);
+					}
+				}
 
 			}
 		}
