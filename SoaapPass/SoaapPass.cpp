@@ -1,20 +1,20 @@
 #include "llvm/Pass.h"
-#include "llvm/Function.h"
-#include "llvm/Module.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/PassManager.h"
 #include "llvm/ADT/ilist.h"
-#include "llvm/GlobalVariable.h"
-#include "llvm/Constants.h"
-#include "llvm/Type.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/Type.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
-#include "llvm/IntrinsicInst.h"
-#include "llvm/IRBuilder.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Instruction.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"
@@ -63,6 +63,51 @@ namespace soaap {
       dynamic = false;
       emPerf = false;
     }
+
+    // inner classes for propagate functions
+    class PropagateFunction {
+      public:
+        virtual bool propagate(const Value* From, const Value* To) = 0; 
+      protected:
+        SoaapPass* parent;
+        PropagateFunction(SoaapPass* p) : parent(p) { }
+      };
+
+    class OriginPropagateFunction : public PropagateFunction {
+      public:
+        OriginPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
+
+        bool propagate(const Value* From, const Value* To) {
+          if (parent->origin.find(To) == parent->origin.end()) {
+            parent->origin[To] = parent->origin[From];
+            return true; // return true to allow perms to propagate through
+                         // regardless of whether the value was non-zero
+          }
+          else {
+            int old = parent->origin[To];
+            parent->origin[To] = parent->origin[From];
+            return parent->origin[To] != old;
+          }
+        };
+    };
+
+    class FDPermsPropagateFunction : public PropagateFunction {
+      public:
+        FDPermsPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
+
+        bool propagate(const Value* From, const Value* To) {
+          if (parent->fdToPerms.find(To) == parent->fdToPerms.end()) {
+            parent->fdToPerms[To] = parent->fdToPerms[From];
+            return true; // return true to allow perms to propagate through
+                         // regardless of whether the value was non-zero
+          }                   
+          else {
+            int old = parent->fdToPerms[To];
+            parent->fdToPerms[To] &= parent->fdToPerms[From];
+            return parent->fdToPerms[To] != old;
+          }      
+        };
+    };
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (!dynamic) {
@@ -301,7 +346,7 @@ namespace soaap {
       }
     }
 
-    void performDataflowAnalysis(Module& M, function<bool (const Value*, const Value*)> propagate, list<const Value*>& worklist) {
+    void performDataflowAnalysis(Module& M, PropagateFunction& propagate, list<const Value*>& worklist) {
 
       // perform propagation until fixed point is reached
       CallGraph& CG = getAnalysis<CallGraph>();
@@ -345,7 +390,7 @@ namespace soaap {
           else {
             V2 = *VI;
           }
-          if (propagate(V,V2)) { // propagate permissions
+          if (propagate.propagate(V,V2)) { // propagate permissions
             if (find(worklist.begin(), worklist.end(), V2) == worklist.end()) {
               worklist.push_back(V2);
             }
@@ -372,19 +417,8 @@ namespace soaap {
         }
       }
 
-      // define transfer function
-      function<bool (const Value*, const Value*)> propagateOrigin = [this](const Value* From, const Value* To)  {
-        if (this->origin.find(To) == this->origin.end()) {
-          this->origin[To] = this->origin[From];
-          return true; // return true to allow perms to propagate through
-                       // regardless of whether the value was non-zero
-        }
-        else {
-          int old = this->origin[To];
-          this->origin[To] = this->origin[From];
-          return this->origin[To] != old;
-        }
-      };
+      // transfer function
+      OriginPropagateFunction propagateOrigin(this);
       
       // compute fixed point
       performDataflowAnalysis(M, propagateOrigin, worklist);
@@ -604,19 +638,8 @@ namespace soaap {
         worklist.push_back(I->first);
       }
 
-      // define transformer function
-      function<bool (const Value*, const Value*)> propagateFDPerms = [this](const Value* From, const Value* To) {
-        if (this->fdToPerms.find(To) == this->fdToPerms.end()) {
-          this->fdToPerms[To] = this->fdToPerms[From];
-          return true; // return true to allow perms to propagate through
-                       // regardless of whether the value was non-zero
-        }
-        else {
-          int old = this->fdToPerms[To];
-          this->fdToPerms[To] &= this->fdToPerms[From];
-          return this->fdToPerms[To] != old;
-        }
-      };
+      // transfer function
+      FDPermsPropagateFunction propagateFDPerms(this);
 
       // compute fixed point
       performDataflowAnalysis(M, propagateFDPerms, worklist);
@@ -626,7 +649,7 @@ namespace soaap {
       validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
     }
 
-    void propagateToCallee(const CallInst* CI, const Function* Callee, list<const Value*>& worklist, const Value* V, function<bool (const Value*, const Value*)> propagateTaint){
+    void propagateToCallee(const CallInst* CI, const Function* Callee, list<const Value*>& worklist, const Value* V, PropagateFunction& propagateTaint){
       // propagate only to methods from which sys call are reachable from 
       if (find(syscallReachableMethods.begin(), syscallReachableMethods.end(), Callee) != syscallReachableMethods.end()) {
         DEBUG(dbgs() << "Propagating to callee " << Callee->getName() << "\n");
@@ -641,7 +664,7 @@ namespace soaap {
                 //outs() << "Pushing arg " << AI->getName() << "\n";
                 if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
                   worklist.push_back(AI);
-                  propagateTaint(V,AI); // propagate taint
+                  propagateTaint.propagate(V,AI); // propagate taint
                 }
               }
             }

@@ -8,7 +8,7 @@
 #ifndef SOAAP_H
 #define SOAAP_H
 
-#include "valgrind/taintgrind.h"
+//#include "valgrind/taintgrind.h"
 #include <stdio.h>
 
 // types of sandboxes
@@ -58,6 +58,7 @@ void soaap_printf(char* str);
 
 int printf(const char*, ...);
 
+/*
 // functions for valgrind-function-wrapping
 // (see http://valgrind.org/docs/manual/manual-core-adv.html#manual-core-adv.wrapping)
 void valgrind_get_orig_fn(OrigFn* fn);
@@ -70,5 +71,6 @@ void call_unwrapped_function_w_wwww(OrigFn* fn, unsigned long* retval, unsigned 
 void call_unwrapped_function_w_5w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
 void call_unwrapped_function_w_6w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6);
 void call_unwrapped_function_w_7w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6, unsigned long arg7);
+*/
 
 #endif /* SOAAP_H */
