@@ -47,6 +47,8 @@ namespace soaap {
 
     map<GlobalVariable*,int> varToPerms;
     map<const Value*,int> fdToPerms;
+    
+    map<Function*, int> sandboxedMethodToOverhead;
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
     SmallVector<Function*,32> sandboxEntryPoints;
@@ -55,6 +57,8 @@ namespace soaap {
 
     SmallSet<Function*,16> sandboxedMethods;
     SmallSet<Function*,16> syscallReachableMethods;
+
+    
 
     map<const Value*,int> origin;
     SmallVector<CallInst*,16> untrustedSources;
@@ -459,6 +463,10 @@ namespace soaap {
      */
     void findSandboxedMethods(Module& M) {
 
+      Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)",
+                                       true);
+      SmallVector<StringRef, 4> matches;
+
       /*
        * Function annotations are added to the global intrinsic array
        * called llvm.global.annotations:
@@ -498,6 +506,13 @@ namespace soaap {
               persistentSandboxFuncs.push_back(annotatedFunc);
               ephemeralSandboxFuncs.push_back(annotatedFunc);
               sandboxEntryPoints.push_back(annotatedFunc);
+            }
+            else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
+              int overhead;
+              cout << "Threshold set to " << matches[1].str() <<
+                      "%\n";
+              matches[1].getAsInteger(0, overhead);
+              sandboxedMethodToOverhead[annotatedFunc] = overhead;
             }
           }
         }
@@ -1178,7 +1193,7 @@ namespace soaap {
 			 * Iterate through sandboxed functions and apply the necessary
 			 * instrumentation to emulate performance overhead.
 			 */
-			for (Function* F : sandboxFuncs) {
+			for (Function* F : sandboxedMethods) {
 				Argument* data_in = NULL;
 				Argument* data_out = NULL;
 				bool persistent = find(persistentSandboxFuncs.begin(),
@@ -1272,9 +1287,9 @@ namespace soaap {
 				}
 
 				int perfThreshold = 0;
-				if (sandboxFuncToOverhead.find(F) !=
-					sandboxFuncToOverhead.end()) {
-					perfThreshold = sandboxFuncToOverhead[F];
+				if (sandboxedMethodToOverhead.find(F) !=
+					sandboxedMethodToOverhead.end()) {
+					perfThreshold = sandboxedMethodToOverhead[F];
 				}
 
 				/*
