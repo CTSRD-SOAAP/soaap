@@ -962,7 +962,6 @@ namespace soaap {
 //            enterSandboxCall->insertBefore(caller);
 //            exitSandboxCall->insertAfter(caller);
 //
-<<<<<<< HEAD
 //            /*
 //             * Before each call to enter_sandbox, also instrument
 //             * calls to tell valgrind which file descriptors are
