@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_C_COMPILER ${LLVM_BINARY_DIR}/bin/clang)
 set(CMAKE_CXX_COMPILER ${LLVM_BINARY_DIR}/bin/clang++)
-set(CMAKE_CXX_FLAGS "-fno-rtti -Wno-c++11-extensions")
+set(CMAKE_C_FLAGS "-fPIC")
+set(CMAKE_CXX_FLAGS "-fPIC -fno-rtti -Wno-c++11-extensions")
 
 # incorporate CMake features provided by LLVM:
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_BINARY_DIR}/share/llvm/cmake")
