@@ -2,6 +2,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Regex.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/PassManager.h"
 #include "llvm/ADT/ilist.h"
@@ -513,9 +514,9 @@ namespace soaap {
       /*
        * Global variable annotations are added to the global intrinsic
        * array called llvm.global.annotations:
-             *
+       *
        * int fd __attribute__((annotate("var_read")));
-             *
+       *
        * @fd = common global i32 0, align 4
        * @.str = private unnamed_addr constant [9 x i8] c"var_read\00", section "llvm.metadata"
        * @.str1 = private unnamed_addr constant [7 x i8] c"test-var.c\00", section "llvm.metadata"
@@ -961,6 +962,7 @@ namespace soaap {
 //            enterSandboxCall->insertBefore(caller);
 //            exitSandboxCall->insertAfter(caller);
 //
+<<<<<<< HEAD
 //            /*
 //             * Before each call to enter_sandbox, also instrument
 //             * calls to tell valgrind which file descriptors are
@@ -1306,5 +1308,498 @@ namespace soaap {
     }
 
   RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
+=======
+//						/*
+//						 * Before each call to enter_sandbox, also instrument
+//						 * calls to tell valgrind which file descriptors are
+//						 * shared and what accesses are allowed on them
+//						 */
+//						for (Argument& A : F->getArgumentList()) {
+//							if (fdToPerms.find(&A) != fdToPerms.end()) {
+//								instrumentSharedFileValgrindClientRequest(M, caller, &A, fdToPerms[&A], enterSandboxCall);
+//							}
+//						}
+//					}
+//				}
+
+			}
+
+			/*
+			 * 3. Insert client requests for shared vars
+			 */
+			if (mainFn != NULL) {
+				for (pair<GlobalVariable*,int> varPermPair : varToPerms) {
+					instrumentSharedVarValgrindClientRequest(M, varPermPair.first, varPermPair.second, mainFnFirstInst);
+				}
+			}
+		}
+
+		/*
+		 * Inserts calls to soaap_shared_fd(fdvar, perms) or
+		 * soaap_shared_file(filevar, perms) that in turn tells valgrind that
+		 * the file descriptor value of fdvar or filevar is shared with
+		 * sandboxes and the permissions as defined by perms are allowed on it.
+		 */
+		void instrumentSharedFileValgrindClientRequest(Module& M, Argument* arg, int perms, Instruction* predInst) {
+			Value* args[] = { arg, ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), perms) };
+			if (arg->getType()->isPointerTy()) {
+				Function* fileSharedFn = M.getFunction("soaap_shared_file");
+				CallInst* fileSharedCall = CallInst::Create(fileSharedFn, args);
+				fileSharedCall->insertAfter(predInst);
+			}
+			else {
+				Function* fdSharedFn = M.getFunction("soaap_shared_fd");
+				CallInst* fdSharedCall = CallInst::Create(fdSharedFn, args);
+				fdSharedCall->insertAfter(predInst);
+			}
+		}
+
+		/*
+		 * Inserts calls to soaap_shared_var(varname, perms) that in turn tells
+		 * valgrind that varname is shared with sandboxes and the permissions
+		 * as defined by perms are allowed on it.
+		 */
+		void instrumentSharedVarValgrindClientRequest(Module& M, GlobalVariable* grv, int perms, Instruction* predInst) {
+			/*
+			 * Create a global string variable to hold the name of the
+			 * shared variable.
+			 *
+			 * Note: When constructing a global variable, if you specify a
+			 * module parent, then the global variable is added automatically
+			 * to its list of global variables
+			 */
+			StringRef varName = grv->getName();
+			Constant* varNameArray = ConstantDataArray::getString(M.getContext(), varName);
+			GlobalVariable* varNameGlobal = new GlobalVariable(M, varNameArray->getType(), true, GlobalValue::PrivateLinkage, varNameArray, "__soaap__shared_var_" + varName);
+
+			Constant* Idxs[2] = {
+					ConstantInt::get(Type::getInt32Ty(M.getContext()), 0),
+					ConstantInt::get(Type::getInt32Ty(M.getContext()), 0)
+			};
+
+			Constant* varCastConst = ConstantExpr::getGetElementPtr(varNameGlobal, Idxs);
+			Constant* permConst = ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), perms);
+			Value* Args[] = { varCastConst, permConst };
+
+			Function* varSharedFn = M.getFunction("soaap_shared_var");
+			CallInst* varSharedCall = CallInst::Create(varSharedFn, Args);
+			varSharedCall->insertBefore(predInst);
+		}
+
+		void calculateSandboxReachableMethods(Module& M) {
+			CallGraphNode* cgRoot = getAnalysis<CallGraph>().getRoot();
+			calculateSandboxReachableMethodsHelper(cgRoot, false, SmallVector<CallGraphNode*,16>());
+		}
+
+
+		void calculateSandboxReachableMethodsHelper(CallGraphNode* node, bool collect, SmallVector<CallGraphNode*,16> visited) {
+//			cout << "Visiting " << node->getFunction()->getName().str() << endl;
+			if (collect) {
+//				cout << "-- Collecting" << endl;
+				sandboxReachableMethods.insert(node->getFunction());
+			}
+			else if (find(visited.begin(), visited.end(), node) != visited.end()) {
+				// cycle detected
+				return;
+			}
+//			cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
+			visited.push_back(node);
+			for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
+				CallGraphNode* calleeNode = I->second;
+				if (Function* calleeFunc = calleeNode->getFunction()) {
+					bool sandboxFunc = find(sandboxFuncs.begin(), sandboxFuncs.end(), calleeFunc) != sandboxFuncs.end();
+					calculateSandboxReachableMethodsHelper(calleeNode, collect || sandboxFunc, visited);
+				}
+			}
+		}
+
+		void checkGlobalVariables(Module& M) {
+
+			// find all uses of global variables and check that they are allowed
+			// as per the annotations
+			for (Function* F : sandboxReachableMethods) {
+				cout << "Sandboxed function: " << F->getName().str() << endl;
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					for (Instruction& I : BB.getInstList()) {
+//						I.dump();
+						if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+							if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
+								if (!(varToPerms[gv] & VAR_READ_MASK)) {
+									cout << " *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to" << endl;
+									if (MDNode *N = I.getMetadata("dbg")) {
+									   DILocation loc(N);
+									   cout << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << endl;
+									}
+									cout << endl;
+								}
+
+							}
+						}
+						else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+							if (GlobalVariable* gv = dyn_cast<GlobalVariable>(store->getPointerOperand())) {
+								// check that the programmer has annotated that this
+								// variable can be written to
+								if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
+									cout << " *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to" << endl;
+									if (MDNode *N = I.getMetadata("dbg")) {
+									   DILocation loc(N);
+									   cout << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getDirectory().str() << "/" << loc.getFilename().str() << endl;
+									}
+									cout << endl;
+								}
+							}
+						}
+//						I.dump();
+//						cout << "Num operands: " << I.getNumOperands() << endl;
+//						for (int i=0; i<I.getNumOperands(); i++) {
+//							cout << "Operand " << i << ": " << endl;
+//							I.getOperand(i)->dump();
+//						}
+					}
+				}
+			}
+
+		}
+
+		void checkFileDescriptors(Module& M) {
+
+			/* Plan:
+			 * Find all operations on files (e.g. read, write, lseek etc) within
+			 * sandbox-reachable methods, obtain the file descriptor argument
+			 * and trace it back to the corresponding parameter. Check the param
+			 * for a file descriptor annotation. If it doesn't exist then trace
+			 * back further until we have reached the outermost sandbox method.
+			 */
+
+			for (Function* F : sandboxReachableMethods) {
+				cout << "Sandboxed function: " << F->getName().str() << endl;
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					for (Instruction& I : BB.getInstList()) {
+						if (CallInst* ci = dyn_cast<CallInst>(&I))  {
+							ci->dump();
+							Function* callee = ci->getCalledFunction();
+							if (callee->getName().equals("read")) {
+								Value* ifd = ci->getOperand(0);
+								// ifd is either a constant, local var, global
+								// var or function parameter
+								if (!checkFileDescriptorInTheContextOf(ifd, 0, F, VAR_READ_MASK)) {
+									cout << "Not allowed to read file descriptor" << endl;
+								}
+							}
+							callee->dump();
+						}
+					}
+				}
+			}
+		}
+
+		bool checkFileDescriptorInTheContextOf(Value* fd, int idx, Function* fn, int perm) {
+			if (find(sandboxReachableMethods.begin(), sandboxReachableMethods.end(), fn) == sandboxReachableMethods.end()) {
+				// fn is not sandbox-reachable
+				cout << fn->getName().str() << " does not execute in a sandbox!" << endl;
+				return false;
+			}
+
+			// perform necessary checks depending on whether fd is a local var,
+			// global var, constant or function param
+			if (isa<Argument>(fd)) {
+				Argument* arg = dyn_cast<Argument>(fd);
+				// function param
+				cout << "Function param!!" << endl;
+				// check if ifd has an annotation
+				if (fdToPerms.find(arg) == fdToPerms.end()) {
+					// no annotation, so we look higher up
+					// find all callers of F and perform this
+					// check recursively, until we reach a
+					// method that is not sandbox-reachable
+					bool allPathsAuthorise = true;
+					for (User::use_iterator i = fn->use_begin(), e = fn->use_end(); e!=i; i++) {
+						if (CallInst *ci = dyn_cast<CallInst>(*i)) {
+							Function* caller = ci->getParent()->getParent();
+							cout << "called by " << caller->getName().str() << endl;
+							Value* callerArg = ci->getArgOperand(idx);
+							allPathsAuthorise &= checkFileDescriptorInTheContextOf(callerArg, idx, caller, perm);
+						}
+					}
+					return allPathsAuthorise;
+				}
+				else if (!(fdToPerms[arg] & perm)) {
+					/*
+					 * Annotation exists for this fd, but no read access has
+					 * been granted.
+					 *
+					 * Note: if the same fd is annotated differently in different
+					 * methods of the same call chain then the question arises of
+					 * whether we all annotations should be considered or just
+					 * the one closest to the posix call (e.g. read or write)?
+					 * I think probably the closest one as the programmer may
+					 * want to specify that a method have only a subset of the
+					 */
+
+				}
+			}
+			else {
+				// either a global var, local var or constant
+			}
+			return false;
+		}
+
+		void instrumentPerfEmul(Module& M) {
+			/* Get LLVM context */
+			LLVMContext &C = M.getContext();
+
+			/*
+			 * Get the var.annotation intrinsic function from the current
+			 * module.
+			 */
+			Function* FVA = M.getFunction("llvm.var.annotation");
+
+			/* Insert instrumentation for emulating performance */
+			Function* enterPersistentSandboxFn
+				= M.getFunction("soaap_perf_enter_persistent_sbox");
+			Function* enterEphemeralSandboxFn
+				= M.getFunction("soaap_perf_enter_ephemeral_sbox");
+
+			/*
+			 * Iterate through sandboxed functions and apply the necessary
+			 * instrumentation to emulate performance overhead.
+			 */
+			for (Function* F : sandboxFuncs) {
+				Argument* data_in = NULL;
+				Argument* data_out = NULL;
+				bool persistent = find(persistentSandboxFuncs.begin(),
+					persistentSandboxFuncs.end(), F) !=
+					persistentSandboxFuncs.end();
+				Instruction* firstInst = F->getEntryBlock().getFirstNonPHI();
+
+				/*
+				 * Check if there are annotated parameters to sandboxed
+				 * functions.
+				 */
+				if (FVA) {
+					for (User::use_iterator u = FVA->use_begin(),
+						e = FVA->use_end(); e!=u; u++) {
+						User* user = u.getUse().getUser();
+						if (isa<IntrinsicInst>(user)) {
+							IntrinsicInst* annotateCall
+								= dyn_cast<IntrinsicInst>(user);
+
+							/* Get the enclosing function */
+							Function* enclosingFunc
+								= annotateCall->getParent()->getParent();
+
+							/*
+							 * If the enclosing function does not match the
+							 * current sandboxed function in the outer loop
+							 * continue.
+							 */
+							if (enclosingFunc != F)
+								continue;
+
+							/* Get the annotated variable as LLVM::Value */
+							Value* annotatedVar
+								= dyn_cast<Value>
+								(annotateCall->getOperand(0)->stripPointerCasts());
+
+							/* Get the annotation as string */
+							GlobalVariable* annotationStrVar
+								= dyn_cast<GlobalVariable>
+								(annotateCall->getOperand(1)->stripPointerCasts());
+							ConstantDataArray* annotationStrValArray
+								= dyn_cast<ConstantDataArray>
+								(annotationStrVar->getInitializer());
+							StringRef annotationStrValCString
+								= annotationStrValArray->getAsCString();
+
+							/*
+							 * Record which param was annotated. We have to do
+							 * this because llvm creates a local var for the
+							 * param by appending .addrN to the end of the param
+							 * name and associates the annotation with the newly
+							 * created local var i.e. see ifd and ifd.addr1
+							 * above
+							 */
+							Argument* annotatedArg = NULL;
+
+							for (Argument &arg : enclosingFunc->getArgumentList()) {
+								if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
+									annotatedArg = &arg;
+								}
+							}
+
+							if (annotatedArg != NULL) {
+								if (annotationStrValCString == DATA_IN) {
+									cout << "__DATA_IN annotated parameter"
+										" found!\n";
+									if (data_in) {
+										errs() << "[XXX] Only one parameter "
+											"should be annotated with __data_in"
+											" attribute";
+										return;
+									}
+									/* Get the data_in param */
+									data_in = annotatedArg;
+								}
+								else if (annotationStrValCString == DATA_OUT) {
+									cout << "__DATA_OUT annotated parameter"
+										" found!\n";
+									if (data_out) {
+										errs() << "[XXX] Only one parameter "
+											"should be annotated with __data_out"
+											" attribute";
+										return;
+									}
+									/* Get the data_in param */
+									data_out = annotatedArg;
+								}
+							}
+						}
+					}
+				}
+
+				int perfThreshold = 0;
+				if (sandboxFuncToOverhead.find(F) !=
+					sandboxFuncToOverhead.end()) {
+					perfThreshold = sandboxFuncToOverhead[F];
+				}
+
+				/*
+				 * Get type of "struct timespec" from the current module.
+				 * Unfortunately, IRbuilder's CreateAlloca() method does not
+				 * support inserting *before* a basic block and thus it is
+				 * inconvenient to use it here.
+				 *
+				 */
+				StructType* timespecTy = M.getTypeByName("struct.timespec");
+				AllocaInst *start_ts = new AllocaInst(dyn_cast<Type>(timespecTy),
+					Twine("soaap_start_ts"), firstInst);
+				AllocaInst *sbox_ts = new AllocaInst(dyn_cast<Type>(timespecTy),
+					Twine("soaap_sbox_ts"), firstInst);
+				Value *argStartTs = dyn_cast <Value> (start_ts);
+				Value *argSboxTs = dyn_cast <Value> (sbox_ts);
+
+				/*
+				 * Instrument block prologue to measure the sandboxing overhead.
+				 */
+				Function *perfOverheadFn
+					= M.getFunction("soaap_perf_tic");
+				CallInst *perfOverheadCall = CallInst::Create(perfOverheadFn,
+					ArrayRef<Value*>(argStartTs));
+				perfOverheadCall->insertBefore(firstInst);
+
+				/*
+				 * Pick the appropriate function to inject based on the
+				 * annotations and perform the actual instrumentation in the
+				 * sandboxed function prologue.
+				 * NOTE: At the moment, we do not handle __data_out.
+				 */
+				CallInst* enterSandboxCall = NULL;
+				if (data_in) {
+					enterPersistentSandboxFn
+						= M.getFunction("soaap_perf_enter_datain_persistent_sbox");
+					enterEphemeralSandboxFn
+						= M.getFunction("soaap_perf_enter_datain_ephemeral_sbox");
+					enterSandboxCall = CallInst::Create(persistent
+						? enterPersistentSandboxFn : enterEphemeralSandboxFn,
+						ArrayRef<Value*>(data_in));
+					enterSandboxCall->insertBefore(firstInst);
+				} else {
+					enterPersistentSandboxFn
+						= M.getFunction("soaap_perf_enter_persistent_sbox");
+					enterEphemeralSandboxFn
+						= M.getFunction("soaap_perf_enter_ephemeral_sbox");
+					enterSandboxCall = CallInst::Create(persistent
+						? enterPersistentSandboxFn : enterEphemeralSandboxFn,
+						ArrayRef<Value*>());
+					enterSandboxCall->insertBefore(firstInst);
+				}
+
+				/*
+				 * Inject instrumentation after the sandboxing emulation in
+				 * order to measure the absolute overhead.
+				 * Before that create the vector with the arguments needed.
+				 */
+				perfOverheadFn = M.getFunction("soaap_perf_overhead_toc");
+				perfOverheadCall = CallInst::Create(perfOverheadFn,
+					ArrayRef<Value*>(argSboxTs));
+				perfOverheadCall->insertBefore(firstInst);
+
+				ConstantInt *argPerfThreshold = NULL;
+				if (perfThreshold)
+					argPerfThreshold = ConstantInt::get(Type::getInt32Ty(C),
+						perfThreshold, false);
+
+				/*
+				 * Inject instrumentation after the sandboxing emulation in
+				 * order to measure the total execution time.
+				 */
+				SmallVector<Value*, 2> soaap_perf_overhead_args;
+				soaap_perf_overhead_args.push_back(argStartTs);
+				soaap_perf_overhead_args.push_back(argSboxTs);
+				if (perfThreshold) {
+					soaap_perf_overhead_args.push_back(dyn_cast<Value>
+						(argPerfThreshold));
+					perfOverheadFn = M.getFunction("soaap_perf_total_toc_thres");
+
+				} else {
+					perfOverheadFn = M.getFunction("soaap_perf_total_toc");
+				}
+
+				perfOverheadCall = CallInst::Create(perfOverheadFn,
+					ArrayRef<Value*>(soaap_perf_overhead_args));
+
+				// Get terminator instruction of the current basic block.
+				for (BasicBlock& BB : F->getBasicBlockList()) {
+					TerminatorInst* termInst = BB.getTerminator();
+					if (isa<ReturnInst>(termInst)) {
+						//BB is an exit block, instrument ret
+						perfOverheadCall->insertBefore(termInst);
+					}
+				}
+			}
+
+			/*
+			 * If there are running persistent sandboxed terminate them before
+			 * exiting the program.  This is achieved when calling the
+			 * appropriate library function with -1 as argument.
+			 */
+			if (!persistentSandboxFuncs.empty()) {
+				Function* mainFn = M.getFunction("main");
+
+				ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
+					-1, true);
+
+				Function* terminatePersistentSandbox
+					= M.getFunction("soaap_perf_enter_datain_persistent_sbox");
+				CallInst* terminateCall
+					= CallInst::Create(terminatePersistentSandbox,
+						ArrayRef<Value*>(dyn_cast<Value>(arg)));
+				//CallInst* terminateCall
+				//= CallInst::Create(terminatePersistentSandbox,
+				//ArrayRef<Value*>());
+				terminateCall->setTailCall();
+
+				// Iterate over main's BasicBlocks and instrument all ret points
+				for (BasicBlock& BB : mainFn->getBasicBlockList()) {
+					TerminatorInst* mainLastInst = BB.getTerminator();
+					if (isa<ReturnInst>(mainLastInst)) {
+						//BB is an exit block, instrument ret
+						terminateCall->insertBefore(mainLastInst);
+					}
+				}
+
+			}
+		}
+	};
+
+	char SoaapPass::ID = 0;
+	static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
+
+	void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
+  		PM.add(new SoaapPass);
+  	}
+
+	RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
+>>>>>>> perf_analysis
 
 }

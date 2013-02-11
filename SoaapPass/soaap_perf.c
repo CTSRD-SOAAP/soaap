@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "soaap_perf.h"
@@ -16,6 +17,8 @@
 #else
 #define DPRINTF(...)
 #endif
+
+#define PIPES
 
 void
 soaap_perf_enter_persistent_sbox()
@@ -39,7 +42,8 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
 	int nbytes = 0;
 	static char *buf;
 	static pid_t pid;
-	static int pfds[2], flag, buflen;
+	static int flag, buflen;
+	static int pfds[2]; /* Paired descriptors used for both sockets and pipes */
 
 	DPRINTF("Emulating performance of using persistent sandbox.");
 
@@ -47,8 +51,15 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
 		buflen = getpagesize();
 		buf = malloc(buflen*sizeof(char));
 
+#ifdef PIPES
 		/* Use pipes for IPC */
 		pipe(pfds);
+#elif defined (UDSOCKETS)
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, pfds) == -1) {
+			perror("socketpair");
+			exit(1);
+		}
+#endif
 
 		pid = fork();
 		if (pid == -1) {
@@ -124,8 +135,15 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
 
 	DPRINTF("Emulating performance of using ephemeral sandbox.");
 
+#ifdef PIPES
 	/* Use pipes for IPC */
 	pipe(pfds);
+#elif defined (UDSOCKETS)
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pfds) == -1) {
+		perror("socketpair");
+		exit(1);
+	}
+#endif
 
 	/* Allocate resources */
 	buflen = getpagesize();
@@ -178,3 +196,100 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
 		wait(NULL);
 	}
 }
+
+void
+soaap_perf_tic(struct timespec *start_ts)
+{
+
+	DPRINTF("SANDBOXED FUNCTION PROLOGUE -- TIC!");
+	clock_gettime(CLOCK_MONOTONIC, start_ts);
+}
+
+void
+soaap_perf_overhead_toc(struct timespec *sbox_ts)
+{
+	DPRINTF("SANDBOXED FUNCTION OVERHEAD -- SBOX_TOC!");
+	clock_gettime(CLOCK_MONOTONIC, sbox_ts);
+}
+
+void
+soaap_perf_total_toc(struct timespec *start_ts, struct timespec *sbox_ts)
+{
+	struct timespec end_ts, diff_ts;
+	unsigned long ns_total, ns_sbox;
+
+	ns_total = ns_sbox = 0;
+
+	/* Get the final timestamp */
+	clock_gettime(CLOCK_MONOTONIC, &end_ts);
+
+	/* Calculate total execution time of sandboxed function */
+	diff_ts.tv_sec = end_ts.tv_sec - start_ts->tv_sec;
+	diff_ts.tv_nsec = end_ts.tv_nsec - start_ts->tv_nsec;
+
+	ns_total = diff_ts.tv_nsec;
+	while(diff_ts.tv_sec) {
+		diff_ts.tv_sec--;
+		ns_total += 1000000000;
+	}
+
+	/* Calculate the time spent in sandboxing mechanisms */
+	diff_ts.tv_sec = sbox_ts->tv_sec - start_ts->tv_sec;
+	diff_ts.tv_nsec = sbox_ts->tv_nsec - start_ts->tv_nsec;
+
+	ns_sbox = diff_ts.tv_nsec;
+	while(diff_ts.tv_sec) {
+		diff_ts.tv_sec--;
+		ns_sbox += 1000000000;
+	}
+
+	DPRINTF("[Total Execution Time]: %lu ns, [Sandboxing Time]: %lu ns, "
+		"[Sandboxing Overhead]: %f%%", ns_total, ns_sbox,
+		((double)ns_sbox/(double)ns_total)*100);
+
+}
+
+void
+soaap_perf_total_toc_thres(struct timespec *start_ts, struct timespec *sbox_ts,
+	int thres)
+{
+	struct timespec end_ts, diff_ts;
+	unsigned long ns_total, ns_sbox;
+	double overhead;
+
+	ns_total = ns_sbox = 0;
+
+	/* Get the final timestamp */
+	clock_gettime(CLOCK_MONOTONIC, &end_ts);
+
+	/* Calculate total execution time of sandboxed function */
+	diff_ts.tv_sec = end_ts.tv_sec - start_ts->tv_sec;
+	diff_ts.tv_nsec = end_ts.tv_nsec - start_ts->tv_nsec;
+
+	ns_total = diff_ts.tv_nsec;
+	while(diff_ts.tv_sec) {
+		diff_ts.tv_sec--;
+		ns_total += 1000000000;
+	}
+
+	/* Calculate the time spent in sandboxing mechanisms */
+	diff_ts.tv_sec = sbox_ts->tv_sec - start_ts->tv_sec;
+	diff_ts.tv_nsec = sbox_ts->tv_nsec - start_ts->tv_nsec;
+
+	ns_sbox = diff_ts.tv_nsec;
+	while(diff_ts.tv_sec) {
+		diff_ts.tv_sec--;
+		ns_sbox += 1000000000;
+	}
+
+	overhead = ((double)ns_sbox/(double)ns_total)*100;
+
+	if (overhead > (double) thres)
+		fprintf(stderr, "[!!!] Sandboxing Overhead %f%% (Threshold: %d%%)\n",
+			overhead, thres);
+
+	DPRINTF("[Total Execution Time]: %lu ns, [Sandboxing Time]: %lu ns, "
+		"[Sandboxing Overhead]: %f%%", ns_total, ns_sbox, overhead);
+
+}
+
