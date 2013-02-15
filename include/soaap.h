@@ -27,6 +27,10 @@
 #define FD_WRITE "FD_WRITE"
 #define FD_WRITE_MASK 0x2
 
+// classification and clearance to access data
+#define CLASSIFY "CLASSIFY"
+#define CLEARANCE "CLEARANCE"
+
 #define __soaap_sandbox __sandbox_persistent
 #define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
 #define __soaap_sandbox_ephemeral __attribute__((annotate(SANDBOX_EPHEMERAL))) __attribute__((noinline))
@@ -40,6 +44,9 @@
 	static void __declare_callgates() { \
 		__declare_callgates_helper(0, fns); \
 	}
+
+#define __soaap_classify(L) __attribute__((annotate(CLASSIFY"_"L)))
+#define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
 
 void __declare_callgates_helper(int unused, ...);
 

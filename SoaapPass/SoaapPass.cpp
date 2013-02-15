@@ -58,10 +58,15 @@ namespace soaap {
     SmallSet<Function*,16> sandboxedMethods;
     SmallSet<Function*,16> syscallReachableMethods;
 
-    
-
     map<const Value*,int> origin;
     SmallVector<CallInst*,16> untrustedSources;
+
+    // classification stuff
+    map<StringRef,int> classToBitIdx;
+    map<int,StringRef> bitIdxToClass;
+    int nextClassBitIdx = 0;
+    map<Function*,int> sandboxedMethodToClearances;
+    map<const Value*,int> valueToClasses;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -83,6 +88,7 @@ namespace soaap {
         OriginPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
 
         bool propagate(const Value* From, const Value* To) {
+          dbgs() << "propagate called\n";
           if (parent->origin.find(To) == parent->origin.end()) {
             parent->origin[To] = parent->origin[From];
             return true; // return true to allow perms to propagate through
@@ -113,6 +119,24 @@ namespace soaap {
           }      
         };
     };
+    
+    class ClassPropagateFunction : public PropagateFunction {
+      public:
+        ClassPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
+
+        bool propagate(const Value* From, const Value* To) {
+          if (parent->valueToClasses.find(To) == parent->valueToClasses.end()) {
+            parent->valueToClasses[To] = parent->valueToClasses[From];
+            return true; // return true to allow classes to propagate through
+                         // regardless of whether the value was non-zero
+          }                   
+          else {
+            int old = parent->valueToClasses[To];
+            parent->valueToClasses[To] |= parent->valueToClasses[From];
+            return parent->valueToClasses[To] != old;
+          }      
+        };
+    };
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (!dynamic) {
@@ -137,6 +161,9 @@ namespace soaap {
 
       outs() << "* Finding callgates\n";
       findCallgates(M);
+
+      outs() << "* Finding classifications\n";
+      findClassifications(M);
 
       if (!sandboxEntryPoints.empty()) {
         if (dynamic && !emPerf) {
@@ -167,6 +194,9 @@ namespace soaap {
 
           outs() << "* Checking propagation of data from sandboxes to privileged components\n";
           checkOriginOfAccesses(M);
+          
+          outs() << "* Checking propagation of classified data\n";
+          checkPropagationOfClassifiedData(M);
         }
         else if (!dynamic && emPerf) {
           instrumentPerfEmul(M);
@@ -287,8 +317,8 @@ namespace soaap {
               for (const Function* F2 : PI->getDynamicCallees(C)) {
                 CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
                 CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
-                F1Node->addCalledFunction(CallSite(C), F2Node);
                 DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
+                F1Node->addCalledFunction(CallSite(C), F2Node);
               }
             }
           }
@@ -514,10 +544,21 @@ namespace soaap {
               matches[1].getAsInteger(0, overhead);
               sandboxedMethodToOverhead[annotatedFunc] = overhead;
             }
+            else if (annotationStrArrayCString.startswith(CLEARANCE)) {
+              StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
+              outs() << "   Sandbox has clearance for \"" << className << "\"\n";
+              if (classToBitIdx.find(className) == classToBitIdx.end()) {
+                dbgs() << "      Assigning bit index " << nextClassBitIdx << " to class \"" << className << "\"\n";
+                classToBitIdx[className] = nextClassBitIdx;
+                bitIdxToClass[nextClassBitIdx] = className;
+                nextClassBitIdx++;
+              }
+              sandboxedMethodToClearances[annotatedFunc] |= (1 << classToBitIdx[className]);
+            }
           }
         }
       }
-
+      
     }
 
     /*
@@ -633,6 +674,82 @@ namespace soaap {
         }
       }
 
+    }
+
+    void checkPropagationOfClassifiedData(Module& M) {
+
+      // initialise with pointers to annotated fields
+      list<const Value*> worklist;
+      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<IntrinsicInst>(user)) {
+            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            
+            StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
+            int bitIdx = classToBitIdx[className];
+            
+            dbgs() << "   Classification annotation " << annotationStrValCString << " found:\n";
+            
+            worklist.push_back(annotatedVar);
+            valueToClasses[annotatedVar] |= (1 << bitIdx);
+          }
+        }
+      }
+                  
+      // transfer function
+      ClassPropagateFunction propagateClassifications(this);
+
+      // compute fixed point
+      performDataflowAnalysis(M, propagateClassifications, worklist);
+      
+      // validate that classified data is never accessed inside sandboxed contexts that
+      // don't have clearance for its class.
+      for (Function* F : sandboxedMethods) {
+        DEBUG(dbgs() << "Function: " << F->getName() << ", clearances: " << stringifyClassifications(sandboxedMethodToClearances[F]) << "\n");
+        for (BasicBlock& BB : F->getBasicBlockList()) {
+          for (Instruction& I : BB.getInstList()) {
+            DEBUG(dbgs() << "   Instruction:\n");
+            DEBUG(I.dump());
+            if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+              Value* v = load->getPointerOperand();
+              DEBUG(dbgs() << "      Value:\n");
+              DEBUG(v->dump());
+              DEBUG(dbgs() << "      Value classes: " << valueToClasses[v] << ", " << stringifyClassifications(valueToClasses[v]) << "\n");
+              if (!(valueToClasses[v] == 0 || valueToClasses[v] == sandboxedMethodToClearances[F] || (valueToClasses[v] & sandboxedMethodToClearances[F]))) {
+                outs() << "\n *** Sandboxed method " << F->getName() << " read data value of class: " << stringifyClassifications(valueToClasses[v]) << " but only has clearances for: " << stringifyClassifications(sandboxedMethodToClearances[F]) << "\n";
+                if (MDNode *N = I.getMetadata("dbg")) {
+                  DILocation loc(N);
+                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                }
+              }
+            }
+          }
+        }
+      }
+      
+    }
+
+    string stringifyClassifications(int classes) {
+      string classStr = "[";
+      int currIdx = 0;
+      bool first = true;
+      for (currIdx=0; currIdx<=31; currIdx++) {
+        if (classes & (1 << currIdx)) {
+          StringRef className = bitIdxToClass[currIdx];
+          if (!first) 
+            classStr += ",";
+          classStr += className;
+          first = false;
+        }
+      }
+      classStr += "]";
+      return classStr;
     }
 
     /*
@@ -751,6 +868,32 @@ namespace soaap {
           }
         }
       }
+    }
+
+    void findClassifications(Module& M) {
+
+      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<IntrinsicInst>(user)) {
+            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            
+            StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
+            if (classToBitIdx.find(className) == classToBitIdx.end()) {
+              dbgs() << "    Assigning bit index " << nextClassBitIdx << " to class \"" << className << "\"\n";
+              classToBitIdx[className] = nextClassBitIdx;
+              bitIdxToClass[nextClassBitIdx] = className;
+              nextClassBitIdx++;
+            }
+          }
+        }
+      }
+
     }
 
     /*
@@ -1072,12 +1215,12 @@ namespace soaap {
       CallGraph& CG = getAnalysis<CallGraph>();
       for (Function* F : sandboxEntryPoints) {
         CallGraphNode* Node = CG.getOrInsertFunction(F);
-        calculateSandboxedMethodsHelper(Node);
+        calculateSandboxedMethodsHelper(Node, sandboxedMethodToClearances[F]);
       }
     }
 
 
-    void calculateSandboxedMethodsHelper(CallGraphNode* node) {
+    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances) {
 
       Function* F = node->getFunction();
 
@@ -1089,13 +1232,14 @@ namespace soaap {
       }
 
       sandboxedMethods.insert(F);
+      sandboxedMethodToClearances[F] |= clearances;
 
 //      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
       for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
         Value* V = I->first;
         CallGraphNode* calleeNode = I->second;
         if (Function* calleeFunc = calleeNode->getFunction()) {
-          calculateSandboxedMethodsHelper(calleeNode);
+          calculateSandboxedMethodsHelper(calleeNode, clearances);
         }
       }
     }
