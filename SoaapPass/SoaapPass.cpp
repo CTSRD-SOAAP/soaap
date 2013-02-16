@@ -67,6 +67,7 @@ namespace soaap {
     int nextClassBitIdx = 0;
     map<Function*,int> sandboxedMethodToClearances;
     map<const Value*,int> valueToClasses;
+    map<GlobalVariable*,int> varToClasses;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -547,12 +548,7 @@ namespace soaap {
             else if (annotationStrArrayCString.startswith(CLEARANCE)) {
               StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
               outs() << "   Sandbox has clearance for \"" << className << "\"\n";
-              if (classToBitIdx.find(className) == classToBitIdx.end()) {
-                dbgs() << "      Assigning bit index " << nextClassBitIdx << " to class \"" << className << "\"\n";
-                classToBitIdx[className] = nextClassBitIdx;
-                bitIdxToClass[nextClassBitIdx] = className;
-                nextClassBitIdx++;
-              }
+              assignBitIdxToClassName(className);
               sandboxedMethodToClearances[annotatedFunc] |= (1 << classToBitIdx[className]);
             }
           }
@@ -678,7 +674,7 @@ namespace soaap {
 
     void checkPropagationOfClassifiedData(Module& M) {
 
-      // initialise with pointers to annotated fields
+      // initialise with pointers to annotated fields and uses of annotated global variables
       list<const Value*> worklist;
       if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
         for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
@@ -700,6 +696,22 @@ namespace soaap {
             valueToClasses[annotatedVar] |= (1 << bitIdx);
           }
         }
+      }
+      
+      for (map<GlobalVariable*,int>::iterator I=varToClasses.begin(), E=varToClasses.end(); I != E; I++) {
+        GlobalVariable* var = I->first;
+        int classes = I->second;
+        // find all users of var and taint them
+        for (User::use_iterator u = var->use_begin(), e = var->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (LoadInst* load = dyn_cast<LoadInst>(user)) {
+            Value* v = load->getPointerOperand();
+            dbgs() << "   Load of classified global variable " << var->getName() << " found with classifications: " << stringifyClassifications(classes) << "\n";
+            DEBUG(load->dump());
+            valueToClasses[v] = classes; // could v have already been initialised above? (NO)
+          }
+        }
+
       }
                   
       // transfer function
@@ -872,6 +884,8 @@ namespace soaap {
 
     void findClassifications(Module& M) {
 
+      // struct field annotations are stored in LLVM IR as arguments to calls 
+      // to the intrinsic @llvm.ptr.annotation.p0i8
       if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
         for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
           User* user = u.getUse().getUser();
@@ -884,16 +898,45 @@ namespace soaap {
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
             
             StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
-            if (classToBitIdx.find(className) == classToBitIdx.end()) {
-              dbgs() << "    Assigning bit index " << nextClassBitIdx << " to class \"" << className << "\"\n";
-              classToBitIdx[className] = nextClassBitIdx;
-              bitIdxToClass[nextClassBitIdx] = className;
-              nextClassBitIdx++;
+            assignBitIdxToClassName(className);
+          }
+        }
+      }
+
+      // annotations on variables are stored in the llvm.global.annotations global
+      // array
+      GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations");
+      if (lga != NULL) {
+        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+          // get the annotation value first
+          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+
+          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+          if (isa<GlobalVariable>(annotatedVal)) {
+            GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
+            if (annotationStrArrayCString.startswith(CLASSIFY)) {
+              StringRef className = annotationStrArrayCString.substr(strlen(CLASSIFY)+1);
+              assignBitIdxToClassName(className);
+              varToClasses[annotatedVar] |= (1 << classToBitIdx[className]);
             }
           }
         }
       }
 
+    }
+
+    void assignBitIdxToClassName(StringRef className) {
+      if (classToBitIdx.find(className) == classToBitIdx.end()) {
+        dbgs() << "    Assigning bit index " << nextClassBitIdx << " to class \"" << className << "\"\n";
+        classToBitIdx[className] = nextClassBitIdx;
+        bitIdxToClass[nextClassBitIdx] = className;
+        nextClassBitIdx++;
+      }
     }
 
     /*
