@@ -66,7 +66,7 @@ namespace soaap {
     SoaapPass() : ModulePass(ID) {
       modified = false;
       dynamic = false;
-      emPerf = false;
+      emPerf = true;
     }
 
     // inner classes for propagate functions
@@ -115,6 +115,8 @@ namespace soaap {
     };
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+      if (emPerf)
+	return;
       if (!dynamic) {
         AU.setPreservesCFG();
       }
@@ -1193,7 +1195,7 @@ namespace soaap {
 			 * Iterate through sandboxed functions and apply the necessary
 			 * instrumentation to emulate performance overhead.
 			 */
-			for (Function* F : sandboxedMethods) {
+			for (Function* F : sandboxEntryPoints) {
 				Argument* data_in = NULL;
 				Argument* data_out = NULL;
 				bool persistent = find(persistentSandboxFuncs.begin(),
