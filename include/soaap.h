@@ -31,6 +31,8 @@
 #define CLASSIFY "CLASSIFY"
 #define CLEARANCE "CLEARANCE"
 
+#define SANDBOX_PRIVATE "SANDBOX_PRIVATE"
+
 #define __soaap_sandbox __sandbox_persistent
 #define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
 #define __soaap_sandbox_persistent_named(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
@@ -48,6 +50,7 @@
 
 #define __soaap_classify(L) __attribute__((annotate(CLASSIFY"_"L)))
 #define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
+#define __soaap_sandbox_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
 
 void __declare_callgates_helper(int unused, ...);
 

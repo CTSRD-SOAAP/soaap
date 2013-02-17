@@ -52,8 +52,11 @@ namespace soaap {
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
     SmallVector<Function*,32> sandboxEntryPoints;
-    map<Function*,StringRef> sandboxEntryPointToName;
-    map<Function*,SmallVector<StringRef,5> > sandboxedMethodToNames;
+    map<Function*,int> sandboxEntryPointToName;
+    map<Function*,int> sandboxedMethodToNames;
+    map<StringRef,int> sandboxNameToBitIdx;
+    map<int,StringRef> bitIdxToSandboxName;
+    int nextSandboxNameBitIdx = 0;
     SmallVector<Function*,16> callgates;
     SmallVector<Function*,16> privilegedMethods;
 
@@ -70,6 +73,10 @@ namespace soaap {
     map<Function*,int> sandboxedMethodToClearances;
     map<const Value*,int> valueToClasses;
     map<GlobalVariable*,int> varToClasses;
+
+    // sandbox-private stuff
+    map<const Value*,int> valueToSandboxNames;
+    map<GlobalVariable*,int> varToSandboxNames;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -141,6 +148,24 @@ namespace soaap {
         };
     };
 
+    class SandboxPrivatePropagateFunction : public PropagateFunction {
+      public:
+        SandboxPrivatePropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
+
+        bool propagate(const Value* From, const Value* To) {
+          if (parent->valueToSandboxNames.find(To) == parent->valueToSandboxNames.end()) {
+            parent->valueToSandboxNames[To] = parent->valueToSandboxNames[From];
+            return true; // return true to allow sandbox names to propagate through
+                         // regardless of whether the value was non-zero
+          }                   
+          else {
+            int old = parent->valueToSandboxNames[To];
+            parent->valueToSandboxNames[To] |= parent->valueToSandboxNames[From];
+            return parent->valueToSandboxNames[To] != old;
+          }      
+        };
+    };
+
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (!dynamic) {
         AU.setPreservesCFG();
@@ -167,6 +192,9 @@ namespace soaap {
 
       outs() << "* Finding classifications\n";
       findClassifications(M);
+
+      outs() << "* Finding sandbox-private data\n";
+      findSandboxPrivateAnnotations(M);
 
       if (!sandboxEntryPoints.empty()) {
         if (dynamic && !emPerf) {
@@ -200,6 +228,9 @@ namespace soaap {
           
           outs() << "* Checking propagation of classified data\n";
           checkPropagationOfClassifiedData(M);
+
+          outs() << "* Checking propagation of sandbox-private data\n";
+          checkPropagationOfSandboxPrivateData(M);
         }
         else if (!dynamic && emPerf) {
           instrumentPerfEmul(M);
@@ -537,7 +568,9 @@ namespace soaap {
               if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
                 StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
                 outs() << "      Sandbox name: " << sandboxName << "\n";
-                sandboxEntryPointToName[annotatedFunc] = sandboxName;
+                assignBitIdxToSandboxName(sandboxName);
+                sandboxEntryPointToName[annotatedFunc] = (1 << sandboxNameToBitIdx[sandboxName]);
+                DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
               }
             }
             else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
@@ -680,6 +713,83 @@ namespace soaap {
 
     }
 
+    void checkPropagationOfSandboxPrivateData(Module& M) {
+
+      // initialise with pointers to annotated fields and uses of annotated global variables
+      list<const Value*> worklist;
+      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<IntrinsicInst>(user)) {
+            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            
+            if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+              StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+              int bitIdx = sandboxNameToBitIdx[sandboxName];
+            
+              dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n";
+            
+              worklist.push_back(annotatedVar);
+              valueToSandboxNames[annotatedVar] |= (1 << bitIdx);
+            }
+          }
+        }
+      }
+      
+      for (map<GlobalVariable*,int>::iterator I=varToSandboxNames.begin(), E=varToSandboxNames.end(); I != E; I++) {
+        GlobalVariable* var = I->first;
+        int sandboxNames = I->second;
+        // find all users of var and taint them
+        for (User::use_iterator u = var->use_begin(), e = var->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (LoadInst* load = dyn_cast<LoadInst>(user)) {
+            Value* v = load->getPointerOperand();
+            DEBUG(dbgs() << "   Load of sandbox-private global variable " << var->getName() << " found; associated sandboxes are: " << stringifySandboxNames(sandboxNames) << "\n");
+            DEBUG(load->dump());
+            valueToSandboxNames[v] = sandboxNames; // could v have already been initialised above? (NO)
+          }
+        }
+
+      }
+                  
+      // transfer function
+      SandboxPrivatePropagateFunction propagateSandboxPrivate(this);
+
+      // compute fixed point
+      performDataflowAnalysis(M, propagateSandboxPrivate, worklist);
+      
+      // validate that classified data is never accessed inside sandboxed contexts that
+      // don't have clearance for its class.
+      for (Function* F : sandboxedMethods) {
+        DEBUG(dbgs() << "Function: " << F->getName() << ", names: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n");
+        for (BasicBlock& BB : F->getBasicBlockList()) {
+          for (Instruction& I : BB.getInstList()) {
+            DEBUG(dbgs() << "   Instruction:\n");
+            DEBUG(I.dump());
+            if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+              Value* v = load->getPointerOperand();
+              DEBUG(dbgs() << "      Value:\n");
+              DEBUG(v->dump());
+              DEBUG(dbgs() << "      Value names: " << valueToSandboxNames[v] << ", " << stringifySandboxNames(valueToSandboxNames[v]) << "\n");
+              if (!(valueToSandboxNames[v] == 0 || valueToSandboxNames[v] == sandboxedMethodToNames[F] || (valueToSandboxNames[v] & sandboxedMethodToNames[F]))) {
+                outs() << "\n *** Sandboxed method " << F->getName() << " read data value belonging to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << " but it executes in sandboxes: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
+                if (MDNode *N = I.getMetadata("dbg")) {
+                  DILocation loc(N);
+                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                }
+              }
+            }
+          }
+        }
+      }
+      
+    }
+
     void checkPropagationOfClassifiedData(Module& M) {
 
       // initialise with pointers to annotated fields and uses of annotated global variables
@@ -695,13 +805,15 @@ namespace soaap {
             ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
             
-            StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
-            int bitIdx = classToBitIdx[className];
+            if (annotationStrValCString.startswith(CLASSIFY)) {
+              StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
+              int bitIdx = classToBitIdx[className];
             
-            dbgs() << "   Classification annotation " << annotationStrValCString << " found:\n";
+              dbgs() << "   Classification annotation " << annotationStrValCString << " found:\n";
             
-            worklist.push_back(annotatedVar);
-            valueToClasses[annotatedVar] |= (1 << bitIdx);
+              worklist.push_back(annotatedVar);
+              valueToClasses[annotatedVar] |= (1 << bitIdx);
+            }
           }
         }
       }
@@ -753,6 +865,23 @@ namespace soaap {
         }
       }
       
+    }
+
+    string stringifySandboxNames(int sandboxNames) {
+      string sandboxNamesStr = "[";
+      int currIdx = 0;
+      bool first = true;
+      for (currIdx=0; currIdx<=31; currIdx++) {
+        if (sandboxNames & (1 << currIdx)) {
+          StringRef sandboxName = bitIdxToSandboxName[currIdx];
+          if (!first) 
+            sandboxNamesStr += ",";
+          sandboxNamesStr += sandboxName;
+          first = false;
+        }
+      }
+      sandboxNamesStr += "]";
+      return sandboxNamesStr;
     }
 
     string stringifyClassifications(int classes) {
@@ -890,7 +1019,7 @@ namespace soaap {
       }
     }
 
-    void findClassifications(Module& M) {
+    void findSandboxPrivateAnnotations(Module& M) {
 
       // struct field annotations are stored in LLVM IR as arguments to calls 
       // to the intrinsic @llvm.ptr.annotation.p0i8
@@ -904,9 +1033,10 @@ namespace soaap {
             GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
             ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-            
-            StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
-            assignBitIdxToClassName(className);
+            if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+              StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+              assignBitIdxToSandboxName(sandboxName);
+            }
           }
         }
       }
@@ -923,14 +1053,65 @@ namespace soaap {
           GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
           ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
           StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+          if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
+            GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+            if (isa<GlobalVariable>(annotatedVal)) {
+              GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
+              if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
+                StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
+                DEBUG(dbgs() << "    Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
+                assignBitIdxToSandboxName(sandboxName);
+                varToSandboxNames[annotatedVar] |= (1 << sandboxNameToBitIdx[sandboxName]);
+              }
+            }
+          }
+        }
+      }
 
-          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-          if (isa<GlobalVariable>(annotatedVal)) {
-            GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
-            if (annotationStrArrayCString.startswith(CLASSIFY)) {
-              StringRef className = annotationStrArrayCString.substr(strlen(CLASSIFY)+1);
+    }
+    void findClassifications(Module& M) {
+
+      // struct field annotations are stored in LLVM IR as arguments to calls 
+      // to the intrinsic @llvm.ptr.annotation.p0i8
+      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<IntrinsicInst>(user)) {
+            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            if (annotationStrValCString.startswith(CLASSIFY)) {
+              StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
               assignBitIdxToClassName(className);
-              varToClasses[annotatedVar] |= (1 << classToBitIdx[className]);
+            }
+          }
+        }
+      }
+
+      // annotations on variables are stored in the llvm.global.annotations global
+      // array
+      GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations");
+      if (lga != NULL) {
+        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+          // get the annotation value first
+          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+          if (annotationStrArrayCString.startswith(CLASSIFY)) {
+            GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+            if (isa<GlobalVariable>(annotatedVal)) {
+              GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
+              if (annotationStrArrayCString.startswith(CLASSIFY)) {
+                StringRef className = annotationStrArrayCString.substr(strlen(CLASSIFY)+1);
+                assignBitIdxToClassName(className);
+                varToClasses[annotatedVar] |= (1 << classToBitIdx[className]);
+              }
             }
           }
         }
@@ -944,6 +1125,15 @@ namespace soaap {
         classToBitIdx[className] = nextClassBitIdx;
         bitIdxToClass[nextClassBitIdx] = className;
         nextClassBitIdx++;
+      }
+    }
+
+    void assignBitIdxToSandboxName(StringRef sandboxName) {
+      if (sandboxNameToBitIdx.find(sandboxName) == sandboxNameToBitIdx.end()) {
+        dbgs() << "    Assigning bit index " << nextSandboxNameBitIdx << " to sandbox name \"" << sandboxName << "\"\n";
+        sandboxNameToBitIdx[sandboxName] = nextSandboxNameBitIdx;
+        bitIdxToSandboxName[nextSandboxNameBitIdx] = sandboxName;
+        nextSandboxNameBitIdx++;
       }
     }
 
@@ -1266,7 +1456,7 @@ namespace soaap {
       CallGraph& CG = getAnalysis<CallGraph>();
       for (Function* F : sandboxEntryPoints) {
         CallGraphNode* Node = CG.getOrInsertFunction(F);
-        StringRef sandboxName;
+        int sandboxName = 0;
         if (sandboxEntryPointToName.find(F) != sandboxEntryPointToName.end()) {
           sandboxName = sandboxEntryPointToName[F]; // sandbox entry point will only have one name
         }
@@ -1274,8 +1464,7 @@ namespace soaap {
       }
     }
 
-
-    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances, StringRef sandboxName) {
+    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances, int sandboxName) {
 
       Function* F = node->getFunction();
 
@@ -1289,9 +1478,9 @@ namespace soaap {
       sandboxedMethods.insert(F);
       sandboxedMethodToClearances[F] |= clearances;
 
-      if (!sandboxName.empty()) {
+      if (sandboxName != 0) {
         DEBUG(dbgs() << "   Assigning name: " << sandboxName << "\n");
-        sandboxedMethodToNames[F].push_back(sandboxName);
+        sandboxedMethodToNames[F] |= sandboxName;
       }
 
 //      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
