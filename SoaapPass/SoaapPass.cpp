@@ -505,7 +505,6 @@ namespace soaap {
             }
             else if (annotationStrArrayCString == SANDBOX_EPHEMERAL) {
               outs() << "   Found ephemeral sandbox " << annotatedFunc->getName() << "\n";
-              persistentSandboxFuncs.push_back(annotatedFunc);
               ephemeralSandboxFuncs.push_back(annotatedFunc);
               sandboxEntryPoints.push_back(annotatedFunc);
             }
