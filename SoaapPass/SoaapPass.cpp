@@ -732,7 +732,7 @@ namespace soaap {
               StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
               int bitIdx = sandboxNameToBitIdx[sandboxName];
             
-              dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n";
+              DEBUG(dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n");
             
               worklist.push_back(annotatedVar);
               valueToSandboxNames[annotatedVar] |= (1 << bitIdx);
@@ -741,6 +741,29 @@ namespace soaap {
         }
       }
       
+      if (Function* F = M.getFunction("llvm.var.annotation")) {
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<IntrinsicInst>(user)) {
+            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+              StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+              int bitIdx = sandboxNameToBitIdx[sandboxName];
+            
+              DEBUG(dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n");
+            
+              worklist.push_back(annotatedVar);
+              valueToSandboxNames[annotatedVar] |= (1 << bitIdx);
+            }
+          }
+        }
+      }
+
       for (map<GlobalVariable*,int>::iterator I=varToSandboxNames.begin(), E=varToSandboxNames.end(); I != E; I++) {
         GlobalVariable* var = I->first;
         int sandboxNames = I->second;
@@ -754,9 +777,8 @@ namespace soaap {
             valueToSandboxNames[v] = sandboxNames; // could v have already been initialised above? (NO)
           }
         }
-
       }
-                  
+
       // transfer function
       SandboxPrivatePropagateFunction propagateSandboxPrivate(this);
 
@@ -782,6 +804,10 @@ namespace soaap {
               if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
                 if (valueToSandboxNames[v] != 0) {
                   outs() << "\n *** Privileged method " << F->getName() << " read data value private to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << "\n";
+                  if (MDNode *N = I.getMetadata("dbg")) {
+                    DILocation loc(N);
+                    outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  }
                 }
               }
               if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
@@ -1034,6 +1060,24 @@ namespace soaap {
       // struct field annotations are stored in LLVM IR as arguments to calls 
       // to the intrinsic @llvm.ptr.annotation.p0i8
       if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<IntrinsicInst>(user)) {
+            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+              StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+              assignBitIdxToSandboxName(sandboxName);
+            }
+          }
+        }
+      }
+
+      if (Function* F = M.getFunction("llvm.var.annotation")) {
         for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
           User* user = u.getUse().getUser();
           if (isa<IntrinsicInst>(user)) {
