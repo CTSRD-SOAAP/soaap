@@ -59,7 +59,7 @@ namespace soaap {
     int nextSandboxNameBitIdx = 0;
     SmallVector<Function*,16> callgates;
     SmallVector<Function*,16> privilegedMethods;
-
+    SmallSet<Function*,32> allReachableMethods;
     SmallSet<Function*,16> sandboxedMethods;
     SmallSet<Function*,16> syscallReachableMethods;
 
@@ -765,8 +765,11 @@ namespace soaap {
       
       // validate that classified data is never accessed inside sandboxed contexts that
       // don't have clearance for its class.
-      for (Function* F : sandboxedMethods) {
-        DEBUG(dbgs() << "Function: " << F->getName() << ", names: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n");
+      for (Function* F : allReachableMethods) {
+        DEBUG(dbgs() << "Function: " << F->getName());
+        if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
+          DEBUG(dbgs() << ", sandbox names: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n");
+        }
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
             DEBUG(dbgs() << "   Instruction:\n");
@@ -776,11 +779,18 @@ namespace soaap {
               DEBUG(dbgs() << "      Value:\n");
               DEBUG(v->dump());
               DEBUG(dbgs() << "      Value names: " << valueToSandboxNames[v] << ", " << stringifySandboxNames(valueToSandboxNames[v]) << "\n");
-              if (!(valueToSandboxNames[v] == 0 || valueToSandboxNames[v] == sandboxedMethodToNames[F] || (valueToSandboxNames[v] & sandboxedMethodToNames[F]))) {
-                outs() << "\n *** Sandboxed method " << F->getName() << " read data value belonging to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << " but it executes in sandboxes: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
-                if (MDNode *N = I.getMetadata("dbg")) {
-                  DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+              if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
+                if (valueToSandboxNames[v] != 0) {
+                  outs() << "\n *** Privileged method " << F->getName() << " read data value private to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << "\n";
+                }
+              }
+              if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
+                if (!(valueToSandboxNames[v] == 0 || valueToSandboxNames[v] == sandboxedMethodToNames[F] || (valueToSandboxNames[v] & sandboxedMethodToNames[F]))) {
+                  outs() << "\n *** Sandboxed method " << F->getName() << " read data value belonging to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << " but it executes in sandboxes: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
+                  if (MDNode *N = I.getMetadata("dbg")) {
+                    DILocation loc(N);
+                    outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  }
                 }
               }
             }
@@ -1476,6 +1486,7 @@ namespace soaap {
       }
 
       sandboxedMethods.insert(F);
+      allReachableMethods.insert(F);
       sandboxedMethodToClearances[F] |= clearances;
 
       if (sandboxName != 0) {
@@ -1512,6 +1523,7 @@ namespace soaap {
           return;
   
         privilegedMethods.push_back(F);
+        allReachableMethods.insert(F);
   
         // recurse on callees
         for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
