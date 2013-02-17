@@ -33,6 +33,7 @@
 
 #define __soaap_sandbox __sandbox_persistent
 #define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
+#define __soaap_sandbox_persistent_named(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
 #define __soaap_sandbox_ephemeral __attribute__((annotate(SANDBOX_EPHEMERAL))) __attribute__((noinline))
 #define __soaap_var_allow_read __attribute__((annotate(VAR_READ)))
 #define __soaap_var_allow_write __attribute__((annotate(VAR_WRITE)))

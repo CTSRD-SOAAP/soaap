@@ -52,6 +52,8 @@ namespace soaap {
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
     SmallVector<Function*,32> sandboxEntryPoints;
+    map<Function*,StringRef> sandboxEntryPointToName;
+    map<Function*,SmallVector<StringRef,5> > sandboxedMethodToNames;
     SmallVector<Function*,16> callgates;
     SmallVector<Function*,16> privilegedMethods;
 
@@ -527,13 +529,19 @@ namespace soaap {
           GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
           if (isa<Function>(annotatedVal)) {
             Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
-            if (annotationStrArrayCString == SANDBOX_PERSISTENT) {
-              outs() << "   Found persistent sandbox " << annotatedFunc->getName() << "\n";
+            if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
+              outs() << "   Found persistent sandbox entry-point " << annotatedFunc->getName() << "\n";
               persistentSandboxFuncs.push_back(annotatedFunc);
               sandboxEntryPoints.push_back(annotatedFunc);
+              // get name if one was specified
+              if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
+                StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
+                outs() << "      Sandbox name: " << sandboxName << "\n";
+                sandboxEntryPointToName[annotatedFunc] = sandboxName;
+              }
             }
-            else if (annotationStrArrayCString == SANDBOX_EPHEMERAL) {
-              outs() << "   Found ephemeral sandbox " << annotatedFunc->getName() << "\n";
+            else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+              outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
               persistentSandboxFuncs.push_back(annotatedFunc);
               ephemeralSandboxFuncs.push_back(annotatedFunc);
               sandboxEntryPoints.push_back(annotatedFunc);
@@ -1258,12 +1266,16 @@ namespace soaap {
       CallGraph& CG = getAnalysis<CallGraph>();
       for (Function* F : sandboxEntryPoints) {
         CallGraphNode* Node = CG.getOrInsertFunction(F);
-        calculateSandboxedMethodsHelper(Node, sandboxedMethodToClearances[F]);
+        StringRef sandboxName;
+        if (sandboxEntryPointToName.find(F) != sandboxEntryPointToName.end()) {
+          sandboxName = sandboxEntryPointToName[F]; // sandbox entry point will only have one name
+        }
+        calculateSandboxedMethodsHelper(Node, sandboxedMethodToClearances[F], sandboxName);
       }
     }
 
 
-    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances) {
+    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances, StringRef sandboxName) {
 
       Function* F = node->getFunction();
 
@@ -1277,12 +1289,17 @@ namespace soaap {
       sandboxedMethods.insert(F);
       sandboxedMethodToClearances[F] |= clearances;
 
+      if (!sandboxName.empty()) {
+        DEBUG(dbgs() << "   Assigning name: " << sandboxName << "\n");
+        sandboxedMethodToNames[F].push_back(sandboxName);
+      }
+
 //      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
       for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
         Value* V = I->first;
         CallGraphNode* calleeNode = I->second;
         if (Function* calleeFunc = calleeNode->getFunction()) {
-          calculateSandboxedMethodsHelper(calleeNode, clearances);
+          calculateSandboxedMethodsHelper(calleeNode, clearances, sandboxName);
         }
       }
     }
