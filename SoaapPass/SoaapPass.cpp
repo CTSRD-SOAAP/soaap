@@ -858,6 +858,28 @@ namespace soaap {
                   }
                 }
               }
+              else if (CallInst* call = dyn_cast<CallInst>(&I)) {
+                // if this is a call to setenv, check the taint of the second argument
+                if (Function* Callee = call->getCalledFunction()) {
+                  if (Callee->getName() == "setenv") {
+                    Value* arg = call->getArgOperand(1);
+                  
+                    if (valueToSandboxNames[arg] & sandboxNames) {
+                      outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " << stringifySandboxNames(sandboxNames) << " may leak private data through env var ";
+                      if (GlobalVariable* envVarGlobal = dyn_cast<GlobalVariable>(call->getArgOperand(0)->stripPointerCasts())) {
+                        ConstantDataArray* envVarArray = dyn_cast<ConstantDataArray>(envVarGlobal->getInitializer());
+                        StringRef envVarName = envVarArray->getAsString();
+                        outs() << "\"" << envVarName << "\"";
+                      }
+                      outs() << "\n";
+                      if (MDNode *N = I.getMetadata("dbg")) {
+                        DILocation loc(N);
+                        outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
