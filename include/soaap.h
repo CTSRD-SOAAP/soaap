@@ -44,7 +44,7 @@
 #define __soaap_indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
 #define __soaap_fd_allow_write __attribute__((annotate(FD_WRITE)))
 #define __soaap_callgates(fns...) \
-	static void __declare_callgates() { \
+	void __declare_callgates() { \
 		__declare_callgates_helper(0, fns); \
 	}
 
@@ -52,7 +52,7 @@
 #define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
 #define __soaap_sandbox_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
 
-void __declare_callgates_helper(int unused, ...);
+void __declare_callgates_helper(int unused, ...) { }
 
 void soaap_create_sandbox();
 void soaap_enter_persistent_sandbox();

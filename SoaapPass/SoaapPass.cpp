@@ -862,6 +862,7 @@ namespace soaap {
               else if (CallInst* call = dyn_cast<CallInst>(&I)) {
                 // if this is a call to setenv, check the taint of the second argument
                 if (Function* Callee = call->getCalledFunction()) {
+                  if (Callee->isIntrinsic()) continue;
                   if (Callee->getName() == "setenv") {
                     Value* arg = call->getArgOperand(1);
                   
@@ -879,7 +880,7 @@ namespace soaap {
                       }
                     }
                   }
-                  else if (!Callee->isIntrinsic() && Callee->getBasicBlockList().empty()) {
+                  else if (Callee->getBasicBlockList().empty()) {
                     // extern function
                     DEBUG(dbgs() << "Extern callee: " << Callee->getName() << "\n");
                     for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
@@ -891,6 +892,22 @@ namespace soaap {
                           outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                         }
                       }
+                    }
+                  }
+                  else if (find(callgates.begin(), callgates.end(), Callee) != callgates.end()) {
+                    // cross-domain call to callgate
+                    outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through callgate " << Callee->getName() << "\n";
+                    if (MDNode *N = I.getMetadata("dbg")) {
+                      DILocation loc(N);
+                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    }
+
+                  }
+                  else if (sandboxedMethodToNames[Callee] != sandboxNames) { // possible cross-sandbox call
+                    outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through a cross-sandbox call into: " << stringifySandboxNames(sandboxedMethodToNames[Callee]) << "\n";
+                    if (MDNode *N = I.getMetadata("dbg")) {
+                      DILocation loc(N);
+                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                     }
                   }
                 }
@@ -1115,6 +1132,7 @@ namespace soaap {
        * instruction and obtain the list of functions from its arguments
        */
       if (Function* F = M.getFunction("__declare_callgates_helper")) {
+        DEBUG(dbgs() << "Found __declare_callgates_helper\n");
         for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
           User* user = u.getUse().getUser();
           if (isa<CallInst>(user)) {
@@ -1126,7 +1144,7 @@ namespace soaap {
              */
             for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
               Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
-              outs() << "Callgate " << i << " is " << callgate->getName() << "\n";
+              outs() << "   Callgate " << i << " is " << callgate->getName() << "\n";
               callgates.push_back(callgate);
             }
           }
@@ -1622,6 +1640,10 @@ namespace soaap {
         Value* V = I->first;
         CallGraphNode* calleeNode = I->second;
         if (Function* calleeFunc = calleeNode->getFunction()) {
+          if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
+            DEBUG(dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << stringifySandboxNames(sandboxName));
+            sandboxName = sandboxEntryPointToName[calleeFunc];
+          }
           calculateSandboxedMethodsHelper(calleeNode, clearances, sandboxName);
         }
       }
