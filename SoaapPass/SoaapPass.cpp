@@ -785,8 +785,7 @@ namespace soaap {
       // compute fixed point
       performDataflowAnalysis(M, propagateSandboxPrivate, worklist);
       
-      // validate that classified data is never accessed inside sandboxed contexts that
-      // don't have clearance for its class.
+      // validate that sandbox-private data is never accessed in other sandboxed contexts
       for (Function* F : allReachableMethods) {
         DEBUG(dbgs() << "Function: " << F->getName());
         if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
@@ -823,7 +822,50 @@ namespace soaap {
           }
         }
       }
-      
+
+      // Validate that data cannot leak out of a sandbox.
+      // Currently, SOAAP looks for escapement via:
+      //   1) Assignments to global variables.
+      //   2) Arguments to functions for which there is no body (due to incomplete call graph).
+      //   3) Arguments to functions of callgates.
+      //   4) Arguments to functions that are executed in a different sandbox
+      //      (i.e. cross-domain calls).
+      //   5) Assignments to environment variables.
+      //   6) Arguments to system calls
+      for (Function* F : allReachableMethods) {
+        DEBUG(dbgs() << "Function: " << F->getName());
+        int sandboxNames = sandboxedMethodToNames[F];
+        if (sandboxNames != 0) {
+          DEBUG(dbgs() << ", sandbox names: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n");
+
+          for (BasicBlock& BB : F->getBasicBlockList()) {
+            for (Instruction& I : BB.getInstList()) {
+              DEBUG(dbgs() << "   Instruction:\n");
+              DEBUG(I.dump());
+              // if assignment to a global variable, then check taint of value
+              // being assigned
+              if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+                Value* lhs = store->getPointerOperand();
+                if (GlobalVariable* gv = dyn_cast<GlobalVariable>(lhs)) {
+                  Value* rhs = store->getValueOperand();
+                  // if the rhs is private to the current sandbox, then flag an error
+                  if (valueToSandboxNames[rhs] & sandboxNames) {
+                    outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " << stringifySandboxNames(sandboxNames) << " may leak private data through global variable " << gv->getName() << "\n";
+                    if (MDNode *N = I.getMetadata("dbg")) {
+                      DILocation loc(N);
+                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        else {
+          DEBUG(dbgs() << "\n");
+        }
+      }
+
     }
 
     void checkPropagationOfClassifiedData(Module& M) {
