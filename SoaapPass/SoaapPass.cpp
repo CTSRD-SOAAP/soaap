@@ -423,6 +423,7 @@ namespace soaap {
         const Value* V = worklist.front();
         worklist.pop_front();
         DEBUG(outs() << "*** Popped " << V->getName() << "\n");
+        DEBUG(V->dump());
         for (Value::const_use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
           const Value* V2;
           DEBUG(VI->dump());
@@ -756,7 +757,7 @@ namespace soaap {
               int bitIdx = sandboxNameToBitIdx[sandboxName];
             
               DEBUG(dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n");
-            
+              DEBUG(annotatedVar->dump());
               worklist.push_back(annotatedVar);
               valueToSandboxNames[annotatedVar] |= (1 << bitIdx);
             }
@@ -875,6 +876,20 @@ namespace soaap {
                       if (MDNode *N = I.getMetadata("dbg")) {
                         DILocation loc(N);
                         outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                      }
+                    }
+                  }
+                  else if (!Callee->isIntrinsic() && Callee->getBasicBlockList().empty()) {
+                    // extern function
+                    DEBUG(dbgs() << "Extern callee: " << Callee->getName() << "\n");
+                    for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
+                      Value* arg = dyn_cast<Value>(AI->get());
+                      if (valueToSandboxNames[arg] & sandboxNames) {
+                        outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through the extern function " << Callee->getName() << "\n";
+                        if (MDNode *N = I.getMetadata("dbg")) {
+                          DILocation loc(N);
+                          outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                        }
                       }
                     }
                   }
