@@ -98,7 +98,7 @@ namespace soaap {
         OriginPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
 
         bool propagate(const Value* From, const Value* To) {
-          dbgs() << "propagate called\n";
+          DEBUG(dbgs() << "propagate called\n");
           if (parent->origin.find(To) == parent->origin.end()) {
             parent->origin[To] = parent->origin[From];
             return true; // return true to allow perms to propagate through
