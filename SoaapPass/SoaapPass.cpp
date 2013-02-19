@@ -1700,6 +1700,7 @@ namespace soaap {
 //            I.dump();
             if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
+                if (gv->hasExternalLinkage()) continue; // not concerned with externs
                 if (!(varToPerms[gv] & VAR_READ_MASK)) {
                   outs() << "\n *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
@@ -1712,6 +1713,7 @@ namespace soaap {
             }
             else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(store->getPointerOperand())) {
+                if (gv->hasExternalLinkage()) continue; // not concerned with externs
                 // check that the programmer has annotated that this
                 // variable can be written to
                 if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
