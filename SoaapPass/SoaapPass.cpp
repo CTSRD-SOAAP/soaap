@@ -79,6 +79,10 @@ namespace soaap {
     map<const Value*,int> valueToSandboxNames;
     map<GlobalVariable*,int> varToSandboxNames;
 
+    // past-vulnerability stuff
+    SmallVector<CallInst*,16> pastVulnAnnotatedBlocks;
+    SmallVector<Function*,16> pastVulnAnnotatedFuncs;
+
     SoaapPass() : ModulePass(ID) {
       modified = false;
       dynamic = false;
@@ -197,6 +201,8 @@ namespace soaap {
       outs() << "* Finding sandbox-private data\n";
       findSandboxPrivateAnnotations(M);
 
+      outs() << "* Finding past vulnerability annotations\n";
+      findPastVulnerabilityAnnotations(M);
 
       if (!sandboxEntryPoints.empty()) {
         if (dynamic && !emPerf) {
@@ -233,9 +239,6 @@ namespace soaap {
 
           outs() << "* Checking propagation of sandbox-private data\n";
           checkPropagationOfSandboxPrivateData(M);
-          
-          outs() << "* Finding loops involving calls to sandboxes\n";
-          findLoopsInvolvingSandboxCalls(M);
         }
         else if (!dynamic && emPerf) {
           instrumentPerfEmul(M);
@@ -256,10 +259,47 @@ namespace soaap {
       return modified;
     }
 
-    void findLoopsInvolvingSandboxCalls(Module& M) {
-      
-      // 
+    void findPastVulnerabilityAnnotations(Module& M) {
+      // Find all annotated code blocks. Note, we do this by inserting calls to 
+      // the function __soaap_past_vulnerability_in_block. This function is declared
+      // static to avoid linking problems when linking multiple modules. However,
+      // as a result of this, a number may be appended to its name to make unique.
+      // We therefore have to search through all the functions in M and find those
+      // that start with __soaap_past_vulnerability_in_block
+      string pastVulnFuncBaseName = "__soaap_past_vulnerability_in_block";
+      for (Function& F : M.getFunctionList()) {
+        if (F.getName().startswith(pastVulnFuncBaseName)) {
+          DEBUG(dbgs() << "Found " << F.getName() << " function\n");
+          for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
+            CallInst* call = dyn_cast<CallInst>(u.getUse().getUser());
+            DEBUG(call->dump());
+            pastVulnAnnotatedBlocks.push_back(call);
+          }
+        }
+      }
 
+      // Find all annotated functions
+      GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations");
+      if (lga != NULL) {
+        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+          // get the annotation value first
+          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+
+          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+          if (isa<Function>(annotatedVal)) {
+            Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
+            if (annotationStrArrayCString.startswith(PAST_VULNERABILITY)) {
+              DEBUG(dbgs() << "Found annotated function " << annotatedFunc->getName() << "\n");
+              pastVulnAnnotatedFuncs.push_back(annotatedFunc);
+            }
+          }
+        }
+      }
     }
 
     void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
@@ -1150,18 +1190,18 @@ namespace soaap {
       /*
        * Callgates are declared using the variadic macro
        * __callgates(fns...), that passes the functions as arguments
-       * to the function __declare_callgates_helper:
+       * to the function __soaap_declare_callgates_helper:
        *
-       * #define __callgates(fns...) \
-       *    void __declare_callgates() { \
-       *      __declare_callgates_helper(0, fns); \
+       * #define __soaap_callgates(fns...) \
+       *    void __soaap_declare_callgates() { \
+       *      __soaap_declare_callgates_helper(0, fns); \
        *    }
        *
-       * Hence, we must find the "call @__declare_callgates_helper"
+       * Hence, we must find the "call @__soaap_declare_callgates_helper"
        * instruction and obtain the list of functions from its arguments
        */
-      if (Function* F = M.getFunction("__declare_callgates_helper")) {
-        DEBUG(dbgs() << "Found __declare_callgates_helper\n");
+      if (Function* F = M.getFunction("__soaap_declare_callgates_helper")) {
+        DEBUG(dbgs() << "Found __soaap_declare_callgates_helper\n");
         for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
           User* user = u.getUse().getUser();
           if (isa<CallInst>(user)) {

@@ -31,7 +31,14 @@
 #define CLASSIFY "CLASSIFY"
 #define CLEARANCE "CLEARANCE"
 
+// sandbox-private data
 #define SANDBOX_PRIVATE "SANDBOX_PRIVATE"
+
+// past vulnerabilities
+#define PAST_VULNERABILITY "PAST_VULNERABILITY"
+#define __soaap_past_vulnerability_func __attribute__((annotate(PAST_VULNERABILITY))) __attribute__((noinline))
+#define __soaap_past_vulnerability_block __soaap_past_vulnerability_in_block();
+static void __soaap_past_vulnerability_in_block() {}
 
 #define __soaap_sandbox __sandbox_persistent
 #define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
@@ -44,43 +51,14 @@
 #define __soaap_indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
 #define __soaap_fd_allow_write __attribute__((annotate(FD_WRITE)))
 #define __soaap_callgates(fns...) \
-  void __declare_callgates_helper(int unused, ...) { } \
-	void __declare_callgates() { \
-		__declare_callgates_helper(0, fns); \
+  void __soaap_declare_callgates_helper(int unused, ...) { } \
+	void __soaap_declare_callgates() { \
+		__soaap_declare_callgates_helper(0, fns); \
 	} 
 
 #define __soaap_classify(L) __attribute__((annotate(CLASSIFY"_"L)))
 #define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
 #define __soaap_sandbox_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
 
-void soaap_create_sandbox();
-void soaap_enter_persistent_sandbox();
-void soaap_exit_persistent_sandbox();
-void soaap_enter_ephemeral_sandbox();
-void soaap_exit_ephemeral_sandbox();
-
-void soaap_shared_var(char* var_name, int perms);
-void soaap_shared_fd(int fd, int perms);
-void soaap_shared_file(FILE* file, int perms);
-
-void soaap_exit_callgate();
-void soaap_printf(char* str);
-
-int printf(const char*, ...);
-
-/*
-// functions for valgrind-function-wrapping
-// (see http://valgrind.org/docs/manual/manual-core-adv.html#manual-core-adv.wrapping)
-void valgrind_get_orig_fn(OrigFn* fn);
-
-void call_unwrapped_function_w_v(OrigFn* fn, unsigned long* retval);
-void call_unwrapped_function_w_w(OrigFn* fn, unsigned long* retval, unsigned long arg1);
-void call_unwrapped_function_w_ww(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2);
-void call_unwrapped_function_w_www(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3);
-void call_unwrapped_function_w_wwww(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4);
-void call_unwrapped_function_w_5w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5);
-void call_unwrapped_function_w_6w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6);
-void call_unwrapped_function_w_7w(OrigFn* fn, unsigned long* retval, unsigned long arg1, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5, unsigned long arg6, unsigned long arg7);
-*/
 
 #endif /* SOAAP_H */
