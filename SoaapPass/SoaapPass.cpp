@@ -197,6 +197,7 @@ namespace soaap {
       outs() << "* Finding sandbox-private data\n";
       findSandboxPrivateAnnotations(M);
 
+
       if (!sandboxEntryPoints.empty()) {
         if (dynamic && !emPerf) {
           // use valgrind
@@ -212,6 +213,9 @@ namespace soaap {
           calculateSandboxedMethods(M);
           outs() << "   " << sandboxedMethods.size() << " methods found\n";
 
+          outs() << "* Calculating privileged methods\n";
+          calculatePrivilegedMethods(M);
+          
           outs() << "* Checking global variable accesses\n";
           checkGlobalVariables(M);
 
@@ -221,9 +225,6 @@ namespace soaap {
           outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
           checkFileDescriptors(M);
 
-          outs() << "* Calculating privileged methods\n";
-          calculatePrivilegedMethods(M);
-
           outs() << "* Checking propagation of data from sandboxes to privileged components\n";
           checkOriginOfAccesses(M);
           
@@ -232,6 +233,9 @@ namespace soaap {
 
           outs() << "* Checking propagation of sandbox-private data\n";
           checkPropagationOfSandboxPrivateData(M);
+          
+          outs() << "* Finding loops involving calls to sandboxes\n";
+          findLoopsInvolvingSandboxCalls(M);
         }
         else if (!dynamic && emPerf) {
           instrumentPerfEmul(M);
@@ -250,6 +254,12 @@ namespace soaap {
       }   
 
       return modified;
+    }
+
+    void findLoopsInvolvingSandboxCalls(Module& M) {
+      
+      // 
+
     }
 
     void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
@@ -517,7 +527,7 @@ namespace soaap {
             if (C->getCalledFunction() == NULL) {
               if (origin[C->getCalledValue()] == ORIGIN_SANDBOX) {
                 Function* Caller = cast<Function>(C->getParent()->getParent());
-                outs() << "\n *** Untrusted function pointer call in " << Caller->getName() << "\n";
+                outs() << " *** Untrusted function pointer call in " << Caller->getName() << "\n";
                 if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
                   DILocation Loc(N);                      // DILocation is in DebugInfo.h
                   unsigned Line = Loc.getLineNumber();
@@ -525,13 +535,13 @@ namespace soaap {
                   StringRef Dir = Loc.getDirectory();
                   outs() << " +++ Line " << Line << " of file " << File << "\n";
                 }
+                outs() << "\n";
                 printPrivilegedPathToInstruction(C, M);
               }
             }
           }
         }
       }
-      outs() << "\n";
     }
 
     /*
@@ -815,20 +825,22 @@ namespace soaap {
               DEBUG(dbgs() << "      Value names: " << valueToSandboxNames[v] << ", " << stringifySandboxNames(valueToSandboxNames[v]) << "\n");
               if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
                 if (valueToSandboxNames[v] != 0) {
-                  outs() << "\n *** Privileged method " << F->getName() << " read data value private to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << "\n";
+                  outs() << " *** Privileged method " << F->getName() << " read data value private to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << "\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                   }
+                  outs() << "\n";
                 }
               }
               if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
                 if (!(valueToSandboxNames[v] == 0 || valueToSandboxNames[v] == sandboxedMethodToNames[F] || (valueToSandboxNames[v] & sandboxedMethodToNames[F]))) {
-                  outs() << "\n *** Sandboxed method " << F->getName() << " read data value belonging to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << " but it executes in sandboxes: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
+                  outs() << " *** Sandboxed method " << F->getName() << " read data value belonging to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << " but it executes in sandboxes: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                   }
+                  outs() << "\n";
                 }
               }
             }
@@ -863,11 +875,12 @@ namespace soaap {
                   Value* rhs = store->getValueOperand();
                   // if the rhs is private to the current sandbox, then flag an error
                   if (valueToSandboxNames[rhs] & sandboxNames) {
-                    outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " << stringifySandboxNames(sandboxNames) << " may leak private data through global variable " << gv->getName() << "\n";
+                    outs() << " *** Sandboxed method " << F->getName() << " executing in sandboxes: " << stringifySandboxNames(sandboxNames) << " may leak private data through global variable " << gv->getName() << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                     }
+                    outs() << "\n";
                   }
                 }
               }
@@ -879,7 +892,7 @@ namespace soaap {
                     Value* arg = call->getArgOperand(1);
                   
                     if (valueToSandboxNames[arg] & sandboxNames) {
-                      outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " << stringifySandboxNames(sandboxNames) << " may leak private data through env var ";
+                      outs() << " *** Sandboxed method " << F->getName() << " executing in sandboxes: " << stringifySandboxNames(sandboxNames) << " may leak private data through env var ";
                       if (GlobalVariable* envVarGlobal = dyn_cast<GlobalVariable>(call->getArgOperand(0)->stripPointerCasts())) {
                         ConstantDataArray* envVarArray = dyn_cast<ConstantDataArray>(envVarGlobal->getInitializer());
                         StringRef envVarName = envVarArray->getAsString();
@@ -890,6 +903,7 @@ namespace soaap {
                         DILocation loc(N);
                         outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                       }
+                      outs() << "\n";
                     }
                   }
                   else if (Callee->getBasicBlockList().empty()) {
@@ -898,29 +912,31 @@ namespace soaap {
                     for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                       Value* arg = dyn_cast<Value>(AI->get());
                       if (valueToSandboxNames[arg] & sandboxNames) {
-                        outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through the extern function " << Callee->getName() << "\n";
+                        outs() << " *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through the extern function " << Callee->getName() << "\n";
                         if (MDNode *N = I.getMetadata("dbg")) {
                           DILocation loc(N);
                           outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                         }
+                        outs() << "\n";
                       }
                     }
                   }
                   else if (find(callgates.begin(), callgates.end(), Callee) != callgates.end()) {
                     // cross-domain call to callgate
-                    outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through callgate " << Callee->getName() << "\n";
+                    outs() << " *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through callgate " << Callee->getName() << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                     }
-
+                    outs() << "\n";
                   }
                   else if (sandboxedMethodToNames[Callee] != sandboxNames) { // possible cross-sandbox call
-                    outs() << "\n *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through a cross-sandbox call into: " << stringifySandboxNames(sandboxedMethodToNames[Callee]) << "\n";
+                    outs() << " *** Sandboxed method " << F->getName() << " executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through a cross-sandbox call into: " << stringifySandboxNames(sandboxedMethodToNames[Callee]) << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                     }
+                    outs() << "\n";
                   }
                 }
               }
@@ -998,11 +1014,12 @@ namespace soaap {
               DEBUG(v->dump());
               DEBUG(dbgs() << "      Value classes: " << valueToClasses[v] << ", " << stringifyClassifications(valueToClasses[v]) << "\n");
               if (!(valueToClasses[v] == 0 || valueToClasses[v] == sandboxedMethodToClearances[F] || (valueToClasses[v] & sandboxedMethodToClearances[F]))) {
-                outs() << "\n *** Sandboxed method " << F->getName() << " read data value of class: " << stringifyClassifications(valueToClasses[v]) << " but only has clearances for: " << stringifyClassifications(sandboxedMethodToClearances[F]) << "\n";
+                outs() << " *** Sandboxed method " << F->getName() << " read data value of class: " << stringifyClassifications(valueToClasses[v]) << " but only has clearances for: " << stringifyClassifications(sandboxedMethodToClearances[F]) << "\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
                   outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                 }
+                outs() << "\n";
               }
             }
           }
@@ -1109,7 +1126,7 @@ namespace soaap {
           Value* fd = Call->getArgOperand(0);
           if (!(fdToPerms[fd] & required_perm)) {
             Function* Caller = cast<Function>(Call->getParent()->getParent());
-            outs() << "\n *** Insufficient privileges for " << syscall << "() in " << Caller->getName() << "\n";
+            outs() << " *** Insufficient privileges for " << syscall << "() in " << Caller->getName() << "\n";
             if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
               DILocation Loc(N);                      // DILocation is in DebugInfo.h
               unsigned Line = Loc.getLineNumber();
@@ -1117,10 +1134,10 @@ namespace soaap {
               StringRef Dir = Loc.getDirectory();
               outs() << " +++ Line " << Line << " of file " << File << "\n";
             }
+            outs() << "\n";
           }
         }
       }
-      outs() << "\n";
     }
 
     /*
@@ -1702,11 +1719,12 @@ namespace soaap {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
                 if (gv->hasExternalLinkage()) continue; // not concerned with externs
                 if (!(varToPerms[gv] & VAR_READ_MASK)) {
-                  outs() << "\n *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to\n";
+                  outs() << " *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                      DILocation loc(N);
                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                   }
+                  outs() << "\n";
                 }
 
               }
@@ -1717,11 +1735,12 @@ namespace soaap {
                 // check that the programmer has annotated that this
                 // variable can be written to
                 if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
-                  outs() << "\n *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to\n";
+                  outs() << " *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                      DILocation loc(N);
                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                   }
+                  outs() << "\n";
                 }
               }
             }
@@ -1734,7 +1753,31 @@ namespace soaap {
           }
         }
       }
-      outs() << "\n";
+
+      // Look for writes to shared global variables in privileged methods
+      // that will therefore not be seen by sandboxes (assuming that the
+      // the sandbox process is forked at the start of main).
+      for (Function* F : privilegedMethods) {
+        DEBUG(dbgs() << "Privileged function: " << F->getName().str() << "\n");
+        for (BasicBlock& BB : F->getBasicBlockList()) {
+          for (Instruction& I : BB.getInstList()) {
+            if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+              if (GlobalVariable* gv = dyn_cast<GlobalVariable>(store->getPointerOperand())) {
+                // check that the programmer has annotated that this
+                // variable can be written to
+                if (varToPerms[gv] & VAR_READ_MASK) {
+                  outs() << " *** Write to shared variable " << gv->getName() << " outside sandbox in method " << F->getName() << " will not be seen by a sandbox\n";
+                  if (MDNode *N = I.getMetadata("dbg")) {
+                     DILocation loc(N);
+                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  }
+                  outs() << "\n";
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
 		void instrumentPerfEmul(Module& M) {
