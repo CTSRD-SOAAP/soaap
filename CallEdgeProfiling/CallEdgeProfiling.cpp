@@ -22,6 +22,7 @@
 #include "llvm/Analysis/ProfileInfoLoader.h"
 #include "Transforms/Instrumentation/ProfilingUtils.h"
 #include "llvm/Support/InstIterator.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include <iostream>
 #include <vector>
@@ -164,6 +165,17 @@ namespace soaap {
       }
 
       InsertProfilingInitCall(Main, "llvm_start_call_edge_profiling", Counters);
+
+      //WORKAROUND: remove calls to llvm.ptr.annotate.p0i8, otherwise LLVM will
+      //            crash when generating object code.
+      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+        outs() << "BUG WORKAROUND: Removing calls to intrinisc @llvm.ptr.annotation.p0i8\n";
+        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+          IntrinsicInst* intrinsicCall = dyn_cast<IntrinsicInst>(u.getUse().getUser());
+          BasicBlock::iterator ii(intrinsicCall);
+          ReplaceInstWithValue(intrinsicCall->getParent()->getInstList(), ii, intrinsicCall->getOperand(0));
+        }
+      }
       return true;
     }
 
