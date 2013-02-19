@@ -261,12 +261,12 @@ namespace soaap {
 
     void findPastVulnerabilityAnnotations(Module& M) {
       // Find all annotated code blocks. Note, we do this by inserting calls to 
-      // the function __soaap_past_vulnerability_in_block. This function is declared
+      // the function __soaap_past_vulnerability_at_point. This function is declared
       // static to avoid linking problems when linking multiple modules. However,
       // as a result of this, a number may be appended to its name to make unique.
       // We therefore have to search through all the functions in M and find those
-      // that start with __soaap_past_vulnerability_in_block
-      string pastVulnFuncBaseName = "__soaap_past_vulnerability_in_block";
+      // that start with __soaap_past_vulnerability_at_point
+      string pastVulnFuncBaseName = "__soaap_past_vulnerability_at_point";
       for (Function& F : M.getFunctionList()) {
         if (F.getName().startswith(pastVulnFuncBaseName)) {
           DEBUG(dbgs() << "Found " << F.getName() << " function\n");
@@ -300,6 +300,11 @@ namespace soaap {
           }
         }
       }
+    }
+
+    void checkLeakedRightsForPastVulnerabilities(Module& M) {
+      // for each vulnerability, find out whether it is in a sandbox or not 
+      // and what the leaked rights are
     }
 
     void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
