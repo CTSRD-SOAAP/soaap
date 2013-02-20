@@ -23,6 +23,7 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "soaap.h"
 #include "soaap_perf.h"
@@ -34,6 +35,12 @@
 
 using namespace llvm;
 using namespace std;
+
+static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
+       cl::desc("Comma-separated list of vendors whose code should "
+                "be treated as vulnerable"),
+       cl::value_desc("list of vendors"), cl::CommaSeparated);
+
 namespace soaap {
 
   struct SoaapPass : public ModulePass {
@@ -82,6 +89,7 @@ namespace soaap {
     // past-vulnerability stuff
     SmallVector<CallInst*,16> pastVulnAnnotatedBlocks;
     SmallVector<Function*,16> pastVulnAnnotatedFuncs;
+    SmallVector<StringRef,16> vulnerableVendors;
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
@@ -183,6 +191,9 @@ namespace soaap {
 
       outs() << "* Running " << getPassName() << "\n";
 
+      outs() << "* Processing command-line options\n"; 
+      processCmdLineArgs(M);
+
       outs() << "* Finding sandbox methods\n";
       findSandboxedMethods(M);
 
@@ -203,6 +214,9 @@ namespace soaap {
 
       outs() << "* Finding past vulnerability annotations\n";
       findPastVulnerabilityAnnotations(M);
+
+      outs() << "* Finding code provenanace annotations\n";
+      findCodeProvenanaceAnnotations(M);
 
       if (!sandboxEntryPoints.empty()) {
         if (dynamic && !emPerf) {
@@ -257,6 +271,29 @@ namespace soaap {
       }   
 
       return modified;
+    }
+
+    void processCmdLineArgs(Module& M) {
+      // process ClVulnerableVendors
+      for (StringRef vendor : ClVulnerableVendors) {
+        DEBUG(dbgs() << "Vulnerable vendor: " << vendor << "\n");
+        vulnerableVendors.push_back(vendor);
+      }
+    }
+
+    void findCodeProvenanaceAnnotations(Module& M) {
+      // provenance is recorded in compilation units with a variable called
+      // __soaap_provenance_var. This variable has hidden visibility so that
+      // the linker doesn't complain when linking multiple compilation units
+      // together.
+      string provenanceVarBaseName = "__soaap_provenance";
+      for (GlobalVariable& G : M.getGlobalList()) {
+        if (G.getName().startswith(provenanceVarBaseName)) {
+          DEBUG(dbgs() << "Found global variable " << G.getName() << "\n");
+          //ConstantDataArray* provenance = dyn_cast<ConstantDataArray>(G.getInitializer());
+          //dbgs() << "  Provenance: " << provenance->getAsString() << "\n";
+        }
+      }
     }
 
     void findPastVulnerabilityAnnotations(Module& M) {

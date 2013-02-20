@@ -40,6 +40,10 @@
 #define __soaap_past_vulnerability_point __soaap_past_vulnerability_at_point();
 static void __soaap_past_vulnerability_at_point() {}
 
+// code provenance
+#define __soaap_provenance(X) \
+  static char* __attribute__((used)) __soaap_provenance_var = X;
+
 #define __soaap_sandbox __sandbox_persistent
 #define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
 #define __soaap_sandbox_persistent_named(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
