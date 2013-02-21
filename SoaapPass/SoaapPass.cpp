@@ -1396,6 +1396,17 @@ namespace soaap {
 			if (!persistentSandboxFuncs.empty()) {
 				Function* mainFn = M.getFunction("main");
 
+				Function* createPersistentSandbox
+					= M.getFunction("soaap_perf_create_persistent_sbox");
+				Instruction* mainFirstInst = mainFn->getEntryBlock().getFirstNonPHI();
+				if(mainFirstInst) {
+					CallInst* createCall
+						= CallInst::Create(createPersistentSandbox,
+							ArrayRef<Value*>());
+					createCall->insertBefore(mainFirstInst);
+				}
+
+
 				ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
 					-1, true);
 
