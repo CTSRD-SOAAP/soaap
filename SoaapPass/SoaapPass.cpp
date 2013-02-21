@@ -350,11 +350,12 @@ namespace soaap {
       string pastVulnFuncBaseName = "__soaap_past_vulnerability_at_point";
       for (Function& F : M.getFunctionList()) {
         if (F.getName().startswith(pastVulnFuncBaseName)) {
-          DEBUG(dbgs() << "Found " << F.getName() << " function\n");
+          dbgs() << "Found " << F.getName() << " function\n";
           for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
-            CallInst* call = dyn_cast<CallInst>(u.getUse().getUser());
-            //DEBUG(call->dump());
-            pastVulnAnnotatedBlocks.push_back(call);
+            if (CallInst* call = dyn_cast<CallInst>(u.getUse().getUser())) {
+              call->dump();
+              pastVulnAnnotatedBlocks.push_back(call);
+            }
           }
         }
       }
@@ -375,7 +376,7 @@ namespace soaap {
           if (isa<Function>(annotatedVal)) {
             Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
             if (annotationStrArrayCString.startswith(PAST_VULNERABILITY)) {
-              DEBUG(dbgs() << "Found annotated function " << annotatedFunc->getName() << "\n");
+              dbgs() << "Found annotated function " << annotatedFunc->getName() << "\n";
               pastVulnAnnotatedFuncs.push_back(annotatedFunc);
             }
           }
