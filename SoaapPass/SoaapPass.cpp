@@ -290,13 +290,14 @@ namespace soaap {
       // together.
       string provenanceVarBaseName = "__soaap_provenance";
       SmallVector<DICompileUnit,16> CUs;
-      NamedMDNode* CUMDNodes = M.getNamedMetadata("llvm.dbg.cu");
-      for(unsigned i = 0, e = CUMDNodes->getNumOperands(); i != e; i++) {
-        MDNode* CUMDNode = CUMDNodes->getOperand(i);
-        DICompileUnit CU(CUMDNode);
-        CUs.push_back(CU);
+      if (NamedMDNode* CUMDNodes = M.getNamedMetadata("llvm.dbg.cu")) {
+        for(unsigned i = 0, e = CUMDNodes->getNumOperands(); i != e; i++) {
+          MDNode* CUMDNode = CUMDNodes->getOperand(i);
+          DICompileUnit CU(CUMDNode);
+          CUs.push_back(CU);
+        }
       }
-      
+
       // each __soaap_provenance global var is defined in exactly one CU,
       // so remove a CU from CUs once it has be attributed to a var
       for (GlobalVariable& G : M.getGlobalList()) {
