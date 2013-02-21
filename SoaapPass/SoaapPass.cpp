@@ -294,13 +294,14 @@ namespace soaap {
       // together.
       string provenanceVarBaseName = "__soaap_provenance";
       SmallVector<DICompileUnit,16> CUs;
-      NamedMDNode* CUMDNodes = M.getNamedMetadata("llvm.dbg.cu");
-      for(unsigned i = 0, e = CUMDNodes->getNumOperands(); i != e; i++) {
-        MDNode* CUMDNode = CUMDNodes->getOperand(i);
-        DICompileUnit CU(CUMDNode);
-        CUs.push_back(CU);
+      if (NamedMDNode* CUMDNodes = M.getNamedMetadata("llvm.dbg.cu")) {
+        for(unsigned i = 0, e = CUMDNodes->getNumOperands(); i != e; i++) {
+          MDNode* CUMDNode = CUMDNodes->getOperand(i);
+          DICompileUnit CU(CUMDNode);
+          CUs.push_back(CU);
+        }
       }
-      
+
       // each __soaap_provenance global var is defined in exactly one CU,
       // so remove a CU from CUs once it has be attributed to a var
       for (GlobalVariable& G : M.getGlobalList()) {
@@ -1366,7 +1367,8 @@ namespace soaap {
      */
     void validateDescriptorAccesses(Module& M, string syscall, int required_perm) {
       if (Function* syscallFn = M.getFunction(syscall)) {
-        for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end(); I != E; I++) {
+        for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end();
+             (I != E) && isa<CallInst>(*I); I++) {
           CallInst* Call = cast<CallInst>(*I);
           Value* fd = Call->getArgOperand(0);
           if (!(fdToPerms[fd] & required_perm)) {
