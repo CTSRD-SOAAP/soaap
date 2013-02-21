@@ -36,9 +36,20 @@
 
 // past vulnerabilities
 #define PAST_VULNERABILITY "PAST_VULNERABILITY"
-#define __soaap_vuln_fn __attribute__((annotate(PAST_VULNERABILITY))) __attribute__((noinline))
-#define __soaap_vuln_pt __soaap_past_vulnerability_at_point();
-__attribute__((noinline)) static void __soaap_past_vulnerability_at_point() { __asm__ volatile (""); }
+#define __soaap_vuln_fn(CVE) __attribute__((annotate(PAST_VULNERABILITY"_"CVE))) __attribute__((noinline))
+#define __soaap_vuln_pt(CVE) __soaap_past_vulnerability_at_point(CVE);
+__attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* cve) {
+  int result;
+  // hack to prevent LLVM from inlining cve
+  __asm__ volatile( "addl %%ebx, %%eax;"
+                    : "=a" (result)
+                    : "a" (cve[0]), "b" (cve[1]) );
+  if (result == 909092) {
+    char dummybuf[1];
+    dummybuf[0] = '\0';
+    __soaap_past_vulnerability_at_point(dummybuf);
+  }
+}
 
 // code provenance
 #define __soaap_provenance(X) \

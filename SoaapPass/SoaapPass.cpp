@@ -69,6 +69,7 @@ namespace soaap {
     SmallVector<Function*,16> privilegedMethods;
     SmallSet<Function*,32> allReachableMethods;
     SmallSet<Function*,16> sandboxedMethods;
+    map<Function*,SmallVector<Function*,16> > funcToSandboxEntryPoint;
     SmallSet<Function*,16> syscallReachableMethods;
 
     map<const Value*,int> origin;
@@ -87,7 +88,7 @@ namespace soaap {
     map<GlobalVariable*,int> varToSandboxNames;
 
     // past-vulnerability stuff
-    SmallVector<CallInst*,16> pastVulnAnnotatedBlocks;
+    SmallVector<CallInst*,16> pastVulnAnnotatedPoints;
     SmallVector<Function*,16> pastVulnAnnotatedFuncs;
     
     // provenance
@@ -193,6 +194,9 @@ namespace soaap {
 
       outs() << "* Running " << getPassName() << "\n";
 
+      //outs() << "* Adding dynamic call edges to callgraph (if available)\n";
+      //loadDynamicCallEdges(M);
+
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);
 
@@ -220,46 +224,46 @@ namespace soaap {
       outs() << "* Finding code provenanace annotations\n";
       findCodeProvenanaceAnnotations(M);
 
-      if (!sandboxEntryPoints.empty()) {
-        if (dynamic && !emPerf) {
-          // use valgrind
-          instrumentValgrindClientRequests(M);
-          generateCallgateValgrindWrappers(M);
-        }
-        else if (!dynamic && !emPerf) {
-          // do the checks statically
-          outs() << "* Adding dynamic call edges to callgraph (if available)\n";
-          loadDynamicCallEdges(M);
-
-          outs() << "* Calculating sandboxed methods\n";
-          calculateSandboxedMethods(M);
-          outs() << "   " << sandboxedMethods.size() << " methods found\n";
-
-          outs() << "* Calculating privileged methods\n";
-          calculatePrivilegedMethods(M);
-          
-          outs() << "* Checking global variable accesses\n";
-          checkGlobalVariables(M);
-
-          outs() << "* Checking file descriptor accesses\n";
-          outs() << "   Calculating syscall-reachable methods\n";
-          calculateSyscallReachableMethods(M);
-          outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
-          checkFileDescriptors(M);
-
-          outs() << "* Checking propagation of data from sandboxes to privileged components\n";
-          checkOriginOfAccesses(M);
-          
-          outs() << "* Checking propagation of classified data\n";
-          checkPropagationOfClassifiedData(M);
-
-          outs() << "* Checking propagation of sandbox-private data\n";
-          checkPropagationOfSandboxPrivateData(M);
-        }
-        else if (!dynamic && emPerf) {
-          instrumentPerfEmul(M);
-        }
+      if (dynamic && !emPerf) {
+        // use valgrind
+        instrumentValgrindClientRequests(M);
+        generateCallgateValgrindWrappers(M);
       }
+      else if (!dynamic && !emPerf) {
+        // do the checks statically
+
+        outs() << "* Calculating sandboxed methods\n";
+        calculateSandboxedMethods(M);
+        outs() << "   " << sandboxedMethods.size() << " methods found\n";
+
+        outs() << "* Calculating privileged methods\n";
+        calculatePrivilegedMethods(M);
+        
+        outs() << "* Checking global variable accesses\n";
+        checkGlobalVariables(M);
+
+        outs() << "* Checking file descriptor accesses\n";
+        outs() << "   Calculating syscall-reachable methods\n";
+        calculateSyscallReachableMethods(M);
+        outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
+        checkFileDescriptors(M);
+
+        outs() << "* Checking propagation of data from sandboxes to privileged components\n";
+        checkOriginOfAccesses(M);
+        
+        outs() << "* Checking propagation of classified data\n";
+        checkPropagationOfClassifiedData(M);
+
+        outs() << "* Checking propagation of sandbox-private data\n";
+        checkPropagationOfSandboxPrivateData(M);
+
+        outs() << "* Checking rights leaked by past vulnerable code\n";
+        checkLeakedRights(M);
+      }
+      else if (!dynamic && emPerf) {
+        instrumentPerfEmul(M);
+      }
+      
 
       //WORKAROUND: remove calls to llvm.ptr.annotate.p0i8, otherwise LLVM will
       //            crash when generating object code.
@@ -353,8 +357,8 @@ namespace soaap {
           dbgs() << "Found " << F.getName() << " function\n";
           for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
             if (CallInst* call = dyn_cast<CallInst>(u.getUse().getUser())) {
-              call->dump();
-              pastVulnAnnotatedBlocks.push_back(call);
+              //call->dump();
+              pastVulnAnnotatedPoints.push_back(call);
             }
           }
         }
@@ -384,9 +388,124 @@ namespace soaap {
       }
     }
 
-    void checkLeakedRightsForPastVulnerabilities(Module& M) {
-      // for each vulnerability, find out whether it is in a sandbox or not 
-      // and what the leaked rights are
+    void checkLeakedRights(Module& M) {
+      for (CallInst* C : pastVulnAnnotatedPoints) {
+        // for each vulnerability, find out whether it is in a sandbox or not 
+        // and what the leaked rights are
+        Function* F = C->getParent()->getParent();
+        if (GlobalVariable* CVEGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(0)->stripPointerCasts())) {
+          ConstantDataArray* CVEGlobalArr = dyn_cast<ConstantDataArray>(CVEGlobal->getInitializer());
+          StringRef CVE = CVEGlobalArr->getAsCString();
+          DEBUG(dbgs() << "Enclosing function is " << F->getName() << "\n");
+
+          if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
+            outs() << " *** Sandboxed function " << F->getName() << " has a past-vulnerability annotation for " << CVE << ".\n";
+            outs() << " *** Another vulnerability here would not grant ambient authority to the attacker but would leak the following restricted rights:\n"     ;
+            // F may run in a sandbox
+            // find out what was passed into the sandbox (shared global variables, file descriptors)
+            for (pair<GlobalVariable*,int> varPermPair : varToPerms) {
+              GlobalVariable* G = varPermPair.first;
+              int varPerms = varPermPair.second;
+              StringRef varPermsStr = "";
+              if (varPerms == (VAR_READ_MASK | VAR_WRITE_MASK)) {
+                varPermsStr = "Read and write";
+              }
+              else if (varPerms & VAR_READ_MASK) {
+                varPermsStr = "Read";
+              }
+              else if (varPerms) {
+                varPermsStr = "Write";
+              }
+              if (varPermsStr != "")
+                outs () << " +++ " << varPermsStr << " access to global variable " << G->getName() << "\n";
+            }
+          
+            for(Function* entryPoint : funcToSandboxEntryPoint[F]) {
+              for (pair<const Value*,int> fdPermPair : fdToPerms) {
+                const Argument* fd = dyn_cast<const Argument>(fdPermPair.first);
+                int perms = fdPermPair.second;
+                for (Function::const_arg_iterator AI=entryPoint->arg_begin(), AE=entryPoint->arg_end(); AI!=AE; AI++) {
+                  if (fd == AI) {
+                    StringRef fdPerms = "";
+                    if (perms == (FD_READ_MASK | FD_WRITE_MASK)) {
+                      fdPerms = "Read and write";
+                    }
+                    else if (perms & FD_READ_MASK) {
+                      fdPerms = "Read";
+                    }
+                    else if (perms) {
+                      fdPerms = "Write";
+                    }
+                    if (fdPerms != "")
+                      outs() << " +++ " << fdPerms << " access to file descriptor " << fd->getName() << " passed into sandbox entrypoint " << entryPoint->getName() << "\n";
+                  }
+
+                }
+              }
+            }
+          }
+          if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
+            // enclosingFunc may run with ambient authority
+            outs() << " *** Function " << F->getName() << " has a past-vulnerability annotation for " << CVE << ".\n";
+            outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
+            outs() << " *** network and file system access.\n"; 
+            dbgs() << " Possible trace:\n";
+            printPrivilegedPathToFunction(F, M);
+          }
+        }
+
+      }
+
+    }
+
+
+    void printPrivilegedPathToFunction(Function* Target, Module& M) {
+      if (Function* MainFn = M.getFunction("main")) {
+        // Find privileged path to instruction I, via a function that calls a sandboxed callee
+        CallGraph& CG = getAnalysis<CallGraph>();
+        CallGraphNode* TargetNode = CG[Target];
+        list<Instruction*> trace = findPathToFunc(MainFn, Target, NULL, -1);
+        prettyPrintTrace(trace);
+        outs() << "\n";
+      }
+    }
+
+
+    list<Instruction*> findPrivPathToFunc(Function* From, Function* To, map<const Value*,int>* shadow, int taint) {
+      CallGraph& CG = getAnalysis<CallGraph>();
+      CallGraphNode* FromNode = CG[From];
+      CallGraphNode* ToNode = CG[To];
+      list<CallGraphNode*> visited;
+      list<Instruction*> trace;
+      findPrivPathToFuncHelper(FromNode, ToNode, trace, visited);
+      return trace;
+    }
+
+    bool findPrivPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited) {
+      if (CurrNode == FinalNode)
+        return true;
+      else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
+        return false;
+      else if (find(visited.begin(), visited.end(), CurrNode) != visited.end()) // cycle
+        return false;
+      else {
+        visited.push_back(CurrNode);
+        for (CallGraphNode::iterator I = CurrNode->begin(), E = CurrNode->end(); I!=E; I++) {
+          Value* V = I->first;
+          if(CallInst* Call = dyn_cast_or_null<CallInst>(V)) {
+            CallGraphNode* CalleeNode = I->second;
+            if (Function* CalleeFunc = CalleeNode->getFunction()) {
+              bool privilegedCallee = find(privilegedMethods.begin(), privilegedMethods.end(), CalleeFunc) != privilegedMethods.end();
+              if (privilegedCallee && findPrivPathToFuncHelper(CalleeNode, FinalNode, trace, visited)) {
+                // CurrNode is on a path to FinalNode, so prepend to the trace
+                trace.push_back(Call);
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      }
     }
 
     void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
@@ -475,7 +594,6 @@ namespace soaap {
     }
 
     void prettyPrintTrace(list<Instruction*>& trace) {
-      outs() << "    Possible trace to untrusted function pointer call:\n";
       for (Instruction* I : trace) {
         Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
         if (MDNode *N = I->getMetadata("dbg")) {
@@ -1767,11 +1885,11 @@ namespace soaap {
         if (sandboxEntryPointToName.find(F) != sandboxEntryPointToName.end()) {
           sandboxName = sandboxEntryPointToName[F]; // sandbox entry point will only have one name
         }
-        calculateSandboxedMethodsHelper(Node, sandboxedMethodToClearances[F], sandboxName);
+        calculateSandboxedMethodsHelper(Node, sandboxedMethodToClearances[F], sandboxName, F);
       }
     }
 
-    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances, int sandboxName) {
+    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances, int sandboxName, Function* entryPoint) {
 
       Function* F = node->getFunction();
 
@@ -1786,6 +1904,10 @@ namespace soaap {
       allReachableMethods.insert(F);
       sandboxedMethodToClearances[F] |= clearances;
 
+      if (F != entryPoint) {
+        funcToSandboxEntryPoint[F].push_back(entryPoint);
+      }
+
       if (sandboxName != 0) {
         DEBUG(dbgs() << "   Assigning name: " << sandboxName << "\n");
         sandboxedMethodToNames[F] |= sandboxName;
@@ -1799,8 +1921,9 @@ namespace soaap {
           if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
             DEBUG(dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << stringifySandboxNames(sandboxName));
             sandboxName = sandboxEntryPointToName[calleeFunc];
+            entryPoint = calleeFunc;
           }
-          calculateSandboxedMethodsHelper(calleeNode, clearances, sandboxName);
+          calculateSandboxedMethodsHelper(calleeNode, clearances, sandboxName, entryPoint);
         }
       }
     }
@@ -1823,6 +1946,7 @@ namespace soaap {
         if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
           return;
   
+        DEBUG(dbgs() << "Added " << F->getName() << " as privileged method\n");
         privilegedMethods.push_back(F);
         allReachableMethods.insert(F);
   
