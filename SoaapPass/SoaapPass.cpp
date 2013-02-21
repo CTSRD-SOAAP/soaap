@@ -1249,7 +1249,8 @@ namespace soaap {
      */
     void validateDescriptorAccesses(Module& M, string syscall, int required_perm) {
       if (Function* syscallFn = M.getFunction(syscall)) {
-        for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end(); I != E; I++) {
+        for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end();
+             (I != E) && isa<CallInst>(*I); I++) {
           CallInst* Call = cast<CallInst>(*I);
           Value* fd = Call->getArgOperand(0);
           if (!(fdToPerms[fd] & required_perm)) {
