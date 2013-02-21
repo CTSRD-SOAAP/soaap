@@ -36,8 +36,8 @@
 
 // past vulnerabilities
 #define PAST_VULNERABILITY "PAST_VULNERABILITY"
-#define __soaap_past_vulnerability_func __attribute__((annotate(PAST_VULNERABILITY))) __attribute__((noinline))
-#define __soaap_past_vulnerability_point __soaap_past_vulnerability_at_point();
+#define __soaap_vuln_fn __attribute__((annotate(PAST_VULNERABILITY))) __attribute__((noinline))
+#define __soaap_vuln_pt __soaap_past_vulnerability_at_point();
 __attribute__((noinline)) static void __soaap_past_vulnerability_at_point() { __asm__ volatile (""); }
 
 // code provenance
