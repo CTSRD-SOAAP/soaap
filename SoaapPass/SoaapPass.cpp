@@ -89,6 +89,8 @@ namespace soaap {
     // past-vulnerability stuff
     SmallVector<CallInst*,16> pastVulnAnnotatedBlocks;
     SmallVector<Function*,16> pastVulnAnnotatedFuncs;
+    
+    // provenance
     SmallVector<StringRef,16> vulnerableVendors;
 
     SoaapPass() : ModulePass(ID) {
@@ -287,11 +289,53 @@ namespace soaap {
       // the linker doesn't complain when linking multiple compilation units
       // together.
       string provenanceVarBaseName = "__soaap_provenance";
+      SmallVector<DICompileUnit,16> CUs;
+      NamedMDNode* CUMDNodes = M.getNamedMetadata("llvm.dbg.cu");
+      for(unsigned i = 0, e = CUMDNodes->getNumOperands(); i != e; i++) {
+        MDNode* CUMDNode = CUMDNodes->getOperand(i);
+        DICompileUnit CU(CUMDNode);
+        CUs.push_back(CU);
+      }
+      
+      // each __soaap_provenance global var is defined in exactly one CU,
+      // so remove a CU from CUs once it has be attributed to a var
       for (GlobalVariable& G : M.getGlobalList()) {
         if (G.getName().startswith(provenanceVarBaseName)) {
-          DEBUG(dbgs() << "Found global variable " << G.getName() << "\n");
-          //ConstantDataArray* provenance = dyn_cast<ConstantDataArray>(G.getInitializer());
-          //dbgs() << "  Provenance: " << provenance->getAsString() << "\n";
+          dbgs() << "Found global variable " << G.getName() << "\n";
+          GlobalVariable* provenanceStrVar = dyn_cast<GlobalVariable>(G.getInitializer()->stripPointerCasts());
+          ConstantDataArray* provenanceArr = dyn_cast<ConstantDataArray>(provenanceStrVar->getInitializer());
+          StringRef provenanceStr = provenanceArr->getAsCString(); // getAsString adds '\0' as an additional character
+          dbgs() << "  Provenance: " << provenanceStr << "\n";
+
+          if (find(vulnerableVendors.begin(), vulnerableVendors.end(), provenanceStr) != vulnerableVendors.end()) {
+            outs() << "   " << provenanceStr << " is a vulnerable vendor\n";
+            // Find out what the containing compilation unit and all its functions
+            for(unsigned i = 0, ei = CUs.size(); i != ei; i++) {
+              DICompileUnit CU = CUs[i];
+              DIArray CUGlobals = CU.getGlobalVariables();
+              for (unsigned j = 0, ej = CUGlobals.getNumElements(); j != ej; j++) {
+                DIGlobalVariable CUGlobal = static_cast<DIGlobalVariable>(CUGlobals.getElement(j));
+                if (CUGlobal.getGlobal() == &G) {
+                  outs() << "    Found containing compile unit for " << G.getName() << ", list functions:\n";
+                  DIArray CUSubs = CU.getSubprograms();
+                  for (unsigned k = 0, ek = CUSubs.getNumElements(); k != ek; k++) {
+                    DISubprogram CUSub = static_cast<DISubprogram>(CUSubs.getElement(k));
+                    if (Function* CUFunc = CUSub.getFunction()) {
+                      outs() << "      " << CUFunc->getName() << "()\n";
+                      // record that CUFunc is vulnerable
+                      if (find(pastVulnAnnotatedFuncs.begin(), pastVulnAnnotatedFuncs.end(), CUFunc) == pastVulnAnnotatedFuncs.end()) {
+                        pastVulnAnnotatedFuncs.push_back(CUFunc);
+                      }
+                    }
+                  }
+                  CUs.erase(CUs.begin()+i); // remove CU from CUs
+                  goto outerloop;
+                }
+              }
+            }
+            outerloop:
+            ;
+          }
         }
       }
     }
@@ -309,7 +353,7 @@ namespace soaap {
           DEBUG(dbgs() << "Found " << F.getName() << " function\n");
           for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
             CallInst* call = dyn_cast<CallInst>(u.getUse().getUser());
-            DEBUG(call->dump());
+            //DEBUG(call->dump());
             pastVulnAnnotatedBlocks.push_back(call);
           }
         }
