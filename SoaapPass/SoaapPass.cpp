@@ -23,7 +23,7 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Support/CommandLine.h"
+//#include "llvm/Support/CommandLine.h"
 
 #include "soaap.h"
 #include "soaap_perf.h"
@@ -36,10 +36,11 @@
 using namespace llvm;
 using namespace std;
 
-static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
+/*static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
        cl::desc("Comma-separated list of vendors whose code should "
                 "be treated as vulnerable"),
-       cl::value_desc("list of vendors"), cl::CommaSeparated);
+       cl::value_desc("list of vendors"), cl::CommaSeparated);*/
+static list<std::string> ClVulnerableVendors;
 
 namespace soaap {
 
@@ -1232,7 +1233,7 @@ namespace soaap {
           User* user = u.getUse().getUser();
           if (LoadInst* load = dyn_cast<LoadInst>(user)) {
             Value* v = load->getPointerOperand();
-            dbgs() << "   Load of classified global variable " << var->getName() << " found with classifications: " << stringifyClassifications(classes) << "\n";
+            DEBUG(dbgs() << "   Load of classified global variable " << var->getName() << " found with classifications: " << stringifyClassifications(classes) << "\n");
             DEBUG(load->dump());
             valueToClasses[v] = classes; // could v have already been initialised above? (NO)
           }
@@ -1548,7 +1549,7 @@ namespace soaap {
 
     void assignBitIdxToClassName(StringRef className) {
       if (classToBitIdx.find(className) == classToBitIdx.end()) {
-        dbgs() << "    Assigning bit index " << nextClassBitIdx << " to class \"" << className << "\"\n";
+        dbgs() << "    Assigning index " << nextClassBitIdx << " to class \"" << className << "\"\n";
         classToBitIdx[className] = nextClassBitIdx;
         bitIdxToClass[nextClassBitIdx] = className;
         nextClassBitIdx++;
@@ -1557,7 +1558,7 @@ namespace soaap {
 
     void assignBitIdxToSandboxName(StringRef sandboxName) {
       if (sandboxNameToBitIdx.find(sandboxName) == sandboxNameToBitIdx.end()) {
-        dbgs() << "    Assigning bit index " << nextSandboxNameBitIdx << " to sandbox name \"" << sandboxName << "\"\n";
+        dbgs() << "    Assigning index " << nextSandboxNameBitIdx << " to sandbox name \"" << sandboxName << "\"\n";
         sandboxNameToBitIdx[sandboxName] = nextSandboxNameBitIdx;
         bitIdxToSandboxName[nextSandboxNameBitIdx] = sandboxName;
         nextSandboxNameBitIdx++;
@@ -1964,6 +1965,7 @@ namespace soaap {
       // find all uses of global variables and check that they are allowed
       // as per the annotations
       for (Function* F : sandboxedMethods) {
+        SmallVector<GlobalVariable*,10> alreadyReportedReads, alreadyReportedWrites;
         DEBUG(dbgs() << "Sandbox-reachable function: " << F->getName().str() << "\n");
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
@@ -1972,12 +1974,15 @@ namespace soaap {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
                 if (gv->hasExternalLinkage()) continue; // not concerned with externs
                 if (!(varToPerms[gv] & VAR_READ_MASK)) {
-                  outs() << " *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to\n";
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                     DILocation loc(N);
-                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  if (find(alreadyReportedReads.begin(), alreadyReportedReads.end(), gv) == alreadyReportedReads.end()) {
+                    outs() << " *** Sandboxed method " << F->getName().str() << " read global variable " << gv->getName().str() << " but is not allowed to\n";
+                    if (MDNode *N = I.getMetadata("dbg")) {
+                      DILocation loc(N);
+                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    }
+                    alreadyReportedReads.push_back(gv);
+                    outs() << "\n";
                   }
-                  outs() << "\n";
                 }
 
               }
@@ -1988,12 +1993,15 @@ namespace soaap {
                 // check that the programmer has annotated that this
                 // variable can be written to
                 if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
-                  outs() << " *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to\n";
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                     DILocation loc(N);
-                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  if (find(alreadyReportedWrites.begin(), alreadyReportedWrites.end(), gv) == alreadyReportedWrites.end()) {
+                    outs() << " *** Sandboxed method " << F->getName().str() << " wrote to global variable " << gv->getName().str() << " but is not allowed to\n";
+                    if (MDNode *N = I.getMetadata("dbg")) {
+                      DILocation loc(N);
+                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    }
+                    alreadyReportedWrites.push_back(gv);
+                    outs() << "\n";
                   }
-                  outs() << "\n";
                 }
               }
             }
@@ -2012,6 +2020,7 @@ namespace soaap {
       // the sandbox process is forked at the start of main).
       for (Function* F : privilegedMethods) {
         DEBUG(dbgs() << "Privileged function: " << F->getName().str() << "\n");
+        SmallVector<GlobalVariable*,10> alreadyReported;
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
             if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
@@ -2019,12 +2028,15 @@ namespace soaap {
                 // check that the programmer has annotated that this
                 // variable can be written to
                 if (varToPerms[gv] & VAR_READ_MASK) {
-                  outs() << " *** Write to shared variable " << gv->getName() << " outside sandbox in method " << F->getName() << " will not be seen by a sandbox\n";
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                     DILocation loc(N);
-                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
+                    outs() << " *** Write to shared variable " << gv->getName() << " outside sandbox in method " << F->getName() << " will not be seen by a sandbox\n";
+                    if (MDNode *N = I.getMetadata("dbg")) {
+                      DILocation loc(N);
+                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    }
+                    alreadyReported.push_back(gv);
+                    outs() << "\n";
                   }
-                  outs() << "\n";
                 }
               }
             }
