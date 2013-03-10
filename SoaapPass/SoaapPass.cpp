@@ -23,7 +23,7 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-//#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "soaap.h"
 #include "soaap_perf.h"
@@ -36,11 +36,11 @@
 using namespace llvm;
 using namespace std;
 
-/*static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
+static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
        cl::desc("Comma-separated list of vendors whose code should "
                 "be treated as vulnerable"),
-       cl::value_desc("list of vendors"), cl::CommaSeparated);*/
-static list<std::string> ClVulnerableVendors;
+       cl::value_desc("list of vendors"), cl::CommaSeparated);
+//static list<std::string> ClVulnerableVendors;
 
 namespace soaap {
 
