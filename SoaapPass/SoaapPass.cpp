@@ -1371,18 +1371,20 @@ namespace soaap {
         for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end();
              (I != E) && isa<CallInst>(*I); I++) {
           CallInst* Call = cast<CallInst>(*I);
-          Value* fd = Call->getArgOperand(0);
-          if (!(fdToPerms[fd] & required_perm)) {
-            Function* Caller = cast<Function>(Call->getParent()->getParent());
-            outs() << " *** Insufficient privileges for \"" << syscall << "()\" in sandboxed method \"" << Caller->getName() << "\"\n";
-            if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
-              DILocation Loc(N);                      // DILocation is in DebugInfo.h
-              unsigned Line = Loc.getLineNumber();
-              StringRef File = Loc.getFilename();
-              StringRef Dir = Loc.getDirectory();
-              outs() << " +++ Line " << Line << " of file " << File << "\n";
+          Function* Caller = cast<Function>(Call->getParent()->getParent());
+          if (find(sandboxedMethods.begin(), sandboxedMethods.end(), Caller) != sandboxedMethods.end()) {
+            Value* fd = Call->getArgOperand(0);
+            if (!(fdToPerms[fd] & required_perm)) {
+              outs() << " *** Insufficient privileges for \"" << syscall << "()\" in sandboxed method \"" << Caller->getName() << "\"\n";
+              if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
+                DILocation Loc(N);                      // DILocation is in DebugInfo.h
+                unsigned Line = Loc.getLineNumber();
+                StringRef File = Loc.getFilename();
+                StringRef Dir = Loc.getDirectory();
+                outs() << " +++ Line " << Line << " of file " << File << "\n";
+              }
+              outs() << "\n";
             }
-            outs() << "\n";
           }
         }
       }
