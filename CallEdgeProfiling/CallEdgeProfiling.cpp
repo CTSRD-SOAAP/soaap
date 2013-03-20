@@ -23,6 +23,7 @@
 #include "Transforms/Instrumentation/ProfilingUtils.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/IR/TypeBuilder.h"
 
 #include <iostream>
 #include <vector>
@@ -122,17 +123,23 @@ namespace soaap {
           ++InsertPos;
         }
 
+
         Value *CallerVal = new LoadInst(callerVar, "CallerVal", InsertPos);
 
         // Update counter for [CallerVal*(numFuncs+1)+IdVal]
         // Compute array index:
+        /*
         Value* CallerValArrayIdx = BinaryOperator::Create(Instruction::Mul, CallerVal,
                         ConstantInt::get(Type::getInt32Ty(M.getContext()), (numFuncs+1)),
                             "CallerValArrayIdx", InsertPos);
         Value* CallerCalleeElemIdx = BinaryOperator::Create(Instruction::Add, CallerValArrayIdx,
                             FuncIdVal,
                             "CallerCalleeElemIdx", InsertPos);
+        */
 
+        InsertIncrementCounter(CallerVal, FuncIdVal, numFuncs, InsertPos, M);
+
+        /*
         // Create the GEP instruction
         std::vector<Value*> Indices(2);
         Indices[0] = Constant::getNullValue(Type::getInt32Ty(M.getContext()));
@@ -145,6 +152,7 @@ namespace soaap {
                                        ConstantInt::get(Type::getInt32Ty(M.getContext()), 1),
                                                  "NewCallEdgeCounter", InsertPos);
         new StoreInst(NewVal, GEP, InsertPos);
+        */
 
         // DEBUG: output caller -> callee (using printf)
 
@@ -164,7 +172,7 @@ namespace soaap {
         funcId++;
       }
 
-      InsertProfilingInitCall(Main, "llvm_start_call_edge_profiling", Counters);
+      InsertProfilingInitCall(Main, "soaap_start_call_edge_profiling", Counters);
 
       //WORKAROUND: remove calls to llvm.ptr.annotate.p0i8, otherwise LLVM will
       //            crash when generating object code.
@@ -177,6 +185,14 @@ namespace soaap {
         }
       }
       return true;
+    }
+
+    void InsertIncrementCounter(Value* CallerId, Value* FuncId, int numFuncs, BasicBlock::iterator& InsertPos, Module& M) {
+      
+      FunctionType* IncFuncType = TypeBuilder<void(types::i<32>,types::i<32>,types::i<32>), true>::get(M.getContext());
+      Function* IncFunc = cast<Function>(M.getOrInsertFunction("soaap_increment_call_edge_counter", IncFuncType));
+      Value* args[] = { CallerId, FuncId, ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), numFuncs) };
+      CallInst::Create(IncFunc, args, "", InsertPos);
     }
 
   };
