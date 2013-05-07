@@ -98,7 +98,7 @@ namespace soaap {
     SoaapPass() : ModulePass(ID) {
       modified = false;
       dynamic = false;
-      emPerf = false;
+      emPerf = true;
     }
 
     // inner classes for propagate functions
@@ -184,6 +184,8 @@ namespace soaap {
     };
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+      if (emPerf)
+	return;
       if (!dynamic) {
         AU.setPreservesCFG();
       }
@@ -845,7 +847,6 @@ namespace soaap {
             }
             else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
               outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
-              persistentSandboxFuncs.push_back(annotatedFunc);
               ephemeralSandboxFuncs.push_back(annotatedFunc);
               sandboxEntryPoints.push_back(annotatedFunc);
             }
@@ -2067,7 +2068,7 @@ namespace soaap {
 			 * Iterate through sandboxed functions and apply the necessary
 			 * instrumentation to emulate performance overhead.
 			 */
-			for (Function* F : sandboxedMethods) {
+			for (Function* F : sandboxEntryPoints) {
 				Argument* data_in = NULL;
 				Argument* data_out = NULL;
 				bool persistent = find(persistentSandboxFuncs.begin(),
@@ -2268,6 +2269,17 @@ namespace soaap {
 			 */
 			if (!persistentSandboxFuncs.empty()) {
 				Function* mainFn = M.getFunction("main");
+
+				Function* createPersistentSandbox
+					= M.getFunction("soaap_perf_create_persistent_sbox");
+				Instruction* mainFirstInst = mainFn->getEntryBlock().getFirstNonPHI();
+				if(mainFirstInst) {
+					CallInst* createCall
+						= CallInst::Create(createPersistentSandbox,
+							ArrayRef<Value*>());
+					createCall->insertBefore(mainFirstInst);
+				}
+
 
 				ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
 					-1, true);
