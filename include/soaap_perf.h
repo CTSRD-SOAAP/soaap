@@ -9,7 +9,6 @@
 #define __sandbox_overhead(A) __attribute((annotate("perf_overhead_(" #A ")")))
 
 #include <time.h>
-#include <sys/timespec.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
