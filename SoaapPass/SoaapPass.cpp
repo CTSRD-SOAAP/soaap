@@ -1303,10 +1303,16 @@ namespace soaap {
                   }
                   else if (find(callgates.begin(), callgates.end(), Callee) != callgates.end()) {
                     // cross-domain call to callgate
-                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through callgate " << Callee->getName() << "\n";
-                    if (MDNode *N = I.getMetadata("dbg")) {
-                      DILocation loc(N);
-                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
+                      Value* arg = dyn_cast<Value>(AI->get());
+                      if (valueToSandboxNames[arg] & sandboxNames) {
+                        outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      stringifySandboxNames(sandboxNames) << " may leak private data through callgate " << Callee->getName() << "\n";
+                        if (MDNode *N = I.getMetadata("dbg")) {
+                          DILocation loc(N);
+                          outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                        }
+                        outs() << "\n";
+                      }
                     }
                     outs() << "\n";
                   }
