@@ -59,7 +59,7 @@ namespace soaap {
 
     map<GlobalVariable*,int> globalVarToSandboxNames;
 
-    SmallVector<Instruction*,16> sandboxCreationPoint;
+    SmallVector<Instruction*,16> sandboxCreationPoints;
     map<Instruction*,int> sandboxCreationPointToName;
 
     map<Function*, int> sandboxedMethodToOverhead;
@@ -103,7 +103,7 @@ namespace soaap {
     SoaapPass() : ModulePass(ID) {
       modified = false;
       dynamic = false;
-      emPerf = true;
+      emPerf = false;
     }
 
     // inner classes for propagate functions
@@ -817,6 +817,7 @@ namespace soaap {
               outs() << "      Sandbox name: " << sandboxName << "\n";
               assignBitIdxToSandboxName(sandboxName);
               sandboxCreationPointToName[Call] = (1 << sandboxNameToBitIdx[sandboxName]);
+              sandboxCreationPoints.push_back(Call);
             }
           }
         }
@@ -935,11 +936,17 @@ namespace soaap {
           GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
           if (isa<GlobalVariable>(annotatedVal)) {
             GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
-            if (annotationStrArrayCString == VAR_READ) {
+            if (annotationStrArrayCString.startswith(VAR_READ)) {
+              StringRef sandboxName = annotationStrArrayCString.substr(strlen(VAR_READ)+1);
               varToPerms[annotatedVar] |= VAR_READ_MASK;
+              globalVarToSandboxNames[annotatedVar] |= (1 << sandboxNameToBitIdx[sandboxName]);
+              dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
             }
-            else if (annotationStrArrayCString == VAR_WRITE) {
+            else if (annotationStrArrayCString.startswith(VAR_WRITE)) {
+              StringRef sandboxName = annotationStrArrayCString.substr(strlen(VAR_WRITE)+1);
               varToPerms[annotatedVar] |= VAR_WRITE_MASK;
+              globalVarToSandboxNames[annotatedVar] |= (1 << sandboxNameToBitIdx[sandboxName]);
+              dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
             }
           }
         }
@@ -1999,16 +2006,17 @@ namespace soaap {
       // as per the annotations
       for (Function* F : sandboxedMethods) {
         SmallVector<GlobalVariable*,10> alreadyReportedReads, alreadyReportedWrites;
-        DEBUG(dbgs() << "Sandbox-reachable function: " << F->getName().str() << "\n");
+        DEBUG(dbgs() << "   Sandbox-reachable function: " << F->getName().str() << "\n");
         for (BasicBlock& BB : F->getBasicBlockList()) {
           for (Instruction& I : BB.getInstList()) {
 //            I.dump();
             if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
-                if (gv->hasExternalLinkage()) continue; // not concerned with externs
-                if (!(varToPerms[gv] & VAR_READ_MASK)) {
+                //outs() << "VAR_READ_MASK?: " << (varToPerms[gv] & VAR_READ_MASK) << ", sandbox-check: " << stringifySandboxNames(globalVarToSandboxNames[gv] & sandboxedMethodToNames[F]) << "\n";
+                //if (gv->hasExternalLinkage()) continue; // not concerned with externs
+                if (!(varToPerms[gv] & VAR_READ_MASK) || (globalVarToSandboxNames[gv] & sandboxedMethodToNames[F]) == 0) {
                   if (find(alreadyReportedReads.begin(), alreadyReportedReads.end(), gv) == alreadyReportedReads.end()) {
-                    outs() << " *** Sandboxed method \"" << F->getName().str() << "\" read global variable \"" << gv->getName().str() << "\" but is not allowed to\n";
+                    outs() << " *** Sandboxed method \"" << F->getName().str() << "\" read global variable \"" << gv->getName().str() << "\" but is not allowed to. If the access is intended, the variable needs to be annotated with __soaap_read_var.\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -2017,7 +2025,6 @@ namespace soaap {
                     outs() << "\n";
                   }
                 }
-
               }
             }
             else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
@@ -2065,9 +2072,11 @@ namespace soaap {
                   int precedingSandboxCreations = findPrecedingSandboxCreations(store, F, M);
                   int varSandboxNames = globalVarToSandboxNames[gv];
                   int commonSandboxNames = precedingSandboxCreations & varSandboxNames;
+                  DEBUG(dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
+                  DEBUG(dbgs() << "   preceding sandbox creations: " << stringifySandboxNames(precedingSandboxCreations) << ", varSandboxNames: " << stringifySandboxNames(varSandboxNames) << "\n");
                   if (commonSandboxNames) {
                     if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
-                      outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << stringifySandboxNames(commonSandboxNames) << "\n";
+                      outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << stringifySandboxNames(commonSandboxNames) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
                       if (MDNode *N = I.getMetadata("dbg")) {
                         DILocation loc(N);
                         outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -2086,11 +2095,14 @@ namespace soaap {
 
     int findPrecedingSandboxCreations(Instruction* I, Function* F, Module& M) {
       int result = 0;
-      for (Instruction* J : sandboxCreationPoint) {
+      for (Instruction* J : sandboxCreationPoints) {
         Function* sandboxCreationFunc = J->getParent()->getParent();
+        DEBUG(dbgs() << "   Sandbox creation point: ");
+        DEBUG(J->dump());
+        DEBUG(dbgs() << "   Enclosing function: " << sandboxCreationFunc->getName() << "\n");
         if (F == sandboxCreationFunc) {
           // check that J is reachable from I
-          result |= (isReachableFrom(J, I, F) ? sandboxCreationPointToName[J] : 0);
+          result |= (isReachableFrom(I, J, F) ? sandboxCreationPointToName[J] : 0);
         }
         else {
           // check that F is reachable from sandboxCreationFunc
@@ -2104,10 +2116,13 @@ namespace soaap {
       BasicBlock* B2 = I2->getParent();
       BasicBlock* B1 = I1->getParent();
       if (B1 == B2) {
+        DEBUG(dbgs() << "   Same basic block\n");
         // same basic block
         bool I1Found = false;
         for (Instruction& I : B1->getInstList()) {
+          //I.dump();
           if (&I == I1) {
+            DEBUG(dbgs() << "   I1 found\n");
             I1Found = true;
           }
           else if (!I1Found && &I == I2) {
@@ -2117,6 +2132,7 @@ namespace soaap {
         return true;
       }
       else {
+        dbgs() << "   Different basic blocks\n";
         return isReachableFrom(B2, B1);
       }
     }
@@ -2143,6 +2159,7 @@ namespace soaap {
     }
 
     bool isReachableFrom(Function* F2, Function* F1) {
+      dbgs() << "   Checking if " << F2->getName() << " is reachable from " << F1->getName() << "\n";
       CallGraph& CG = getAnalysis<CallGraph>();
       CallGraphNode* F1Node = CG[F1];
       CallGraphNode* F2Node = CG[F2];

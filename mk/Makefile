@@ -1,17 +1,19 @@
-.SUFFIXES: .ll .cg .soaap
+.SUFFIXES: .c .bc .cg .soaap
 
-SOAAP_BUILD_DIR=/home/khilan/workspace_local/soaap_build
-SOAAP_INCLUDE_PATH=/home/khilan/workspace/soaap/include
-LLVM_BUILD_DIR=/home/khilan/workspace_local/llvm_build
+SOAAP_BUILD_DIR=/home/kg365/pool/soaap
+SOAAP_INCLUDE_PATH=/home/kg365/workspace/soaap/include
+LLVM_BUILD_DIR=/home/kg365/pool/llvm
 
-.ll.soaap:
-	opt -S -o $<.soaap -load $(SOAAP_BUILD_DIR)/libsoaap.so -profile-loader -soaap $<
+.bc.soaap:
+	opt -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap -o /dev/null ${.IMPSRC}
 
-.c.cg:
-	clang -cc1 -g -I $(SOAAP_INCLUDE_PATH) -emit-llvm $<
-	opt -S -load $(SOAAP_BUILD_DIR)/libcep.so -insert-call-edge-profiling -o=`basename $< .c`.pll `basename $< .c`.ll
-	llc -filetype=obj `basename $< .c`.pll
-	clang -L $(SOAAP_BUILD_DIR) -L $(LLVM_BUILD_DIR)/lib -lcep_rt -lprofile_rt -o `basename $< .c` `basename $< .c`.pll.o
+.c.bc:
+	clang -c -g -I $(SOAAP_INCLUDE_PATH) -emit-llvm -o ${.TARGET} ${.IMPSRC}
+
+.bc.dyncg:
+	opt -load $(SOAAP_BUILD_DIR)/libcep.so -insert-call-edge-profiling -o ${.IMPSRC:R}.pbc ${.IMPSRC} 
+	llc -filetype=obj -o ${.IMPSRC:R}.po ${.IMPSRC:R}.pbc 
+	clang -L $(SOAAP_BUILD_DIR) -L $(LLVM_BUILD_DIR)/lib -lcep_rt -lprofile_rt $(LDADD) -o ${.TARGET} ${.IMPSRC:R}.po
 
 clean:
-	rm *.pll* *.soaap
+	rm *.soaap *.dyncg *.pbc *.po *.bc

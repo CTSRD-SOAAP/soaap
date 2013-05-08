@@ -57,8 +57,8 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 
 #define __soaap_sandbox_persistent(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
 #define __soaap_sandbox_ephemeral(N) __attribute__((annotate(SANDBOX_EPHEMERAL"_"N))) __attribute__((noinline))
-#define __soaap_var_read __attribute__((annotate(VAR_READ)))
-#define __soaap_var_write __attribute__((annotate(VAR_WRITE)))
+#define __soaap_var_read(N) __attribute__((annotate(VAR_READ"_"N)))
+#define __soaap_var_write(N) __attribute__((annotate(VAR_WRITE"_"N)))
 #define __soaap_fd_read __attribute__((annotate(FD_READ)))
 #define __soaap_fd_write __attribute__((annotate(FD_WRITE)))
 #define __soaap_indirect_fd_read(F) __attribute__((annotate(F##"_"##FD_READ)))
