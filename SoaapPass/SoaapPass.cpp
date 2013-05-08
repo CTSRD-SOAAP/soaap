@@ -24,6 +24,7 @@
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/CFG.h"
 
 #include "soaap.h"
 #include "soaap_perf.h"
@@ -40,7 +41,6 @@ static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
        cl::desc("Comma-separated list of vendors whose code should "
                 "be treated as vulnerable"),
        cl::value_desc("list of vendors"), cl::CommaSeparated);
-//static list<std::string> ClVulnerableVendors;
 
 namespace soaap {
 
@@ -56,7 +56,12 @@ namespace soaap {
 
     map<GlobalVariable*,int> varToPerms;
     map<const Value*,int> fdToPerms;
-    
+
+    map<GlobalVariable*,int> globalVarToSandboxNames;
+
+    SmallVector<Instruction*,16> sandboxCreationPoint;
+    map<Instruction*,int> sandboxCreationPointToName;
+
     map<Function*, int> sandboxedMethodToOverhead;
     SmallVector<Function*,16> persistentSandboxFuncs;
     SmallVector<Function*,16> ephemeralSandboxFuncs;
@@ -203,8 +208,11 @@ namespace soaap {
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);
 
-      outs() << "* Finding sandbox methods\n";
-      findSandboxedMethods(M);
+      outs() << "* Finding sandbox creation-points\n";
+      findSandboxCreationPoints(M);
+
+      outs() << "* Finding sandbox entry-points\n";
+      findSandboxEntryPoints(M);
 
       outs() << "* Finding global variables\n";
       findSharedGlobalVariables(M);
@@ -793,11 +801,33 @@ namespace soaap {
       }
     }
 
+    void findSandboxCreationPoints(Module& M) {
+      // look for calls to llvm.annotation.i32(NULL,"SOAAP_PERSISTENT_SANDBOX_CREATE",0,0)
+      if (Function* AnnotationFn = M.getFunction("llvm.annotation.i32")) {
+        for (Value::use_iterator I=AnnotationFn->use_begin(), E=AnnotationFn->use_end();
+             (I != E) && isa<CallInst>(*I); I++) {
+          CallInst* Call = cast<CallInst>(*I);
+          // get name of sandbox in 2nd arg
+          if (GlobalVariable* AnnotStrGlobal = dyn_cast<GlobalVariable>(Call->getArgOperand(1)->stripPointerCasts())) {
+            ConstantDataArray* AnnotStrGlobalArr = dyn_cast<ConstantDataArray>(AnnotStrGlobal->getInitializer());
+            StringRef AnnotStr = AnnotStrGlobalArr->getAsCString();
+            if (AnnotStr.startswith(SOAAP_PERSISTENT_SANDBOX_CREATE)) {
+              // sandbox-creation point
+              StringRef sandboxName = AnnotStr.substr(strlen(SOAAP_PERSISTENT_SANDBOX_CREATE)+1);
+              outs() << "      Sandbox name: " << sandboxName << "\n";
+              assignBitIdxToSandboxName(sandboxName);
+              sandboxCreationPointToName[Call] = (1 << sandboxNameToBitIdx[sandboxName]);
+            }
+          }
+        }
+      }
+    }
+
     /*
      * Find functions that are annotated to be executed in persistent and
      * ephemeral sandboxes
      */
-    void findSandboxedMethods(Module& M) {
+    void findSandboxEntryPoints(Module& M) {
 
       Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)",
                                        true);
@@ -2029,16 +2059,22 @@ namespace soaap {
             if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(store->getPointerOperand())) {
                 // check that the programmer has annotated that this
-                // variable can be written to
+                // variable can be read from 
                 if (varToPerms[gv] & VAR_READ_MASK) {
-                  if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
-                    outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by a sandbox\n";
-                    if (MDNode *N = I.getMetadata("dbg")) {
-                      DILocation loc(N);
-                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  // check that this store is preceded by a sandbox_create annotation
+                  int precedingSandboxCreations = findPrecedingSandboxCreations(store, F, M);
+                  int varSandboxNames = globalVarToSandboxNames[gv];
+                  int commonSandboxNames = precedingSandboxCreations & varSandboxNames;
+                  if (commonSandboxNames) {
+                    if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
+                      outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << stringifySandboxNames(commonSandboxNames) << "\n";
+                      if (MDNode *N = I.getMetadata("dbg")) {
+                        DILocation loc(N);
+                        outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                      }
+                      alreadyReported.push_back(gv);
+                      outs() << "\n";
                     }
-                    alreadyReported.push_back(gv);
-                    outs() << "\n";
                   }
                 }
               }
@@ -2046,6 +2082,96 @@ namespace soaap {
           }
         }
       }
+    }
+
+    int findPrecedingSandboxCreations(Instruction* I, Function* F, Module& M) {
+      int result = 0;
+      for (Instruction* J : sandboxCreationPoint) {
+        Function* sandboxCreationFunc = J->getParent()->getParent();
+        if (F == sandboxCreationFunc) {
+          // check that J is reachable from I
+          result |= (isReachableFrom(J, I, F) ? sandboxCreationPointToName[J] : 0);
+        }
+        else {
+          // check that F is reachable from sandboxCreationFunc
+          result |= (isReachableFrom(F, sandboxCreationFunc) ? sandboxCreationPointToName[J] : 0);
+        }
+      }
+      return result;
+    }
+
+    bool isReachableFrom(Instruction* I2, Instruction* I1, Function* F) {
+      BasicBlock* B2 = I2->getParent();
+      BasicBlock* B1 = I1->getParent();
+      if (B1 == B2) {
+        // same basic block
+        bool I1Found = false;
+        for (Instruction& I : B1->getInstList()) {
+          if (&I == I1) {
+            I1Found = true;
+          }
+          else if (!I1Found && &I == I2) {
+            return false;
+          }
+        }
+        return true;
+      }
+      else {
+        return isReachableFrom(B2, B1);
+      }
+    }
+
+    bool isReachableFrom(BasicBlock* B2, BasicBlock* B1) {
+      list<BasicBlock*> visited;
+      return isReachableFromHelper(B2, B1, visited);
+    }
+
+    bool isReachableFromHelper(BasicBlock* B2, BasicBlock* Curr, list<BasicBlock*> visited) {
+      if (Curr == B2)
+        return true;
+      else if (find(visited.begin(), visited.end(), Curr) != visited.end()) 
+        return false;
+      else {
+        visited.push_back(Curr);
+        for (succ_iterator SI = succ_begin(Curr), SE = succ_end(Curr); SI != SE; SI++) {
+          BasicBlock* Succ = *SI;
+          if (isReachableFromHelper(B2, Succ, visited))
+            return true;
+        }
+        return false;
+      }
+    }
+
+    bool isReachableFrom(Function* F2, Function* F1) {
+      CallGraph& CG = getAnalysis<CallGraph>();
+      CallGraphNode* F1Node = CG[F1];
+      CallGraphNode* F2Node = CG[F2];
+      list<CallGraphNode*> visited;
+      return isReachableFromHelper(F1Node, F2Node, visited);
+    }
+
+    bool isReachableFromHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<CallGraphNode*>& visited) {
+      if (CurrNode == FinalNode)
+        return true;
+      else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
+        return false;
+      else if (find(visited.begin(), visited.end(), CurrNode) != visited.end()) // cycle
+        return false;
+      else {
+        visited.push_back(CurrNode);
+        for (CallGraphNode::iterator I = CurrNode->begin(), E = CurrNode->end(); I!=E; I++) {
+          Value* V = I->first;
+          if(CallInst* Call = dyn_cast_or_null<CallInst>(V)) {
+            CallGraphNode* CalleeNode = I->second;
+            if (Function* CalleeFunc = CalleeNode->getFunction()) {
+              if (isReachableFromHelper(CalleeNode, FinalNode, visited)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
     }
 
 		void instrumentPerfEmul(Module& M) {

@@ -55,25 +55,48 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_provenance(X) \
   static char* __attribute__((used)) __soaap_provenance_var = X;
 
-#define __soaap_sandbox __sandbox_persistent
-#define __soaap_sandbox_persistent __attribute__((annotate(SANDBOX_PERSISTENT))) __attribute__((noinline))
-#define __soaap_sandbox_persistent_named(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
-#define __soaap_sandbox_ephemeral __attribute__((annotate(SANDBOX_EPHEMERAL))) __attribute__((noinline))
-#define __soaap_var_allow_read __attribute__((annotate(VAR_READ)))
-#define __soaap_var_allow_write __attribute__((annotate(VAR_WRITE)))
-#define __soaap_fd_allow_read __attribute__((annotate(FD_READ)))
+#define __soaap_sandbox_persistent(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
+#define __soaap_sandbox_ephemeral(N) __attribute__((annotate(SANDBOX_EPHEMERAL"_"N))) __attribute__((noinline))
+#define __soaap_var_read __attribute__((annotate(VAR_READ)))
+#define __soaap_var_write __attribute__((annotate(VAR_WRITE)))
+#define __soaap_fd_read __attribute__((annotate(FD_READ)))
+#define __soaap_fd_write __attribute__((annotate(FD_WRITE)))
 #define __soaap_indirect_fd_read(F) __attribute__((annotate(F##"_"##FD_READ)))
 #define __soaap_indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
-#define __soaap_fd_allow_write __attribute__((annotate(FD_WRITE)))
-#define __soaap_callgates(fns...) \
+/*#define __soaap_callgates(fns...) \
   void __soaap_declare_callgates_helper(int unused, ...) { } \
 	void __soaap_declare_callgates() { \
 		__soaap_declare_callgates_helper(0, fns); \
-	} 
+	}*/
 
 #define __soaap_classify(L) __attribute__((annotate(CLASSIFY"_"L)))
 #define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
-#define __soaap_sandbox_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
+#define __soaap_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
 
+#define SOAAP_EPHEMERAL_SANDBOX_CREATE "SOAAP_EPHEMERAL_SANDBOX_CREATE"
+#define SOAAP_EPHEMERAL_SANDBOX_KILL "SOAAP_EPHEMERAL_SANDBOX_KILL"
+#define __soaap_create_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_CREATE"_"N)
+#define __soaap_kill_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_KILL"_"N)
+
+#define SOAAP_PERSISTENT_SANDBOX_CREATE "SOAAP_PERSISTENT_SANDBOX_CREATE"
+#define SOAAP_PERSISTENT_SANDBOX_KILL "SOAAP_PERSISTENT_SANDBOX_KILL"
+#define __soaap_create_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_CREATE"_"N)
+#define __soaap_kill_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_KILL"_"N)
+
+#define SOAAP_SANDBOX_CODE_START "SOAAP_SANDBOX_CODE_START"
+#define SOAAP_SANDBOX_CODE_END "SOAAP_SANDBOX_CODE_END"
+#define __soaap_start_sandboxed_code(N) __builtin_annotation(0, SOAAP_SANDBOX_CODE_START"_"N);
+#define __soaap_end_sandboxed_code(N) __builtin_annotation(0, SOAAP_SANDBOX_CODE_END"_"N); 
+
+#define __soaap_callgates(N, fns...) \
+  void __soaap_declare_callgates_helper_##N##(int unused, ...) { } \
+	void __soaap_declare_callgates_##N##() { \
+		__soaap_declare_callgates_helper_##N##(0, fns); \
+	} 
+
+#define SOAAP_PRIVILEGED "PRIVILEGED"
+#define __soaap_privileged __attribute__((annotate(SOAAP_PRIVILEGED)))
+
+#define __soaap_sync_data(N)
 
 #endif /* SOAAP_H */
