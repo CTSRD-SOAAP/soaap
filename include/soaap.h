@@ -89,9 +89,9 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_end_sandboxed_code(N) __builtin_annotation(0, SOAAP_SANDBOX_CODE_END"_"N); 
 
 #define __soaap_callgates(N, fns...) \
-  void __soaap_declare_callgates_helper_##N##(int unused, ...) { } \
-	void __soaap_declare_callgates_##N##() { \
-		__soaap_declare_callgates_helper_##N##(0, fns); \
+  void __soaap_declare_callgates_helper_##N(int unused, ...) { } \
+	void __soaap_declare_callgates_##N() { \
+		__soaap_declare_callgates_helper_##N(0, fns); \
 	} 
 
 #define SOAAP_PRIVILEGED "PRIVILEGED"

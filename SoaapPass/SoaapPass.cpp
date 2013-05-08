@@ -72,6 +72,8 @@ namespace soaap {
     map<int,StringRef> bitIdxToSandboxName;
     int nextSandboxNameBitIdx = 0;
     SmallVector<Function*,16> callgates;
+    map<Function*,int> callgateToSandboxes;
+    SmallVector<Function*,16> privAnnotMethods;
     SmallVector<Function*,16> privilegedMethods;
     SmallSet<Function*,32> allReachableMethods;
     SmallSet<Function*,16> sandboxedMethods;
@@ -221,6 +223,9 @@ namespace soaap {
       outs() << "* Finding file descriptors\n";
       findSharedFileDescriptors(M);
 
+      outs() << "* Finding privileged annotations\n";
+      findPrivilegedAnnotations(M);
+
       outs() << "* Finding callgates\n";
       findCallgates(M);
 
@@ -271,6 +276,9 @@ namespace soaap {
 
         outs() << "* Checking rights leaked by past vulnerable code\n";
         checkLeakedRights(M);
+
+        outs() << "* Checking for calls to privileged functions from sandboxes\n";
+        checkPrivilegedCalls(M);
       }
       else if (!dynamic && emPerf) {
         instrumentPerfEmul(M);
@@ -396,6 +404,48 @@ namespace soaap {
               dbgs() << "   Found annotated function " << annotatedFunc->getName() << "\n";
               pastVulnAnnotatedFuncs.push_back(annotatedFunc);
               pastVulnAnnotatedFuncToCVE[annotatedFunc] = annotationStrArrayCString.substr(strlen(PAST_VULNERABILITY)+1);
+            }
+          }
+        }
+      }
+    }
+
+    void checkPrivilegedCalls(Module& M) {
+      for (Function* F : sandboxedMethods) {
+        for (BasicBlock& BB : F->getBasicBlockList()) {
+          for (Instruction& I : BB.getInstList()) {
+            if (CallInst* C = dyn_cast<CallInst>(&I)) {
+              if (Function* Target = C->getCalledFunction()) {
+                if (find(privAnnotMethods.begin(), privAnnotMethods.end(), Target) != privAnnotMethods.end()) {
+                  // check if this sandbox is allowed to call the privileged function
+                  DEBUG(dbgs() << "   Found privileged call: "); 
+                  DEBUG(C->dump());
+                  int enclosingSandboxes = sandboxedMethodToNames[F];
+                  if (callgateToSandboxes.find(Target) != callgateToSandboxes.end()) {
+                    DEBUG(dbgs() << "   Allowed sandboxes: " << stringifySandboxNames(callgateToSandboxes[Target]) << "\n");
+                    // check if at least all sandboxes that F could be in are allowed to execute this privileged function
+                    int allowedSandboxes = callgateToSandboxes[Target];
+                    if ((enclosingSandboxes & allowedSandboxes) != enclosingSandboxes) {
+                      outs() << " *** Sandboxes " << stringifySandboxNames(enclosingSandboxes) << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
+                      if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
+                        DILocation Loc(N);                      // DILocation is in DebugInfo.h
+                        unsigned Line = Loc.getLineNumber();
+                        StringRef File = Loc.getFilename();
+                        outs() << " +++ Line " << Line << " of file " << File << "\n";
+                      }
+                    }
+                  }
+                  else {
+                    outs() << " *** Sandboxes " << stringifySandboxNames(enclosingSandboxes) << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
+                    if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
+                      DILocation Loc(N);                      // DILocation is in DebugInfo.h
+                      unsigned Line = Loc.getLineNumber();
+                      StringRef File = Loc.getFilename();
+                      outs() << " +++ Line " << Line << " of file " << File << "\n";
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -841,6 +891,29 @@ namespace soaap {
           }
         }
       }
+    }
+
+    void findPrivilegedAnnotations(Module& M) {
+      if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
+        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+          // get the annotation value first
+          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+
+          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+          if (isa<Function>(annotatedVal)) {
+            Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
+            if (annotationStrArrayCString == SOAAP_PRIVILEGED) {
+              outs() << "   Found function: " << annotatedFunc->getName() << "\n";
+              privAnnotMethods.push_back(annotatedFunc);
+            }
+          }
+        }
+      }          
     }
 
     /*
@@ -1470,21 +1543,27 @@ namespace soaap {
        * Hence, we must find the "call @__soaap_declare_callgates_helper"
        * instruction and obtain the list of functions from its arguments
        */
-      if (Function* F = M.getFunction("__soaap_declare_callgates_helper")) {
-        DEBUG(dbgs() << "Found __soaap_declare_callgates_helper\n");
-        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-          User* user = u.getUse().getUser();
-          if (isa<CallInst>(user)) {
-            CallInst* annotateCallgatesCall = dyn_cast<CallInst>(user);
-            /*
-             * Start at 1 because we skip the first unused argument
-             * (The C language requires that there be at least one
-             * non-variable argument).
-             */
-            for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
-              Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
-              outs() << "   Callgate " << i << " is " << callgate->getName() << "\n";
-              callgates.push_back(callgate);
+      for (Function& F : M.getFunctionList()) {
+        if (F.getName().startswith("__soaap_declare_callgates_helper_")) {
+          DEBUG(dbgs() << "Found __soaap_declare_callgates_helper_\n");
+          StringRef sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
+          dbgs() << "   Sandbox name: " << sandboxName << "\n";
+          for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
+            User* user = u.getUse().getUser();
+            if (isa<CallInst>(user)) {
+              CallInst* annotateCallgatesCall = dyn_cast<CallInst>(user);
+              /*
+               * Start at 1 because we skip the first unused argument
+               * (The C language requires that there be at least one
+               * non-variable argument).
+               */
+              for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
+                Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
+                outs() << "   Callgate " << i << " is " << callgate->getName() << "\n";
+                assignBitIdxToSandboxName(sandboxName);
+                callgateToSandboxes[callgate] |= (1 << sandboxNameToBitIdx[sandboxName]);
+                callgates.push_back(callgate);
+              }
             }
           }
         }
