@@ -7,7 +7,7 @@ void foo();
 __soaap_classify("secret") char* server_key;
 
 struct {
-  __soaap_private("something_else") int key;
+  __soaap_private("something_else") char* key;
 } sensitive;
 
 int main(int argc, char** argv) {

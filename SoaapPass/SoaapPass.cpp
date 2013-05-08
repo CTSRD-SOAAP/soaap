@@ -1138,7 +1138,7 @@ namespace soaap {
               DEBUG(dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n");
             
               worklist.push_back(annotatedVar);
-              valueToSandboxNames[annotatedVar] |= (1 << bitIdx);
+              valueToSandboxNames[annotateCall] |= (1 << bitIdx);
             }
           }
         }
@@ -1198,8 +1198,9 @@ namespace soaap {
           for (Instruction& I : BB.getInstList()) {
             DEBUG(dbgs() << "   Instruction:\n");
             DEBUG(I.dump());
+            LoadInst* load2 = dyn_cast<LoadInst>(&I);
             if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
-              Value* v = load->getPointerOperand();
+              Value* v = load->getPointerOperand()->stripPointerCasts();
               DEBUG(dbgs() << "      Value:\n");
               DEBUG(v->dump());
               DEBUG(dbgs() << "      Value names: " << valueToSandboxNames[v] << ", " << stringifySandboxNames(valueToSandboxNames[v]) << "\n");
