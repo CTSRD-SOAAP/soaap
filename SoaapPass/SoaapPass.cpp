@@ -96,6 +96,7 @@ namespace soaap {
     // past-vulnerability stuff
     SmallVector<CallInst*,16> pastVulnAnnotatedPoints;
     SmallVector<Function*,16> pastVulnAnnotatedFuncs;
+    map<Function*,string> pastVulnAnnotatedFuncToCVE;
     
     // provenance
     SmallVector<StringRef,16> vulnerableVendors;
@@ -366,7 +367,7 @@ namespace soaap {
       string pastVulnFuncBaseName = "__soaap_past_vulnerability_at_point";
       for (Function& F : M.getFunctionList()) {
         if (F.getName().startswith(pastVulnFuncBaseName)) {
-          dbgs() << "Found " << F.getName() << " function\n";
+          dbgs() << "   Found " << F.getName() << " function\n";
           for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
             if (CallInst* call = dyn_cast<CallInst>(u.getUse().getUser())) {
               //call->dump();
@@ -392,8 +393,9 @@ namespace soaap {
           if (isa<Function>(annotatedVal)) {
             Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
             if (annotationStrArrayCString.startswith(PAST_VULNERABILITY)) {
-              dbgs() << "Found annotated function " << annotatedFunc->getName() << "\n";
+              dbgs() << "   Found annotated function " << annotatedFunc->getName() << "\n";
               pastVulnAnnotatedFuncs.push_back(annotatedFunc);
+              pastVulnAnnotatedFuncToCVE[annotatedFunc] = annotationStrArrayCString.substr(strlen(PAST_VULNERABILITY)+1);
             }
           }
         }
@@ -404,6 +406,8 @@ namespace soaap {
       for (CallInst* C : pastVulnAnnotatedPoints) {
         // for each vulnerability, find out whether it is in a sandbox or not 
         // and what the leaked rights are
+        /*dbgs() << "   past vuln annot point: ";
+        C->dump();*/
         Function* F = C->getParent()->getParent();
         if (GlobalVariable* CVEGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(0)->stripPointerCasts())) {
           ConstantDataArray* CVEGlobalArr = dyn_cast<ConstantDataArray>(CVEGlobal->getInitializer());
@@ -411,7 +415,8 @@ namespace soaap {
           DEBUG(dbgs() << "Enclosing function is " << F->getName() << "\n");
 
           if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
-            outs() << " *** Sandboxed function " << F->getName() << " has a past-vulnerability annotation for " << CVE << ".\n";
+            outs() << "\n";
+            outs() << " *** Sandboxed function \"" << F->getName() << "\" has a past-vulnerability annotation for \"" << CVE << "\".\n";
             outs() << " *** Another vulnerability here would not grant ambient authority to the attacker but would leak the following restricted rights:\n"     ;
             // F may run in a sandbox
             // find out what was passed into the sandbox (shared global variables, file descriptors)
@@ -429,7 +434,7 @@ namespace soaap {
                 varPermsStr = "Write";
               }
               if (varPermsStr != "")
-                outs () << " +++ " << varPermsStr << " access to global variable " << G->getName() << "\n";
+                outs () << " +++ " << varPermsStr << " access to global variable \"" << G->getName() << "\"\n";
             }
           
             for(Function* entryPoint : funcToSandboxEntryPoint[F]) {
@@ -449,7 +454,7 @@ namespace soaap {
                       fdPerms = "Write";
                     }
                     if (fdPerms != "")
-                      outs() << " +++ " << fdPerms << " access to file descriptor " << fd->getName() << " passed into sandbox entrypoint " << entryPoint->getName() << "\n";
+                      outs() << " +++ " << fdPerms << " access to file descriptor \"" << fd->getName() << "\" passed into sandbox entrypoint \"" << entryPoint->getName() << "\"\n";
                   }
 
                 }
@@ -458,14 +463,28 @@ namespace soaap {
           }
           if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
             // enclosingFunc may run with ambient authority
-            outs() << " *** Function " << F->getName() << " has a past-vulnerability annotation for " << CVE << ".\n";
+            outs() << "\n";
+            outs() << " *** Function \"" << F->getName() << "\" has a past-vulnerability annotation for \"" << CVE << "\".\n";
             outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
             outs() << " *** network and file system access.\n"; 
-            dbgs() << " Possible trace:\n";
+            outs() << " Possible trace:\n";
             printPrivilegedPathToFunction(F, M);
+            outs() << "\n\n";
           }
         }
 
+      }
+      for (Function* P : privilegedMethods) {
+        if (find(pastVulnAnnotatedFuncs.begin(), pastVulnAnnotatedFuncs.end(), P) != pastVulnAnnotatedFuncs.end()) {
+          string CVE = pastVulnAnnotatedFuncToCVE[P];
+          // enclosingFunc may run with ambient authority
+          outs() << "\n";
+          outs() << " *** Function " << P->getName() << " has a past-vulnerability annotation for " << CVE << ".\n";
+          outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
+          outs() << " *** network and file system access.\n"; 
+          outs() << " Possible trace:\n";
+          printPrivilegedPathToFunction(P, M);
+        }
       }
 
     }
@@ -991,6 +1010,8 @@ namespace soaap {
             ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
 
+            DEBUG(dbgs() << "    annotation: " << annotationStrValCString << "\n");
+  
             /*
              * Find out the enclosing function and record which
              * param was annotated. We have to do this because
@@ -1014,6 +1035,7 @@ namespace soaap {
               else if (annotationStrValCString == FD_WRITE) {
                 fdToPerms[annotatedArg] |= FD_WRITE_MASK;
               }
+              DEBUG(dbgs() << "   found annotated file descriptor " << annotatedArg->getName() << "\n");
             }
           }
         }
@@ -1947,9 +1969,9 @@ namespace soaap {
       allReachableMethods.insert(F);
       sandboxedMethodToClearances[F] |= clearances;
 
-      if (F != entryPoint) {
+      //if (F != entryPoint) {
         funcToSandboxEntryPoint[F].push_back(entryPoint);
-      }
+      //}
 
       if (sandboxName != 0) {
         DEBUG(dbgs() << "   Assigning name: " << sandboxName << "\n");
