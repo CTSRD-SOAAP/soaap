@@ -1214,6 +1214,7 @@ namespace soaap {
                 }
               }
               if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
+                //outs() << " S: " << F->getName() << "\n";
                 if (!(valueToSandboxNames[v] == 0 || valueToSandboxNames[v] == sandboxedMethodToNames[F] || (valueToSandboxNames[v] & sandboxedMethodToNames[F]))) {
                   outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << stringifySandboxNames(valueToSandboxNames[v]) << " but it executes in sandboxes: " << stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
