@@ -791,8 +791,7 @@ namespace soaap {
               propagateToCallee(CI, Callee, worklist, V, propagate);
             }
             else if (const Value* FP = CI->getCalledValue())  { // dynamic callees
-              ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
-              if (PI) {
+              if (ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>()) {
                 DEBUG(dbgs() << "dynamic call edge propagation\n");
                 DEBUG(CI->dump());
                 list<const Function*> Callees = PI->getDynamicCallees(CI);
@@ -808,12 +807,33 @@ namespace soaap {
           else {
             V2 = *VI;
           }
-          if (propagate.propagate(V,V2)) { // propagate permissions
+          if (propagate.propagate(V,V2)) { // propagate taint from V to V2
             if (find(worklist.begin(), worklist.end(), V2) == worklist.end()) {
               worklist.push_back(V2);
             }
           }
           DEBUG(outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
+        }
+      }
+    }
+
+    void propagateToCallee(const CallInst* CI, const Function* Callee, list<const Value*>& worklist, const Value* V, PropagateFunction& propagateTaint){
+      DEBUG(dbgs() << "Propagating to callee " << Callee->getName() << "\n");
+      int idx;
+      for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
+        if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
+        // now find the parameter object. Annoyingly there is no way
+        // of getting the Argument at a particular index, so...
+          for (Function::const_arg_iterator AI=Callee->arg_begin(), AE=Callee->arg_end(); AI!=AE; AI++) {
+          //outs() << "arg no: " << AI->getArgNo() << "\n";
+            if (AI->getArgNo() == idx) {
+              //outs() << "Pushing arg " << AI->getName() << "\n";
+              if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
+                worklist.push_back(AI);
+                propagateTaint.propagate(V,AI); // propagate taint
+              }
+            }
+          }
         }
       }
     }
@@ -1480,29 +1500,6 @@ namespace soaap {
       validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
     }
 
-    void propagateToCallee(const CallInst* CI, const Function* Callee, list<const Value*>& worklist, const Value* V, PropagateFunction& propagateTaint){
-      // propagate only to methods from which sys call are reachable from 
-      if (find(syscallReachableMethods.begin(), syscallReachableMethods.end(), Callee) != syscallReachableMethods.end()) {
-        DEBUG(dbgs() << "Propagating to callee " << Callee->getName() << "\n");
-        int idx;
-        for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
-          if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
-          // now find the parameter object. Annoyingly there is no way
-          // of getting the Argument at a particular index, so...
-            for (Function::const_arg_iterator AI=Callee->arg_begin(), AE=Callee->arg_end(); AI!=AE; AI++) {
-            //outs() << "arg no: " << AI->getArgNo() << "\n";
-              if (AI->getArgNo() == idx) {
-                //outs() << "Pushing arg " << AI->getName() << "\n";
-                if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
-                  worklist.push_back(AI);
-                  propagateTaint.propagate(V,AI); // propagate taint
-                }
-              }
-            }
-          }
-        }
-      }
-    }
 
     /*
      * Validate that the necessary permissions propagate to the syscall
