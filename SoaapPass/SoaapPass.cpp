@@ -20,7 +20,6 @@
 #include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Analysis/ProfileInfo.h"
-#include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CommandLine.h"
@@ -28,6 +27,10 @@
 
 #include "soaap.h"
 #include "soaap_perf.h"
+
+#include "Common/Typedefs.h"
+#include "Analysis/InfoFlow/AccessOriginAnalysis.h"
+#include "Utils/LLVMAnalyses.h"
 
 #include <iostream>
 #include <vector>
@@ -62,23 +65,23 @@ namespace soaap {
     SmallVector<Instruction*,16> sandboxCreationPoints;
     map<Instruction*,int> sandboxCreationPointToName;
 
-    map<Function*, int> sandboxedMethodToOverhead;
-    SmallVector<Function*,16> persistentSandboxFuncs;
-    SmallVector<Function*,16> ephemeralSandboxFuncs;
-    SmallVector<Function*,32> sandboxEntryPoints;
+    FunctionIntMap sandboxedMethodToOverhead;
+    FunctionVector persistentSandboxFuncs;
+    FunctionVector ephemeralSandboxFuncs;
+    FunctionVector sandboxEntryPoints;
     map<Function*,int> sandboxEntryPointToName;
     map<Function*,int> sandboxedMethodToNames;
     map<StringRef,int> sandboxNameToBitIdx;
     map<int,StringRef> bitIdxToSandboxName;
     int nextSandboxNameBitIdx = 0;
     SmallVector<Function*,16> callgates;
-    map<Function*,int> callgateToSandboxes;
-    SmallVector<Function*,16> privAnnotMethods;
-    SmallVector<Function*,16> privilegedMethods;
-    SmallSet<Function*,32> allReachableMethods;
-    SmallSet<Function*,16> sandboxedMethods;
+    FunctionIntMap callgateToSandboxes;
+    FunctionVector privAnnotMethods;
+    FunctionVector privilegedMethods;
+    FunctionSet allReachableMethods;
+    FunctionSet sandboxedMethods;
     map<Function*,SmallVector<Function*,16> > funcToSandboxEntryPoint;
-    SmallSet<Function*,16> syscallReachableMethods;
+    FunctionSet syscallReachableMethods;
 
     map<const Value*,int> origin;
     SmallVector<CallInst*,16> untrustedSources;
@@ -97,7 +100,7 @@ namespace soaap {
 
     // past-vulnerability stuff
     SmallVector<CallInst*,16> pastVulnAnnotatedPoints;
-    SmallVector<Function*,16> pastVulnAnnotatedFuncs;
+    FunctionVector pastVulnAnnotatedFuncs;
     map<Function*,string> pastVulnAnnotatedFuncToCVE;
     
     // provenance
@@ -118,25 +121,7 @@ namespace soaap {
         PropagateFunction(SoaapPass* p) : parent(p) { }
       };
 
-    class OriginPropagateFunction : public PropagateFunction {
-      public:
-        OriginPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
-
-        bool propagate(const Value* From, const Value* To) {
-          DEBUG(dbgs() << "propagate called\n");
-          if (parent->origin.find(To) == parent->origin.end()) {
-            parent->origin[To] = parent->origin[From];
-            return true; // return true to allow perms to propagate through
-                         // regardless of whether the value was non-zero
-          }
-          else {
-            int old = parent->origin[To];
-            parent->origin[To] = parent->origin[From];
-            return parent->origin[To] != old;
-          }
-        };
-    };
-
+    /*
     class FDPermsPropagateFunction : public PropagateFunction {
       public:
         FDPermsPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
@@ -172,7 +157,7 @@ namespace soaap {
           }      
         };
     };
-
+    
     class SandboxPrivatePropagateFunction : public PropagateFunction {
       public:
         SandboxPrivatePropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
@@ -190,7 +175,7 @@ namespace soaap {
           }      
         };
     };
-
+    */
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (emPerf)
 	return;
@@ -204,6 +189,11 @@ namespace soaap {
     virtual bool runOnModule(Module& M) {
 
       outs() << "* Running " << getPassName() << "\n";
+    
+      CallGraph& CG = getAnalysis<CallGraph>();
+      ProfileInfo& PI = getAnalysis<ProfileInfo>();
+      LLVMAnalyses::setCallGraphAnalysis(&CG);
+      LLVMAnalyses::setProfileInfoAnalysis(&PI);
 
       //outs() << "* Adding dynamic call edges to callgraph (if available)\n";
       //loadDynamicCallEdges(M);
@@ -263,16 +253,16 @@ namespace soaap {
         outs() << "   Calculating syscall-reachable methods\n";
         calculateSyscallReachableMethods(M);
         outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
-        checkFileDescriptors(M);
+        //checkFileDescriptors(M);
 
         outs() << "* Checking propagation of data from sandboxes to privileged components\n";
         checkOriginOfAccesses(M);
         
         outs() << "* Checking propagation of classified data\n";
-        checkPropagationOfClassifiedData(M);
+        //checkPropagationOfClassifiedData(M);
 
         outs() << "* Checking propagation of sandbox-private data\n";
-        checkPropagationOfSandboxPrivateData(M);
+        //checkPropagationOfSandboxPrivateData(M);
 
         outs() << "* Checking rights leaked by past vulnerable code\n";
         checkLeakedRights(M);
@@ -539,7 +529,6 @@ namespace soaap {
 
     }
 
-
     void printPrivilegedPathToFunction(Function* Target, Module& M) {
       if (Function* MainFn = M.getFunction("main")) {
         // Find privileged path to instruction I, via a function that calls a sandboxed callee
@@ -689,14 +678,15 @@ namespace soaap {
     }
 
     void loadDynamicCallEdges(Module& M) {
-      ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
-      if (PI) {
+      if (ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>()) {
         CallGraph& CG = getAnalysis<CallGraph>();
         for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
           if (F1->isDeclaration()) continue;
           for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
             if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+              C->dump();
               for (const Function* F2 : PI->getDynamicCallees(C)) {
+                DEBUG(dbgs() << "F2: " << F2->getName() << "\n");
                 CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
                 CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
                 DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
@@ -763,83 +753,8 @@ namespace soaap {
       }
     }
 
-    void performDataflowAnalysis(Module& M, PropagateFunction& propagate, list<const Value*>& worklist) {
-
-      // perform propagation until fixed point is reached
-      CallGraph& CG = getAnalysis<CallGraph>();
-      while (!worklist.empty()) {
-        const Value* V = worklist.front();
-        worklist.pop_front();
-        DEBUG(outs() << "*** Popped " << V->getName() << "\n");
-        DEBUG(V->dump());
-        for (Value::const_use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
-          const Value* V2;
-          DEBUG(VI->dump());
-          if (const StoreInst* SI = dyn_cast<const StoreInst>(*VI)) {
-            if (V == SI->getPointerOperand()) // to avoid infinite looping
-              continue;
-            V2 = SI->getPointerOperand();
-          }
-          else if (const CallInst* CI = dyn_cast<const CallInst>(*VI)) {
-            // propagate to the callee function's argument
-            // find the index of the use position
-            //outs() << "CALL: ";
-            //CI->dump();
-            //Function* Caller = const_cast<Function*>(CI->getParent()->getParent());
-            //outs() << "CALLER: " << Caller->getName() << "\n";
-            if (Function* Callee = CI->getCalledFunction()) {
-              propagateToCallee(CI, Callee, worklist, V, propagate);
-            }
-            else if (const Value* FP = CI->getCalledValue())  { // dynamic callees
-              if (ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>()) {
-                DEBUG(dbgs() << "dynamic call edge propagation\n");
-                DEBUG(CI->dump());
-                list<const Function*> Callees = PI->getDynamicCallees(CI);
-                DEBUG(dbgs() << "number of dynamic callees: " << Callees.size() << "\n");
-                for (const Function* Callee : Callees) {
-                  DEBUG(dbgs() << "  " << Callee->getName() << "\n");
-                  propagateToCallee(CI, Callee, worklist, V, propagate);
-                }
-              }
-            } 
-            continue;
-          }
-          else {
-            V2 = *VI;
-          }
-          if (propagate.propagate(V,V2)) { // propagate taint from V to V2
-            if (find(worklist.begin(), worklist.end(), V2) == worklist.end()) {
-              worklist.push_back(V2);
-            }
-          }
-          DEBUG(outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
-        }
-      }
-    }
-
-    void propagateToCallee(const CallInst* CI, const Function* Callee, list<const Value*>& worklist, const Value* V, PropagateFunction& propagateTaint){
-      DEBUG(dbgs() << "Propagating to callee " << Callee->getName() << "\n");
-      int idx;
-      for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
-        if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
-        // now find the parameter object. Annoyingly there is no way
-        // of getting the Argument at a particular index, so...
-          for (Function::const_arg_iterator AI=Callee->arg_begin(), AE=Callee->arg_end(); AI!=AE; AI++) {
-          //outs() << "arg no: " << AI->getArgNo() << "\n";
-            if (AI->getArgNo() == idx) {
-              //outs() << "Pushing arg " << AI->getName() << "\n";
-              if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
-                worklist.push_back(AI);
-                propagateTaint.propagate(V,AI); // propagate taint
-              }
-            }
-          }
-        }
-      }
-    }
-
     void checkOriginOfAccesses(Module& M) {
-
+      /*
       // initialise worklist with values returned from sandboxes
       list<const Value*> worklist;
       for (Function* F : sandboxEntryPoints) {
@@ -863,8 +778,12 @@ namespace soaap {
 
       // look for untrusted function pointer calls
       checkPrivilegedFunctionPointerCalls(M);
+      */
+      AccessOriginAnalysis analysis(sandboxEntryPoints, privilegedMethods);
+      analysis.doAnalysis(M);
     }
 
+    /*
     // check that no untrusted function pointers are called in privileged methods
     void checkPrivilegedFunctionPointerCalls(Module& M) {
       for (Function* F : privilegedMethods) {
@@ -889,6 +808,7 @@ namespace soaap {
         }
       }
     }
+    */
 
     void findSandboxCreationPoints(Module& M) {
       // look for calls to llvm.annotation.i32(NULL,"SOAAP_PERSISTENT_SANDBOX_CREATE",0,0)
@@ -1136,6 +1056,7 @@ namespace soaap {
 
     }
 
+    /*
     void checkPropagationOfSandboxPrivateData(Module& M) {
 
       // initialise with pointers to annotated fields and uses of annotated global variables
@@ -1357,7 +1278,8 @@ namespace soaap {
       }
 
     }
-
+    */
+    /*
     void checkPropagationOfClassifiedData(Module& M) {
 
       // initialise with pointers to annotated fields and uses of annotated global variables
@@ -1435,6 +1357,7 @@ namespace soaap {
       }
       
     }
+    */
 
     string stringifySandboxNames(int sandboxNames) {
       string sandboxNamesStr = "[";
@@ -1481,6 +1404,7 @@ namespace soaap {
      *
      * Carry on this iteration until the worklist is empty.
      */
+    /*
     void checkFileDescriptors(Module& M) {
 
       // initialise
@@ -1499,7 +1423,7 @@ namespace soaap {
       validateDescriptorAccesses(M, "read", FD_READ_MASK);
       validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
     }
-
+    */
 
     /*
      * Validate that the necessary permissions propagate to the syscall
