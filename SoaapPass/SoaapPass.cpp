@@ -30,7 +30,9 @@
 
 #include "Common/Typedefs.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
+#include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Utils/LLVMAnalyses.h"
+#include "Utils/SandboxUtils.h"
 
 #include <iostream>
 #include <vector>
@@ -71,9 +73,9 @@ namespace soaap {
     FunctionVector sandboxEntryPoints;
     map<Function*,int> sandboxEntryPointToName;
     map<Function*,int> sandboxedMethodToNames;
-    map<StringRef,int> sandboxNameToBitIdx;
-    map<int,StringRef> bitIdxToSandboxName;
-    int nextSandboxNameBitIdx = 0;
+    //map<StringRef,int> sandboxNameToBitIdx;
+    //map<int,StringRef> bitIdxToSandboxName;
+    //int nextSandboxNameBitIdx = 0;
     SmallVector<Function*,16> callgates;
     FunctionIntMap callgateToSandboxes;
     FunctionVector privAnnotMethods;
@@ -95,7 +97,7 @@ namespace soaap {
     map<GlobalVariable*,int> varToClasses;
 
     // sandbox-private stuff
-    map<const Value*,int> valueToSandboxNames;
+    ValueIntMap valueToSandboxNames;
     map<GlobalVariable*,int> varToSandboxNames;
 
     // past-vulnerability stuff
@@ -222,8 +224,8 @@ namespace soaap {
       outs() << "* Finding classifications\n";
       findClassifications(M);
 
-      outs() << "* Finding sandbox-private data\n";
-      findSandboxPrivateAnnotations(M);
+      //outs() << "* Finding sandbox-private data\n";
+      //findSandboxPrivateAnnotations(M);
 
       outs() << "* Finding past vulnerability annotations\n";
       findPastVulnerabilityAnnotations(M);
@@ -262,7 +264,7 @@ namespace soaap {
         //checkPropagationOfClassifiedData(M);
 
         outs() << "* Checking propagation of sandbox-private data\n";
-        //checkPropagationOfSandboxPrivateData(M);
+        checkPropagationOfSandboxPrivateData(M);
 
         outs() << "* Checking rights leaked by past vulnerable code\n";
         checkLeakedRights(M);
@@ -412,11 +414,11 @@ namespace soaap {
                   DEBUG(C->dump());
                   int enclosingSandboxes = sandboxedMethodToNames[F];
                   if (callgateToSandboxes.find(Target) != callgateToSandboxes.end()) {
-                    DEBUG(dbgs() << "   Allowed sandboxes: " << stringifySandboxNames(callgateToSandboxes[Target]) << "\n");
+                    DEBUG(dbgs() << "   Allowed sandboxes: " << SandboxUtils::stringifySandboxNames(callgateToSandboxes[Target]) << "\n");
                     // check if at least all sandboxes that F could be in are allowed to execute this privileged function
                     int allowedSandboxes = callgateToSandboxes[Target];
                     if ((enclosingSandboxes & allowedSandboxes) != enclosingSandboxes) {
-                      outs() << " *** Sandboxes " << stringifySandboxNames(enclosingSandboxes) << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
+                      outs() << " *** Sandboxes " << SandboxUtils::stringifySandboxNames(enclosingSandboxes) << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
                       if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
                         DILocation Loc(N);                      // DILocation is in DebugInfo.h
                         unsigned Line = Loc.getLineNumber();
@@ -426,7 +428,7 @@ namespace soaap {
                     }
                   }
                   else {
-                    outs() << " *** Sandboxes " << stringifySandboxNames(enclosingSandboxes) << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
+                    outs() << " *** Sandboxes " << SandboxUtils::stringifySandboxNames(enclosingSandboxes) << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
                     if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
                       DILocation Loc(N);                      // DILocation is in DebugInfo.h
                       unsigned Line = Loc.getLineNumber();
@@ -824,8 +826,8 @@ namespace soaap {
               // sandbox-creation point
               StringRef sandboxName = AnnotStr.substr(strlen(SOAAP_PERSISTENT_SANDBOX_CREATE)+1);
               outs() << "      Sandbox name: " << sandboxName << "\n";
-              assignBitIdxToSandboxName(sandboxName);
-              sandboxCreationPointToName[Call] = (1 << sandboxNameToBitIdx[sandboxName]);
+              SandboxUtils::assignBitIdxToSandboxName(sandboxName);
+              sandboxCreationPointToName[Call] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
               sandboxCreationPoints.push_back(Call);
             }
           }
@@ -903,8 +905,8 @@ namespace soaap {
               if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
                 StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
                 outs() << "      Sandbox name: " << sandboxName << "\n";
-                assignBitIdxToSandboxName(sandboxName);
-                sandboxEntryPointToName[annotatedFunc] = (1 << sandboxNameToBitIdx[sandboxName]);
+                SandboxUtils::assignBitIdxToSandboxName(sandboxName);
+                sandboxEntryPointToName[annotatedFunc] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
                 DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
               }
             }
@@ -971,13 +973,13 @@ namespace soaap {
             if (annotationStrArrayCString.startswith(VAR_READ)) {
               StringRef sandboxName = annotationStrArrayCString.substr(strlen(VAR_READ)+1);
               varToPerms[annotatedVar] |= VAR_READ_MASK;
-              globalVarToSandboxNames[annotatedVar] |= (1 << sandboxNameToBitIdx[sandboxName]);
+              globalVarToSandboxNames[annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
               dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
             }
             else if (annotationStrArrayCString.startswith(VAR_WRITE)) {
               StringRef sandboxName = annotationStrArrayCString.substr(strlen(VAR_WRITE)+1);
               varToPerms[annotatedVar] |= VAR_WRITE_MASK;
-              globalVarToSandboxNames[annotatedVar] |= (1 << sandboxNameToBitIdx[sandboxName]);
+              globalVarToSandboxNames[annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
               dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
             }
           }
@@ -1054,6 +1056,11 @@ namespace soaap {
         }
       }
 
+    }
+
+    void checkPropagationOfSandboxPrivateData(Module& M) {
+      SandboxPrivateAnalysis analysis(privilegedMethods, sandboxedMethods, allReachableMethods, callgates, sandboxedMethodToNames);
+      analysis.doAnalysis(M);
     }
 
     /*
@@ -1359,6 +1366,7 @@ namespace soaap {
     }
     */
 
+    /*
     string stringifySandboxNames(int sandboxNames) {
       string sandboxNamesStr = "[";
       int currIdx = 0;
@@ -1375,6 +1383,7 @@ namespace soaap {
       sandboxNamesStr += "]";
       return sandboxNamesStr;
     }
+    */
 
     string stringifyClassifications(int classes) {
       string classStr = "[";
@@ -1489,8 +1498,8 @@ namespace soaap {
               for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
                 Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
                 outs() << "   Callgate " << i << " is " << callgate->getName() << "\n";
-                assignBitIdxToSandboxName(sandboxName);
-                callgateToSandboxes[callgate] |= (1 << sandboxNameToBitIdx[sandboxName]);
+                SandboxUtils::assignBitIdxToSandboxName(sandboxName);
+                callgateToSandboxes[callgate] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
                 callgates.push_back(callgate);
               }
             }
@@ -1499,6 +1508,7 @@ namespace soaap {
       }
     }
 
+    /*
     void findSandboxPrivateAnnotations(Module& M) {
 
       // struct field annotations are stored in LLVM IR as arguments to calls 
@@ -1515,7 +1525,7 @@ namespace soaap {
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
             if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
               StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
-              assignBitIdxToSandboxName(sandboxName);
+              SandboxUtils::assignBitIdxToSandboxName(sandboxName);
             }
           }
         }
@@ -1533,7 +1543,7 @@ namespace soaap {
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
             if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
               StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
-              assignBitIdxToSandboxName(sandboxName);
+              SandboxUtils::assignBitIdxToSandboxName(sandboxName);
             }
           }
         }
@@ -1558,8 +1568,8 @@ namespace soaap {
               if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
                 StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
                 DEBUG(dbgs() << "    Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
-                assignBitIdxToSandboxName(sandboxName);
-                varToSandboxNames[annotatedVar] |= (1 << sandboxNameToBitIdx[sandboxName]);
+                SandboxUtils::assignBitIdxToSandboxName(sandboxName);
+                varToSandboxNames[annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
               }
             }
           }
@@ -1567,6 +1577,8 @@ namespace soaap {
       }
 
     }
+    */
+
     void findClassifications(Module& M) {
 
       // struct field annotations are stored in LLVM IR as arguments to calls 
@@ -1623,15 +1635,6 @@ namespace soaap {
         classToBitIdx[className] = nextClassBitIdx;
         bitIdxToClass[nextClassBitIdx] = className;
         nextClassBitIdx++;
-      }
-    }
-
-    void assignBitIdxToSandboxName(StringRef sandboxName) {
-      if (sandboxNameToBitIdx.find(sandboxName) == sandboxNameToBitIdx.end()) {
-        dbgs() << "    Assigning index " << nextSandboxNameBitIdx << " to sandbox name \"" << sandboxName << "\"\n";
-        sandboxNameToBitIdx[sandboxName] = nextSandboxNameBitIdx;
-        bitIdxToSandboxName[nextSandboxNameBitIdx] = sandboxName;
-        nextSandboxNameBitIdx++;
       }
     }
 
@@ -1992,7 +1995,7 @@ namespace soaap {
         CallGraphNode* calleeNode = I->second;
         if (Function* calleeFunc = calleeNode->getFunction()) {
           if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
-            DEBUG(dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << stringifySandboxNames(sandboxName));
+            DEBUG(dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
             sandboxName = sandboxEntryPointToName[calleeFunc];
             entryPoint = calleeFunc;
           }
@@ -2103,10 +2106,10 @@ namespace soaap {
                   int varSandboxNames = globalVarToSandboxNames[gv];
                   int commonSandboxNames = precedingSandboxCreations & varSandboxNames;
                   DEBUG(dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
-                  DEBUG(dbgs() << "   preceding sandbox creations: " << stringifySandboxNames(precedingSandboxCreations) << ", varSandboxNames: " << stringifySandboxNames(varSandboxNames) << "\n");
+                  DEBUG(dbgs() << "   preceding sandbox creations: " << SandboxUtils::stringifySandboxNames(precedingSandboxCreations) << ", varSandboxNames: " << SandboxUtils::stringifySandboxNames(varSandboxNames) << "\n");
                   if (commonSandboxNames) {
                     if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
-                      outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << stringifySandboxNames(commonSandboxNames) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
+                      outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << SandboxUtils::stringifySandboxNames(commonSandboxNames) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
                       if (MDNode *N = I.getMetadata("dbg")) {
                         DILocation loc(N);
                         outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";

@@ -1,5 +1,5 @@
-#ifndef SOAAP_ANALYSIS_INFOFLOW_ORIGINANALYSIS_H
-#define SOAAP_ANALYSIS_INFOFLOW_ORIGINANALYSIS_H
+#ifndef SOAAP_ANALYSIS_INFOFLOW_ACCESSORIGINANALYSIS_H
+#define SOAAP_ANALYSIS_INFOFLOW_ACCESSORIGINANALYSIS_H
 
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"
 #include "Common/Typedefs.h"
@@ -13,8 +13,7 @@ namespace soaap {
 
     public:
       AccessOriginAnalysis(FunctionVector& privileged, FunctionVector& sandboxEntries) :
-        privilegedMethods(privileged), sandboxEntryPoints(sandboxEntries) { }
-      
+            privilegedMethods(privileged), sandboxEntryPoints(sandboxEntries) { }
       virtual void initialise(ValueList& worklist, Module& M);
       virtual void postDataFlowAnalysis(Module& M);
 
