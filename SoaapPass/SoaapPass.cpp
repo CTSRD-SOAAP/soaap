@@ -31,8 +31,10 @@
 #include "Common/Typedefs.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
+#include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
+#include "Utils/ClassifiedUtils.h"
 
 #include <iostream>
 #include <vector>
@@ -86,12 +88,12 @@ namespace soaap {
     SmallVector<CallInst*,16> untrustedSources;
 
     // classification stuff
-    map<StringRef,int> classToBitIdx;
-    map<int,StringRef> bitIdxToClass;
-    int nextClassBitIdx = 0;
+    //map<StringRef,int> classToBitIdx;
+    //map<int,StringRef> bitIdxToClass;
+    //int nextClassBitIdx = 0;
     map<Function*,int> sandboxedMethodToClearances;
-    map<const Value*,int> valueToClasses;
-    map<GlobalVariable*,int> varToClasses;
+    //map<const Value*,int> valueToClasses;
+    //map<GlobalVariable*,int> varToClasses;
 
     // sandbox-private stuff
     ValueIntMap valueToSandboxNames;
@@ -138,25 +140,8 @@ namespace soaap {
           }      
         };
     };
-    
-    class ClassPropagateFunction : public PropagateFunction {
-      public:
-        ClassPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
-
-        bool propagate(const Value* From, const Value* To) {
-          if (parent->valueToClasses.find(To) == parent->valueToClasses.end()) {
-            parent->valueToClasses[To] = parent->valueToClasses[From];
-            return true; // return true to allow classes to propagate through
-                         // regardless of whether the value was non-zero
-          }                   
-          else {
-            int old = parent->valueToClasses[To];
-            parent->valueToClasses[To] |= parent->valueToClasses[From];
-            return parent->valueToClasses[To] != old;
-          }      
-        };
-    };
     */
+
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (emPerf)
         return;
@@ -200,8 +185,8 @@ namespace soaap {
       outs() << "* Finding callgates\n";
       findCallgates(M);
 
-      outs() << "* Finding classifications\n";
-      findClassifications(M);
+      //outs() << "* Finding classifications\n";
+      //findClassifications(M);
 
       outs() << "* Finding past vulnerability annotations\n";
       findPastVulnerabilityAnnotations(M);
@@ -237,7 +222,7 @@ namespace soaap {
         checkOriginOfAccesses(M);
         
         outs() << "* Checking propagation of classified data\n";
-        //checkPropagationOfClassifiedData(M);
+        checkPropagationOfClassifiedData(M);
 
         outs() << "* Checking propagation of sandbox-private data\n";
         checkPropagationOfSandboxPrivateData(M);
@@ -251,7 +236,6 @@ namespace soaap {
       else if (!dynamic && emPerf) {
         instrumentPerfEmul(M);
       }
-      
 
       //WORKAROUND: remove calls to llvm.ptr.annotate.p0i8, otherwise LLVM will
       //            crash when generating object code.
@@ -901,8 +885,8 @@ namespace soaap {
             else if (annotationStrArrayCString.startswith(CLEARANCE)) {
               StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
               outs() << "   Sandbox has clearance for \"" << className << "\"\n";
-              assignBitIdxToClassName(className);
-              sandboxedMethodToClearances[annotatedFunc] |= (1 << classToBitIdx[className]);
+              ClassifiedUtils::assignBitIdxToClassName(className);
+              sandboxedMethodToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
             }
           }
         }
@@ -1039,6 +1023,11 @@ namespace soaap {
       analysis.doAnalysis(M);
     }
 
+    void checkPropagationOfClassifiedData(Module& M) {
+      ClassifiedAnalysis analysis(sandboxedMethods, sandboxedMethodToClearances);
+      analysis.doAnalysis(M);
+    }
+
     /*
     void checkPropagationOfClassifiedData(Module& M) {
 
@@ -1138,6 +1127,7 @@ namespace soaap {
     }
     */
 
+    /*
     string stringifyClassifications(int classes) {
       string classStr = "[";
       int currIdx = 0;
@@ -1154,6 +1144,7 @@ namespace soaap {
       classStr += "]";
       return classStr;
     }
+    */
 
     /*
      * Propagate the file descriptor annotations using def-use chains.
@@ -1261,6 +1252,7 @@ namespace soaap {
       }
     }
 
+    /*
     void findClassifications(Module& M) {
 
       // struct field annotations are stored in LLVM IR as arguments to calls 
@@ -1310,7 +1302,9 @@ namespace soaap {
       }
 
     }
+    */
 
+    /*
     void assignBitIdxToClassName(StringRef className) {
       if (classToBitIdx.find(className) == classToBitIdx.end()) {
         dbgs() << "    Assigning index " << nextClassBitIdx << " to class \"" << className << "\"\n";
@@ -1319,6 +1313,7 @@ namespace soaap {
         nextClassBitIdx++;
       }
     }
+    */
 
     /*
      * Insert wrappers for callgates that make client requests before and

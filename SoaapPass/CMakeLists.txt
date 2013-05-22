@@ -3,7 +3,9 @@ add_llvm_loadable_module(libsoaap
   Analysis/InfoFlow/AccessOriginAnalysis.cpp
   Analysis/InfoFlow/InfoFlowAnalysis.cpp
   Analysis/InfoFlow/SandboxPrivateAnalysis.cpp
+  Analysis/InfoFlow/ClassifiedAnalysis.cpp
   Utils/LLVMAnalyses.cpp
   Utils/PrettyPrinters.cpp
   Utils/SandboxUtils.cpp
+  Utils/ClassifiedUtils.cpp
 )
