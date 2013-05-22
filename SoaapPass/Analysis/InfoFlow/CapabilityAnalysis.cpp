@@ -9,6 +9,11 @@
 using namespace soaap;
 
 void CapabilityAnalysis::initialise(ValueList& worklist, Module& M) {
+
+  /*
+   * Find those file descriptor parameters that are shared with the
+   * sandboxed method.
+   */
   /*
    * These will be annotated parameters that are turned by
      * Clang/LLVM into calls to the intrinsic function

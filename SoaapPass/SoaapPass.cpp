@@ -59,11 +59,10 @@ namespace soaap {
     static const int ORIGIN_PRIV = 0;
     static const int ORIGIN_SANDBOX = 1;
     bool modified;
-    bool dynamic;
     bool emPerf;
 
     map<GlobalVariable*,int> varToPerms;
-    map<const Value*,int> fdToPerms;
+    //map<const Value*,int> fdToPerms;
 
     map<GlobalVariable*,int> globalVarToSandboxNames;
 
@@ -110,45 +109,13 @@ namespace soaap {
 
     SoaapPass() : ModulePass(ID) {
       modified = false;
-      dynamic = false;
       emPerf = false;
     }
-
-    // inner classes for propagate functions
-    class PropagateFunction {
-      public:
-        virtual bool propagate(const Value* From, const Value* To) = 0; 
-      protected:
-        SoaapPass* parent;
-        PropagateFunction(SoaapPass* p) : parent(p) { }
-      };
-
-    /*
-    class FDPermsPropagateFunction : public PropagateFunction {
-      public:
-        FDPermsPropagateFunction(SoaapPass* p) : PropagateFunction(p) { }
-
-        bool propagate(const Value* From, const Value* To) {
-          if (parent->fdToPerms.find(To) == parent->fdToPerms.end()) {
-            parent->fdToPerms[To] = parent->fdToPerms[From];
-            return true; // return true to allow perms to propagate through
-                         // regardless of whether the value was non-zero
-          }                   
-          else {
-            int old = parent->fdToPerms[To];
-            parent->fdToPerms[To] &= parent->fdToPerms[From];
-            return parent->fdToPerms[To] != old;
-          }      
-        };
-    };
-    */
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (emPerf)
         return;
-      if (!dynamic) {
-        AU.setPreservesCFG();
-      }
+      AU.setPreservesCFG();
       AU.addRequired<CallGraph>();
       AU.addRequired<ProfileInfo>();
     }
@@ -177,17 +144,11 @@ namespace soaap {
       outs() << "* Finding global variables\n";
       findSharedGlobalVariables(M);
 
-      //outs() << "* Finding file descriptors\n";
-      //findSharedFileDescriptors(M);
-
       outs() << "* Finding privileged annotations\n";
       findPrivilegedAnnotations(M);
 
       outs() << "* Finding callgates\n";
       findCallgates(M);
-
-      //outs() << "* Finding classifications\n";
-      //findClassifications(M);
 
       outs() << "* Finding past vulnerability annotations\n";
       findPastVulnerabilityAnnotations(M);
@@ -195,12 +156,10 @@ namespace soaap {
       outs() << "* Finding code provenanace annotations\n";
       findCodeProvenanaceAnnotations(M);
 
-      if (dynamic && !emPerf) {
-        // use valgrind
-        instrumentValgrindClientRequests(M);
-        generateCallgateValgrindWrappers(M);
+      if (emPerf) {
+        instrumentPerfEmul(M);
       }
-      else if (!dynamic && !emPerf) {
+      else {
         // do the checks statically
 
         outs() << "* Calculating sandboxed methods\n";
@@ -233,9 +192,6 @@ namespace soaap {
 
         outs() << "* Checking for calls to privileged functions from sandboxes\n";
         checkPrivilegedCalls(M);
-      }
-      else if (!dynamic && emPerf) {
-        instrumentPerfEmul(M);
       }
 
       //WORKAROUND: remove calls to llvm.ptr.annotate.p0i8, otherwise LLVM will
@@ -439,7 +395,9 @@ namespace soaap {
               if (varPermsStr != "")
                 outs () << " +++ " << varPermsStr << " access to global variable \"" << G->getName() << "\"\n";
             }
-          
+            
+            outs() << "TODO: check leaking of capabilities\n";
+            /*
             for(Function* entryPoint : funcToSandboxEntryPoint[F]) {
               for (pair<const Value*,int> fdPermPair : fdToPerms) {
                 const Argument* fd = dyn_cast<const Argument>(fdPermPair.first);
@@ -463,6 +421,7 @@ namespace soaap {
                 }
               }
             }
+            */
           }
           if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
             // enclosingFunc may run with ambient authority
@@ -502,7 +461,6 @@ namespace soaap {
         outs() << "\n";
       }
     }
-
 
     list<Instruction*> findPrivPathToFunc(Function* From, Function* To, map<const Value*,int>* shadow, int taint) {
       CallGraph& CG = getAnalysis<CallGraph>();
@@ -717,61 +675,9 @@ namespace soaap {
     }
 
     void checkOriginOfAccesses(Module& M) {
-      /*
-      // initialise worklist with values returned from sandboxes
-      list<const Value*> worklist;
-      for (Function* F : sandboxEntryPoints) {
-        // find calls of F, if F actually returns something!
-        if (!F->getReturnType()->isVoidTy()) {
-          for (Value::use_iterator I=F->use_begin(), E=F->use_end(); I!=E; I++) {
-            if (CallInst* C = dyn_cast<CallInst>(*I)) {
-              worklist.push_back(C);
-              origin[C] = ORIGIN_SANDBOX;
-              untrustedSources.push_back(C);
-            }
-          }
-        }
-      }
-
-      // transfer function
-      OriginPropagateFunction propagateOrigin(this);
-      
-      // compute fixed point
-      performDataflowAnalysis(M, propagateOrigin, worklist);
-
-      // look for untrusted function pointer calls
-      checkPrivilegedFunctionPointerCalls(M);
-      */
       AccessOriginAnalysis analysis(sandboxEntryPoints, privilegedMethods);
       analysis.doAnalysis(M);
     }
-
-    /*
-    // check that no untrusted function pointers are called in privileged methods
-    void checkPrivilegedFunctionPointerCalls(Module& M) {
-      for (Function* F : privilegedMethods) {
-        for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
-          if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-            if (C->getCalledFunction() == NULL) {
-              if (origin[C->getCalledValue()] == ORIGIN_SANDBOX) {
-                Function* Caller = cast<Function>(C->getParent()->getParent());
-                outs() << " *** Untrusted function pointer call in " << Caller->getName() << "\n";
-                if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
-                  DILocation Loc(N);                      // DILocation is in DebugInfo.h
-                  unsigned Line = Loc.getLineNumber();
-                  StringRef File = Loc.getFilename();
-                  StringRef Dir = Loc.getDirectory();
-                  outs() << " +++ Line " << Line << " of file " << File << "\n";
-                }
-                outs() << "\n";
-                printPrivilegedPathToInstruction(C, M);
-              }
-            }
-          }
-        }
-      }
-    }
-    */
 
     void findSandboxCreationPoints(Module& M) {
       // look for calls to llvm.annotation.i32(NULL,"SOAAP_PERSISTENT_SANDBOX_CREATE",0,0)
@@ -892,7 +798,6 @@ namespace soaap {
           }
         }
       }
-      
     }
 
     /*
@@ -949,76 +854,6 @@ namespace soaap {
 
     }
 
-    /*
-     * Find those file descriptor parameters that are shared with the
-     * sandboxed method.
-     */
-//    void findSharedFileDescriptors(Module& M) {
-//
-//      /*
-//       * These will be annotated parameters that are turned by
-//         * Clang/LLVM into calls to the intrinsic function
-//         * llvm.var.annotation, with the param as the arg. This is how
-//         * local variable annotations are represented in general in LLVM
-//       *
-//       * A parameter annotation looks like this:
-//         * void m(int ifd __fd_read) { ... }
-//       *
-//       * It is turned into an intrinsic call as follows:
-//       *
-//         * call void @llvm.var.annotation(
-//         *   i8* %ifd.addr1,      // param (llvm creates a local var for the param by appending .addrN to the end of the param name)
-//       *   i8* getelementptr inbounds ([8 x i8]* @.str2, i32 0, i32 0),  // annotation
-//       *   i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file name
-//       *   i32 5)              // line number
-//             *
-//         * @.str2 = private unnamed_addr constant [8 x i8] c"fd_read\00", section "llvm.metadata"
-//         * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
-//       */
-//      if (Function* F = M.getFunction("llvm.var.annotation")) {
-//        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-//          User* user = u.getUse().getUser();
-//          if (isa<IntrinsicInst>(user)) {
-//            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
-//            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-//
-//            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-//            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-//            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-//
-//            DEBUG(dbgs() << "    annotation: " << annotationStrValCString << "\n");
-//  
-//            /*
-//             * Find out the enclosing function and record which
-//             * param was annotated. We have to do this because
-//             * llvm creates a local var for the param by appending
-//             * .addrN to the end of the param name and associates
-//             * the annotation with the newly created local var
-//             * i.e. see ifd and ifd.addr1 above
-//             */
-//            Argument* annotatedArg = NULL;
-//            Function* enclosingFunc = annotateCall->getParent()->getParent();
-//            for (Argument &arg : enclosingFunc->getArgumentList()) {
-//              if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
-//                annotatedArg = &arg;
-//              }
-//            }
-//
-//            if (annotatedArg != NULL) {
-//              if (annotationStrValCString == FD_READ) {
-//                fdToPerms[annotatedArg] |= FD_READ_MASK;
-//              }
-//              else if (annotationStrValCString == FD_WRITE) {
-//                fdToPerms[annotatedArg] |= FD_WRITE_MASK;
-//              }
-//              DEBUG(dbgs() << "   found annotated file descriptor " << annotatedArg->getName() << "\n");
-//            }
-//          }
-//        }
-//      }
-//
-//    }
-
     void checkPropagationOfSandboxPrivateData(Module& M) {
       SandboxPrivateAnalysis analysis(privilegedMethods, sandboxedMethods, allReachableMethods, callgates, sandboxedMethodToNames);
       analysis.doAnalysis(M);
@@ -1029,189 +864,10 @@ namespace soaap {
       analysis.doAnalysis(M);
     }
 
-    /*
-    void checkPropagationOfClassifiedData(Module& M) {
-
-      // initialise with pointers to annotated fields and uses of annotated global variables
-      list<const Value*> worklist;
-      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
-        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-          User* user = u.getUse().getUser();
-          if (isa<IntrinsicInst>(user)) {
-            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
-            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-
-            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-            
-            if (annotationStrValCString.startswith(CLASSIFY)) {
-              StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
-              int bitIdx = classToBitIdx[className];
-            
-              dbgs() << "   Classification annotation " << annotationStrValCString << " found:\n";
-            
-              worklist.push_back(annotatedVar);
-              valueToClasses[annotatedVar] |= (1 << bitIdx);
-            }
-          }
-        }
-      }
-      
-      for (map<GlobalVariable*,int>::iterator I=varToClasses.begin(), E=varToClasses.end(); I != E; I++) {
-        GlobalVariable* var = I->first;
-        int classes = I->second;
-        // find all users of var and taint them
-        for (User::use_iterator u = var->use_begin(), e = var->use_end(); e!=u; u++) {
-          User* user = u.getUse().getUser();
-          if (LoadInst* load = dyn_cast<LoadInst>(user)) {
-            Value* v = load->getPointerOperand();
-            DEBUG(dbgs() << "   Load of classified global variable " << var->getName() << " found with classifications: " << stringifyClassifications(classes) << "\n");
-            DEBUG(load->dump());
-            valueToClasses[v] = classes; // could v have already been initialised above? (NO)
-          }
-        }
-
-      }
-                  
-      // transfer function
-      ClassPropagateFunction propagateClassifications(this);
-
-      // compute fixed point
-      performDataflowAnalysis(M, propagateClassifications, worklist);
-      
-      // validate that classified data is never accessed inside sandboxed contexts that
-      // don't have clearance for its class.
-      for (Function* F : sandboxedMethods) {
-        DEBUG(dbgs() << "Function: " << F->getName() << ", clearances: " << stringifyClassifications(sandboxedMethodToClearances[F]) << "\n");
-        for (BasicBlock& BB : F->getBasicBlockList()) {
-          for (Instruction& I : BB.getInstList()) {
-            DEBUG(dbgs() << "   Instruction:\n");
-            DEBUG(I.dump());
-            if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
-              Value* v = load->getPointerOperand();
-              DEBUG(dbgs() << "      Value:\n");
-              DEBUG(v->dump());
-              DEBUG(dbgs() << "      Value classes: " << valueToClasses[v] << ", " << stringifyClassifications(valueToClasses[v]) << "\n");
-              if (!(valueToClasses[v] == 0 || valueToClasses[v] == sandboxedMethodToClearances[F] || (valueToClasses[v] & sandboxedMethodToClearances[F]))) {
-                outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << stringifyClassifications(valueToClasses[v]) << " but only has clearances for: " << stringifyClassifications(sandboxedMethodToClearances[F]) << "\n";
-                if (MDNode *N = I.getMetadata("dbg")) {
-                  DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
-                }
-                outs() << "\n";
-              }
-            }
-          }
-        }
-      }
-      
-    }
-    */
-
-    /*
-    string stringifySandboxNames(int sandboxNames) {
-      string sandboxNamesStr = "[";
-      int currIdx = 0;
-      bool first = true;
-      for (currIdx=0; currIdx<=31; currIdx++) {
-        if (sandboxNames & (1 << currIdx)) {
-          StringRef sandboxName = bitIdxToSandboxName[currIdx];
-          if (!first) 
-            sandboxNamesStr += ",";
-          sandboxNamesStr += sandboxName;
-          first = false;
-        }
-      }
-      sandboxNamesStr += "]";
-      return sandboxNamesStr;
-    }
-    */
-
-    /*
-    string stringifyClassifications(int classes) {
-      string classStr = "[";
-      int currIdx = 0;
-      bool first = true;
-      for (currIdx=0; currIdx<=31; currIdx++) {
-        if (classes & (1 << currIdx)) {
-          StringRef className = bitIdxToClass[currIdx];
-          if (!first) 
-            classStr += ",";
-          classStr += className;
-          first = false;
-        }
-      }
-      classStr += "]";
-      return classStr;
-    }
-    */
-
-    /*
-     * Propagate the file descriptor annotations using def-use chains.
-     * Iterate through each def-use chain starting from each annotated arg.
-     * We use a worklist based algorithm.
-     *
-     * Start with the annotated parameters, and then iteratively propagate to 
-     * all defs that use them. If the user is a call instruction, then propagate
-     * to the corresponding parameter Argument object.
-     *
-     * Carry on this iteration until the worklist is empty.
-     */
     void checkFileDescriptors(Module& M) {
       CapabilityAnalysis analysis(sandboxedMethods);
       analysis.doAnalysis(M);
     }
-
-    /*
-    void checkFileDescriptors(Module& M) {
-
-      // initialise
-      list<const Value*> worklist;
-      for (map<const Value*,int>::iterator I=fdToPerms.begin(), E=fdToPerms.end(); I != E; I++) {
-        worklist.push_back(I->first);
-      }
-
-      // transfer function
-      FDPermsPropagateFunction propagateFDPerms(this);
-
-      // compute fixed point
-      performDataflowAnalysis(M, propagateFDPerms, worklist);
-
-      // find all calls to read 
-      validateDescriptorAccesses(M, "read", FD_READ_MASK);
-      validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
-    }
-    */
-
-    /*
-     * Validate that the necessary permissions propagate to the syscall
-     */
-    /* 
-    void validateDescriptorAccesses(Module& M, string syscall, int required_perm) {
-      if (Function* syscallFn = M.getFunction(syscall)) {
-        for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end();
-             (I != E) && isa<CallInst>(*I); I++) {
-          CallInst* Call = cast<CallInst>(*I);
-          Function* Caller = cast<Function>(Call->getParent()->getParent());
-          if (find(sandboxedMethods.begin(), sandboxedMethods.end(), Caller) != sandboxedMethods.end()) {
-            Value* fd = Call->getArgOperand(0);
-            if (!(fdToPerms[fd] & required_perm)) {
-              outs() << " *** Insufficient privileges for \"" << syscall << "()\" in sandboxed method \"" << Caller->getName() << "\"\n";
-              if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
-                DILocation Loc(N);                      // DILocation is in DebugInfo.h
-                unsigned Line = Loc.getLineNumber();
-                StringRef File = Loc.getFilename();
-                StringRef Dir = Loc.getDirectory();
-                outs() << " +++ Line " << Line << " of file " << File << "\n";
-              }
-              outs() << "\n";
-            }
-          }
-        }
-      }
-    }
-    */
 
     /*
      * Find those functions that have been declared as being callgates
@@ -1258,384 +914,6 @@ namespace soaap {
           }
         }
       }
-    }
-
-    /*
-    void findClassifications(Module& M) {
-
-      // struct field annotations are stored in LLVM IR as arguments to calls 
-      // to the intrinsic @llvm.ptr.annotation.p0i8
-      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
-        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-          User* user = u.getUse().getUser();
-          if (isa<IntrinsicInst>(user)) {
-            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
-            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-
-            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-            if (annotationStrValCString.startswith(CLASSIFY)) {
-              StringRef className = annotationStrValCString.substr(strlen(CLASSIFY)+1); //+1 because of _
-              assignBitIdxToClassName(className);
-            }
-          }
-        }
-      }
-
-      // annotations on variables are stored in the llvm.global.annotations global
-      // array
-      GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations");
-      if (lga != NULL) {
-        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
-        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
-          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
-
-          // get the annotation value first
-          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-          if (annotationStrArrayCString.startswith(CLASSIFY)) {
-            GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-            if (isa<GlobalVariable>(annotatedVal)) {
-              GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
-              if (annotationStrArrayCString.startswith(CLASSIFY)) {
-                StringRef className = annotationStrArrayCString.substr(strlen(CLASSIFY)+1);
-                assignBitIdxToClassName(className);
-                varToClasses[annotatedVar] |= (1 << classToBitIdx[className]);
-              }
-            }
-          }
-        }
-      }
-
-    }
-    */
-
-    /*
-    void assignBitIdxToClassName(StringRef className) {
-      if (classToBitIdx.find(className) == classToBitIdx.end()) {
-        dbgs() << "    Assigning index " << nextClassBitIdx << " to class \"" << className << "\"\n";
-        classToBitIdx[className] = nextClassBitIdx;
-        bitIdxToClass[nextClassBitIdx] = className;
-        nextClassBitIdx++;
-      }
-    }
-    */
-
-    /*
-     * Insert wrappers for callgates that make client requests before and
-     * after calls to the callgate letting valgrind know that we're entering
-     * and exiting a callgate respectively.
-     *
-     * This seems to be the only way to interpose callgate calls
-     * in valgrind.
-     */
-    void generateCallgateValgrindWrappers(Module& M) {
-      /*
-       * See http://valgrind.org/docs/manual/manual-core-adv.html#manual-core-adv.wrapping
-       * for information about valgrind function wrappers.
-       *
-       * Suppose we have the function:
-       *
-       * int example(int x, int y) {
-       *    return x+y;
-       * }
-       *
-       * The corresponding valgrind function wrapper would be:
-       *
-       * int _vgw00000ZU_NONE_example(int x, int y) { // wraps calls to example(x,y)
-       *     int    result = -1;
-       *     OrigFn fn;
-       *     valgrind_get_orig_fn(&fn);
-       *     call_unwrapped_function_w_ww(&fn, &result, &x, &y);
-       *     return result;
-       * }
-       *
-       * where:
-       *     _vgw00000: is a special prefix that tells valgrind this is a
-       *            wrapper function
-       *     ZU:      tells valgrind that the soname is Z-encoded
-       *                whereas the function name is not. Z-encoding is
-       *                used to write unusual characters as valid C
-       *                function names (e.g. *, +, :, etc.)
-       *     NONE:    Name of the ELF shared object containing the
-       *                function to be wrapped (i.e. example). This name
-       *                is stored in the soname field of the shared object.
-       *                If the so file does not have a soname then it is
-       *                given the name NONE by default.
-       *     example:   name of the function to wrap. NONE and example
-       *            together identify the exact function to wrap.
-       *     OrigFn:    valgrind struct for holding a pointer to the
-       *            original function to execute (i.e. example).
-       *            The definition of it is:
-       *            typedef
-             *            struct {
-             *                    unsigned int nraddr;
-       *            }
-       *            OrigFn;
-       *
-       *     call_unwrapped_function_w_ww: calls the actual function and
-       *                stores the result. The naming is of the form:
-       *                call_unwrapped_function_RETURNTYPE_ARGTYPES.
-       *                The first w refers to whether the return value is
-       *                non-void (v is used instead of w if it is). The
-       *                next two w's (ww) indicate that the function takes
-       *                two arguments. If the function takes no arguments,
-       *                then v is used instead of any w's.
-       *
-       *     To simplify things, we assume any soname, i.e. we use a
-       *     soname of * represented in Z-encoding as Za. Also, all
-       *     wrapper functions return a value. In the case of a void
-       *     wrapped function, no result value would be stored and so the
-       *     wrapper would return -1.
-       */
-      for (Function* callgate : callgates) {
-        // Za encodes * and means any soname
-        Function* callgateWrapper = dyn_cast<Function>(M.getOrInsertFunction(StringRef(Twine("_vgw00000ZU_Za_", callgate->getName()).str()), callgate->getFunctionType()));
-
-        // create body of wrapper function
-        BasicBlock* entryBlock = BasicBlock::Create(M.getContext(), "entry", callgateWrapper);
-        IRBuilder<> builder(entryBlock);
-
-        // create result and OrigFn local vars
-        Type* callgateReturnType = callgate->getReturnType();
-        Type* resultType = callgateReturnType->isVoidTy() ? IntegerType::get(M.getContext(), 32) : callgateReturnType;
-        AllocaInst* resultAllocInst = builder.CreateAlloca(resultType);
-
-        StructType* origFnType = M.getTypeByName("struct.OrigFn");
-        AllocaInst* origFnAllocInst = builder.CreateAlloca(origFnType);
-
-        // valgrind_get_orig_fn must be the first call or it doesn't work!!
-        FunctionType* getOrigFnType = FunctionType::get(Type::getVoidTy(M.getContext()), ArrayRef<Type*>(origFnType), false);
-        Function* getOrigFn = cast<Function>(M.getOrInsertFunction("valgrind_get_orig_fn", getOrigFnType));
-        builder.CreateCall(getOrigFn, origFnAllocInst);
-
-        /* debug begin */
-        FunctionType* printfFnType = FunctionType::get(Type::getInt32Ty(M.getContext()), ArrayRef<Type*>(Type::getInt8PtrTy(M.getContext())), true);
-        Function* printfFn = cast<Function>(M.getOrInsertFunction("printf", printfFnType));
-        Value* printfFormatString = builder.CreateGlobalStringPtr(StringRef(Twine(callgate->getName()," wrapper\n").str()));
-        builder.CreateCall(printfFn, printfFormatString);
-        /* debug end */
-
-        // Add calls to soaap_enter_callgate and soaap_exit_callgate
-        // after valgrind_get_orig_fn(...).
-        FunctionType* callGateFnType = FunctionType::get(Type::getVoidTy(M.getContext()), false);
-        Function* enterCallGateFn = cast<Function>(M.getOrInsertFunction("soaap_enter_callgate", callGateFnType));
-        Function* exitCallGateFn = cast<Function>(M.getOrInsertFunction("soaap_exit_callgate", callGateFnType));
-
-        builder.CreateCall(enterCallGateFn);
-
-        // Add call to the correct call_unwrappedfunction_w_ variant and construct
-        // function type simultaneously
-        SmallVector<Type*,6> params;
-        params.push_back(PointerType::getUnqual(origFnType));
-        params.push_back(Type::getInt64PtrTy(M.getContext()));
-        int numCallgateParams = callgate->getFunctionType()->getNumParams();
-        string params_code = "";
-        if (numCallgateParams == 0) {
-          params_code = "v";
-        }
-        else {
-          for (int i=0; i<numCallgateParams; i++) {
-            params_code += "w";
-            params.push_back(Type::getInt64Ty(M.getContext()));
-          }
-        }
-      
-        FunctionType* callUnwrappedFnType = FunctionType::get(Type::getVoidTy(M.getContext()), ArrayRef<Type*>(params), false);
-        Function* callUnwrappedFn = cast<Function>(M.getOrInsertFunction(StringRef("call_unwrapped_function_w_" + params_code), callUnwrappedFnType));
-
-        // bitcast result var to int for the func call
-        Value* resultAllocCast = builder.CreateCast(Instruction::BitCast, resultAllocInst, IntegerType::getInt32PtrTy(M.getContext()));
-        SmallVector<Value*, 10> callUnwrappedFnCallArgs;
-        callUnwrappedFnCallArgs.push_back(origFnAllocInst);
-        callUnwrappedFnCallArgs.push_back(resultAllocCast);
-        // bitcast all args to int for the func call
-        Function::ArgumentListType& arguments = callgateWrapper->getArgumentList();
-        for (Argument& arg : arguments) {
-          Value* argCast = builder.CreatePointerCast(&arg, IntegerType::getInt32Ty(M.getContext()));
-          callUnwrappedFnCallArgs.push_back(argCast);
-        }
-
-        builder.CreateCall(callUnwrappedFn, ArrayRef<Value*>(callUnwrappedFnCallArgs));
-
-        builder.CreateCall(exitCallGateFn);
-
-        if (callgate->getReturnType()->isVoidTy()) {
-          builder.CreateRetVoid();
-        }
-        else {
-          Value* returnValue = builder.CreateLoad(resultAllocInst);
-          builder.CreateRet(returnValue);
-        }
-
-//        callgateWrapper->dump();
-      }
-    }
-
-    /*
-     * Instrument valgrind client requests. This is the mechanism valgrind
-     * provides for communicating information to the underlying valgrind
-     * execution engine.
-     *
-     * See http://valgrind.org/docs/manual/manual-core-adv.html#manual-core-adv.clientreq
-     * for more details.
-     */
-    void instrumentValgrindClientRequests(Module& M) {
-  
-      if (sandboxEntryPoints.empty()) {
-        return;
-      }  
-
-      Function* mainFn = M.getFunction("main");
-      Instruction* mainFnFirstInst = NULL;
-      FunctionType* VoidNoArgsFuncType = FunctionType::get(Type::getVoidTy(M.getContext()), false);
-
-      if (mainFn != NULL) {
-
-        mainFnFirstInst = mainFn->getEntryBlock().getFirstNonPHI();
-
-        /*
-         * 1. Create sandbox at the start of main
-         */
-          Function* createSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_create_sandbox", VoidNoArgsFuncType));
-          CallInst* createSandboxCall = CallInst::Create(createSandboxFn, ArrayRef<Value*>());
-          createSandboxCall->insertBefore(mainFnFirstInst);
-
-      }
-
-      /*
-       * 2. Insert calls to enter and exit sandbox at the entry and exit
-       *    of sandboxed methods respectively and also tell valgrind which
-       *    file descriptors are shared at the entry.
-       */
-      Function* enterPersistentSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_enter_persistent_sandbox", VoidNoArgsFuncType));
-      Function* exitPersistentSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_exit_persistent_sandbox", VoidNoArgsFuncType));
-      Function* enterEphemeralSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_enter_ephemeral_sandbox", VoidNoArgsFuncType));
-      Function* exitEphemeralSandboxFn = cast<Function>(M.getOrInsertFunction("soaap_exit_ephemeral_sandbox", VoidNoArgsFuncType));
-
-      for (Function* F : sandboxEntryPoints) {
-        bool persistent = find(persistentSandboxFuncs.begin(), persistentSandboxFuncs.end(), F) != persistentSandboxFuncs.end();
-        Instruction* firstInst = F->getEntryBlock().getFirstNonPHI();
-        CallInst* enterSandboxCall = CallInst::Create(persistent ? enterPersistentSandboxFn : enterEphemeralSandboxFn, ArrayRef<Value*>());
-        enterSandboxCall->insertBefore(firstInst);
-        /*
-         * Before each call to enter_sandbox, also instrument
-         * calls to tell valgrind which file descriptors are
-         * shared and what accesses are allowed on them
-         */
-        for (Argument& A : F->getArgumentList()) {
-          if (fdToPerms.find(&A) != fdToPerms.end()) {
-            instrumentSharedFileValgrindClientRequest(M, &A, fdToPerms[&A], enterSandboxCall);
-          }
-        }
-        for (BasicBlock& BB : F->getBasicBlockList()) {
-          TerminatorInst* termInst = BB.getTerminator();
-          if (isa<ReturnInst>(termInst)) {
-            //BB is an exit block, insert an exit_sandbox() call
-            CallInst* exitSandboxCall = CallInst::Create(persistent ? exitPersistentSandboxFn : exitEphemeralSandboxFn, ArrayRef<Value*>());
-            exitSandboxCall->insertBefore(termInst);
-          }
-        }
-//        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-//          User* user = u.getUse().getUser();
-//          if (isa<CallInst>(user)) {
-//            CallInst* caller = dyn_cast<CallInst>(user);
-//            CallInst* enterSandboxCall = CallInst::Create(persistent ? enterPersistentSandboxFn : enterEphemeralSandboxFn, ArrayRef<Value*>());
-//            CallInst* exitSandboxCall = CallInst::Create(persistent ? exitPersistentSandboxFn : exitEphemeralSandboxFn, ArrayRef<Value*>());
-//            enterSandboxCall->insertBefore(caller);
-//            exitSandboxCall->insertAfter(caller);
-//
-//            /*
-//             * Before each call to enter_sandbox, also instrument
-//             * calls to tell valgrind which file descriptors are
-//             * shared and what accesses are allowed on them
-//             */
-//            for (Argument& A : F->getArgumentList()) {
-//              if (fdToPerms.find(&A) != fdToPerms.end()) {
-//                instrumentSharedFileValgrindClientRequest(M, caller, &A, fdToPerms[&A], enterSandboxCall);
-//              }
-//            }
-//          }
-//        }
-
-      }
-
-      /*
-       * 3. Insert client requests for shared vars
-       */
-      if (mainFn != NULL) {
-        for (pair<GlobalVariable*,int> varPermPair : varToPerms) {
-          instrumentSharedVarValgrindClientRequest(M, varPermPair.first, varPermPair.second, mainFnFirstInst);
-        }
-      }
-    }
-
-    /*
-     * Inserts calls to soaap_shared_fd(fdvar, perms) or
-     * soaap_shared_file(filevar, perms) that in turn tells valgrind that
-     * the file descriptor value of fdvar or filevar is shared with
-     * sandboxes and the permissions as defined by perms are allowed on it.
-     */
-    void instrumentSharedFileValgrindClientRequest(Module& M, Argument* arg, int perms, Instruction* predInst) {
-      Value* args[] = { arg, ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), perms) };
-      if (arg->getType()->isPointerTy()) {
-        Type* fileStructType = M.getTypeByName("struct.FILE");
-        SmallVector<Type*,2> fileSharedFnParamTypes;
-        fileSharedFnParamTypes.push_back(PointerType::getUnqual(fileStructType));
-        fileSharedFnParamTypes.push_back(Type::getInt32Ty(M.getContext()));
-        FunctionType* fileSharedFnType = FunctionType::get(Type::getVoidTy(M.getContext()), ArrayRef<Type*>(fileSharedFnParamTypes), false);
-        Function* fileSharedFn = cast<Function>(M.getOrInsertFunction("soaap_shared_file", fileSharedFnType));
-        CallInst* fileSharedCall = CallInst::Create(fileSharedFn, args);
-        fileSharedCall->insertAfter(predInst);
-      }
-      else {
-        SmallVector<Type*,2> fdSharedFnParamTypes;
-        fdSharedFnParamTypes.push_back(Type::getInt32Ty(M.getContext()));
-        fdSharedFnParamTypes.push_back(Type::getInt32Ty(M.getContext()));
-        FunctionType* fdSharedFnType = FunctionType::get(Type::getVoidTy(M.getContext()), ArrayRef<Type*>(    fdSharedFnParamTypes), false);
-
-        Function* fdSharedFn = cast<Function>(M.getOrInsertFunction("soaap_shared_fd", fdSharedFnType));
-        CallInst* fdSharedCall = CallInst::Create(fdSharedFn, args);
-        fdSharedCall->insertAfter(predInst);
-      }
-    }
-
-    /*
-     * Inserts calls to soaap_shared_var(varname, perms) that in turn tells
-     * valgrind that varname is shared with sandboxes and the permissions
-     * as defined by perms are allowed on it.
-     */
-    void instrumentSharedVarValgrindClientRequest(Module& M, GlobalVariable* grv, int perms, Instruction* predInst) {
-      /*
-       * Create a global string variable to hold the name of the
-       * shared variable.
-       *
-       * Note: When constructing a global variable, if you specify a
-       * module parent, then the global variable is added automatically
-       * to its list of global variables
-       */
-      StringRef varName = grv->getName();
-      Constant* varNameArray = ConstantDataArray::getString(M.getContext(), varName);
-      GlobalVariable* varNameGlobal = new GlobalVariable(M, varNameArray->getType(), true, GlobalValue::PrivateLinkage, varNameArray, "__soaap__shared_var_" + varName);
-
-      Constant* Idxs[2] = {
-          ConstantInt::get(Type::getInt32Ty(M.getContext()), 0),
-          ConstantInt::get(Type::getInt32Ty(M.getContext()), 0)
-      };
-
-      Constant* varCastConst = ConstantExpr::getGetElementPtr(varNameGlobal, Idxs);
-      Constant* permConst = ConstantInt::get(IntegerType::getInt32Ty(M.getContext()), perms);
-      Value* Args[] = { varCastConst, permConst };
-
-      SmallVector<Type*,2> varSharedFnParamTypes;
-      varSharedFnParamTypes.push_back(Type::getInt8PtrTy(M.getContext()));
-      varSharedFnParamTypes.push_back(Type::getInt32Ty(M.getContext()));
-      FunctionType* varSharedFnType = FunctionType::get(Type::getVoidTy(M.getContext()), ArrayRef<Type*>(varSharedFnParamTypes), false);
-      Function* varSharedFn = cast<Function>(M.getOrInsertFunction("soaap_shared_var", varSharedFnType));
-      CallInst* varSharedCall = CallInst::Create(varSharedFn, Args);
-      varSharedCall->insertBefore(predInst);
     }
 
     void calculateSandboxedMethods(Module& M) {
