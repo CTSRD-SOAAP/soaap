@@ -32,6 +32,7 @@
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
+#include "Analysis/InfoFlow/CapabilityAnalysis.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
 #include "Utils/ClassifiedUtils.h"
@@ -96,8 +97,8 @@ namespace soaap {
     //map<GlobalVariable*,int> varToClasses;
 
     // sandbox-private stuff
-    ValueIntMap valueToSandboxNames;
-    map<GlobalVariable*,int> varToSandboxNames;
+    //ValueIntMap valueToSandboxNames;
+    //map<GlobalVariable*,int> varToSandboxNames;
 
     // past-vulnerability stuff
     SmallVector<CallInst*,16> pastVulnAnnotatedPoints;
@@ -176,8 +177,8 @@ namespace soaap {
       outs() << "* Finding global variables\n";
       findSharedGlobalVariables(M);
 
-      outs() << "* Finding file descriptors\n";
-      findSharedFileDescriptors(M);
+      //outs() << "* Finding file descriptors\n";
+      //findSharedFileDescriptors(M);
 
       outs() << "* Finding privileged annotations\n";
       findPrivilegedAnnotations(M);
@@ -216,7 +217,7 @@ namespace soaap {
         outs() << "   Calculating syscall-reachable methods\n";
         calculateSyscallReachableMethods(M);
         outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
-        //checkFileDescriptors(M);
+        checkFileDescriptors(M);
 
         outs() << "* Checking propagation of data from sandboxes to privileged components\n";
         checkOriginOfAccesses(M);
@@ -952,71 +953,71 @@ namespace soaap {
      * Find those file descriptor parameters that are shared with the
      * sandboxed method.
      */
-    void findSharedFileDescriptors(Module& M) {
-
-      /*
-       * These will be annotated parameters that are turned by
-         * Clang/LLVM into calls to the intrinsic function
-         * llvm.var.annotation, with the param as the arg. This is how
-         * local variable annotations are represented in general in LLVM
-       *
-       * A parameter annotation looks like this:
-         * void m(int ifd __fd_read) { ... }
-       *
-       * It is turned into an intrinsic call as follows:
-       *
-         * call void @llvm.var.annotation(
-         *   i8* %ifd.addr1,      // param (llvm creates a local var for the param by appending .addrN to the end of the param name)
-       *   i8* getelementptr inbounds ([8 x i8]* @.str2, i32 0, i32 0),  // annotation
-       *   i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file name
-       *   i32 5)              // line number
-             *
-         * @.str2 = private unnamed_addr constant [8 x i8] c"fd_read\00", section "llvm.metadata"
-         * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
-       */
-      if (Function* F = M.getFunction("llvm.var.annotation")) {
-        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-          User* user = u.getUse().getUser();
-          if (isa<IntrinsicInst>(user)) {
-            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
-            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-
-            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-
-            DEBUG(dbgs() << "    annotation: " << annotationStrValCString << "\n");
-  
-            /*
-             * Find out the enclosing function and record which
-             * param was annotated. We have to do this because
-             * llvm creates a local var for the param by appending
-             * .addrN to the end of the param name and associates
-             * the annotation with the newly created local var
-             * i.e. see ifd and ifd.addr1 above
-             */
-            Argument* annotatedArg = NULL;
-            Function* enclosingFunc = annotateCall->getParent()->getParent();
-            for (Argument &arg : enclosingFunc->getArgumentList()) {
-              if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
-                annotatedArg = &arg;
-              }
-            }
-
-            if (annotatedArg != NULL) {
-              if (annotationStrValCString == FD_READ) {
-                fdToPerms[annotatedArg] |= FD_READ_MASK;
-              }
-              else if (annotationStrValCString == FD_WRITE) {
-                fdToPerms[annotatedArg] |= FD_WRITE_MASK;
-              }
-              DEBUG(dbgs() << "   found annotated file descriptor " << annotatedArg->getName() << "\n");
-            }
-          }
-        }
-      }
-
-    }
+//    void findSharedFileDescriptors(Module& M) {
+//
+//      /*
+//       * These will be annotated parameters that are turned by
+//         * Clang/LLVM into calls to the intrinsic function
+//         * llvm.var.annotation, with the param as the arg. This is how
+//         * local variable annotations are represented in general in LLVM
+//       *
+//       * A parameter annotation looks like this:
+//         * void m(int ifd __fd_read) { ... }
+//       *
+//       * It is turned into an intrinsic call as follows:
+//       *
+//         * call void @llvm.var.annotation(
+//         *   i8* %ifd.addr1,      // param (llvm creates a local var for the param by appending .addrN to the end of the param name)
+//       *   i8* getelementptr inbounds ([8 x i8]* @.str2, i32 0, i32 0),  // annotation
+//       *   i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file name
+//       *   i32 5)              // line number
+//             *
+//         * @.str2 = private unnamed_addr constant [8 x i8] c"fd_read\00", section "llvm.metadata"
+//         * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
+//       */
+//      if (Function* F = M.getFunction("llvm.var.annotation")) {
+//        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
+//          User* user = u.getUse().getUser();
+//          if (isa<IntrinsicInst>(user)) {
+//            IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+//            Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+//
+//            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+//            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+//            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+//
+//            DEBUG(dbgs() << "    annotation: " << annotationStrValCString << "\n");
+//  
+//            /*
+//             * Find out the enclosing function and record which
+//             * param was annotated. We have to do this because
+//             * llvm creates a local var for the param by appending
+//             * .addrN to the end of the param name and associates
+//             * the annotation with the newly created local var
+//             * i.e. see ifd and ifd.addr1 above
+//             */
+//            Argument* annotatedArg = NULL;
+//            Function* enclosingFunc = annotateCall->getParent()->getParent();
+//            for (Argument &arg : enclosingFunc->getArgumentList()) {
+//              if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
+//                annotatedArg = &arg;
+//              }
+//            }
+//
+//            if (annotatedArg != NULL) {
+//              if (annotationStrValCString == FD_READ) {
+//                fdToPerms[annotatedArg] |= FD_READ_MASK;
+//              }
+//              else if (annotationStrValCString == FD_WRITE) {
+//                fdToPerms[annotatedArg] |= FD_WRITE_MASK;
+//              }
+//              DEBUG(dbgs() << "   found annotated file descriptor " << annotatedArg->getName() << "\n");
+//            }
+//          }
+//        }
+//      }
+//
+//    }
 
     void checkPropagationOfSandboxPrivateData(Module& M) {
       SandboxPrivateAnalysis analysis(privilegedMethods, sandboxedMethods, allReachableMethods, callgates, sandboxedMethodToNames);
@@ -1157,6 +1158,11 @@ namespace soaap {
      *
      * Carry on this iteration until the worklist is empty.
      */
+    void checkFileDescriptors(Module& M) {
+      CapabilityAnalysis analysis(sandboxedMethods);
+      analysis.doAnalysis(M);
+    }
+
     /*
     void checkFileDescriptors(Module& M) {
 
@@ -1181,6 +1187,7 @@ namespace soaap {
     /*
      * Validate that the necessary permissions propagate to the syscall
      */
+    /* 
     void validateDescriptorAccesses(Module& M, string syscall, int required_perm) {
       if (Function* syscallFn = M.getFunction(syscall)) {
         for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end();
@@ -1204,6 +1211,7 @@ namespace soaap {
         }
       }
     }
+    */
 
     /*
      * Find those functions that have been declared as being callgates
