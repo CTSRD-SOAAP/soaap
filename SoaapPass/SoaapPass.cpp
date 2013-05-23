@@ -66,8 +66,8 @@ namespace soaap {
 
     map<GlobalVariable*,int> globalVarToSandboxNames;
 
-    SmallVector<Instruction*,16> sandboxCreationPoints;
-    map<Instruction*,int> sandboxCreationPointToName;
+//    SmallVector<Instruction*,16> sandboxCreationPoints;
+//    map<Instruction*,int> sandboxCreationPointToName;
 
     FunctionIntMap sandboxedMethodToOverhead;
     FunctionVector persistentSandboxFuncs;
@@ -135,8 +135,8 @@ namespace soaap {
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);
 
-      outs() << "* Finding sandbox creation-points\n";
-      findSandboxCreationPoints(M);
+      //outs() << "* Finding sandbox creation-points\n";
+      //findSandboxCreationPoints(M);
 
       outs() << "* Finding sandbox entry-points\n";
       findSandboxEntryPoints(M);
@@ -679,6 +679,7 @@ namespace soaap {
       analysis.doAnalysis(M);
     }
 
+    /*
     void findSandboxCreationPoints(Module& M) {
       // look for calls to llvm.annotation.i32(NULL,"SOAAP_PERSISTENT_SANDBOX_CREATE",0,0)
       if (Function* AnnotationFn = M.getFunction("llvm.annotation.i32")) {
@@ -701,6 +702,7 @@ namespace soaap {
         }
       }
     }
+    */
 
     void findPrivilegedAnnotations(Module& M) {
       if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
@@ -1065,7 +1067,7 @@ namespace soaap {
                 // variable can be read from 
                 if (varToPerms[gv] & VAR_READ_MASK) {
                   // check that this store is preceded by a sandbox_create annotation
-                  int precedingSandboxCreations = findPrecedingSandboxCreations(store, F, M);
+                  int precedingSandboxCreations = 1;//findPrecedingSandboxCreations(store, F, M);
                   int varSandboxNames = globalVarToSandboxNames[gv];
                   int commonSandboxNames = precedingSandboxCreations & varSandboxNames;
                   DEBUG(dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
@@ -1089,6 +1091,7 @@ namespace soaap {
       }
     }
 
+    /*
     int findPrecedingSandboxCreations(Instruction* I, Function* F, Module& M) {
       int result = 0;
       for (Instruction* J : sandboxCreationPoints) {
@@ -1107,6 +1110,7 @@ namespace soaap {
       }
       return result;
     }
+    */
 
     bool isReachableFrom(Instruction* I2, Instruction* I1, Function* F) {
       BasicBlock* B2 = I2->getParent();
