@@ -21,11 +21,8 @@ namespace soaap {
       FunctionVector privilegedMethods;
       FunctionVector sandboxEntryPoints;
       CallInstVector untrustedSources;
-      
+
       void ppPrivilegedPathToInstruction(Instruction* I, Module& M);
-      list<Instruction*> findPathToFunc(Function* From, Function* To, bool useOrigins, int taint);
-      bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited, bool useOrigins, int taint);
-      
   };
 }
 #endif 

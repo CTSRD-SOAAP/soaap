@@ -13,9 +13,10 @@ using namespace std;
 namespace soaap {
   class PrettyPrinters {
     public:
-      static void ppPrivilegedPathToFunction(Function* Target, Module& M);
+      static void ppPrivilegedPathToFunction(Function* F, Module& M);
       static void ppTaintSource(CallInst* C);
       static void ppTrace(list<Instruction*>& trace);
+      static list<Instruction*> findPathToFunc(Function* From, Function* To, ValueIntMap* shadow, int taint);
   };
 }
 

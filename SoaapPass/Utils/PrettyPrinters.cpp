@@ -5,7 +5,7 @@
 
 using namespace soaap;
 
-bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited, map<const Value*,int>* shadow, int taint) {
+bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited, ValueIntMap* shadow, int taint) {
   if (CurrNode == FinalNode)
     return true;
   else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
@@ -39,7 +39,7 @@ bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, lis
   }
 }
 
-list<Instruction*> findPathToFunc(Function* From, Function* To, map<const Value*,int>* shadow, int taint) {
+list<Instruction*> PrettyPrinters::findPathToFunc(Function* From, Function* To, ValueIntMap* shadow, int taint) {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* FromNode = (*CG)[From];
   CallGraphNode* ToNode = (*CG)[To];

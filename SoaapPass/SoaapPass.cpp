@@ -36,6 +36,7 @@
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
 #include "Utils/ClassifiedUtils.h"
+#include "Utils/PrettyPrinters.h"
 
 #include <iostream>
 #include <vector>
@@ -430,7 +431,7 @@ namespace soaap {
             outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
             outs() << " *** network and file system access.\n"; 
             outs() << " Possible trace:\n";
-            printPrivilegedPathToFunction(F, M);
+            PrettyPrinters::ppPrivilegedPathToFunction(F, M);
             outs() << "\n\n";
           }
         }
@@ -445,157 +446,10 @@ namespace soaap {
           outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
           outs() << " *** network and file system access.\n"; 
           outs() << " Possible trace:\n";
-          printPrivilegedPathToFunction(P, M);
+          PrettyPrinters::ppPrivilegedPathToFunction(P, M);
         }
       }
 
-    }
-
-    void printPrivilegedPathToFunction(Function* Target, Module& M) {
-      if (Function* MainFn = M.getFunction("main")) {
-        // Find privileged path to instruction I, via a function that calls a sandboxed callee
-        CallGraph& CG = getAnalysis<CallGraph>();
-        CallGraphNode* TargetNode = CG[Target];
-        list<Instruction*> trace = findPathToFunc(MainFn, Target, NULL, -1);
-        prettyPrintTrace(trace);
-        outs() << "\n";
-      }
-    }
-
-    list<Instruction*> findPrivPathToFunc(Function* From, Function* To, map<const Value*,int>* shadow, int taint) {
-      CallGraph& CG = getAnalysis<CallGraph>();
-      CallGraphNode* FromNode = CG[From];
-      CallGraphNode* ToNode = CG[To];
-      list<CallGraphNode*> visited;
-      list<Instruction*> trace;
-      findPrivPathToFuncHelper(FromNode, ToNode, trace, visited);
-      return trace;
-    }
-
-    bool findPrivPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited) {
-      if (CurrNode == FinalNode)
-        return true;
-      else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
-        return false;
-      else if (find(visited.begin(), visited.end(), CurrNode) != visited.end()) // cycle
-        return false;
-      else {
-        visited.push_back(CurrNode);
-        for (CallGraphNode::iterator I = CurrNode->begin(), E = CurrNode->end(); I!=E; I++) {
-          Value* V = I->first;
-          if(CallInst* Call = dyn_cast_or_null<CallInst>(V)) {
-            CallGraphNode* CalleeNode = I->second;
-            if (Function* CalleeFunc = CalleeNode->getFunction()) {
-              bool privilegedCallee = find(privilegedMethods.begin(), privilegedMethods.end(), CalleeFunc) != privilegedMethods.end();
-              if (privilegedCallee && findPrivPathToFuncHelper(CalleeNode, FinalNode, trace, visited)) {
-                // CurrNode is on a path to FinalNode, so prepend to the trace
-                trace.push_back(Call);
-                return true;
-              }
-            }
-          }
-        }
-        return false;
-      }
-    }
-
-    void printPrivilegedPathToInstruction(Instruction* I, Module& M) {
-      if (Function* MainFn = M.getFunction("main")) {
-        // Find privileged path to instruction I, via a function that calls a sandboxed callee
-        Function* Target = I->getParent()->getParent();
-        CallGraph& CG = getAnalysis<CallGraph>();
-        CallGraphNode* TargetNode = CG[Target];
-
-        outs() << "  Possible causes\n";
-        for (CallInst* C : untrustedSources ) {
-          Function* Via = C->getParent()->getParent();
-          DEBUG(outs() << MainFn->getName() << " -> " << Via->getName() << " -> " << Target->getName() << "\n");
-          list<Instruction*> trace1 = findPathToFunc(MainFn, Via, NULL, -1);
-          list<Instruction*> trace2 = findPathToFunc(Via, Target, &origin, ORIGIN_SANDBOX);
-          // check that we have successfully been able to find a full trace!
-          if (!trace1.empty() && !trace2.empty()) {
-            printTaintSource(C);
-            // append target instruction I and trace1, to the end of trace2
-            trace2.push_front(I);
-            trace2.insert(trace2.end(), trace1.begin(), trace1.end());
-            prettyPrintTrace(trace2);
-            outs() << "\n";
-          }
-        }
-
-        outs() << "Unable to find a trace\n";
-      }
-    }
-
-    list<Instruction*> findPathToFunc(Function* From, Function* To, map<const Value*,int>* shadow, int taint) {
-      CallGraph& CG = getAnalysis<CallGraph>();
-      CallGraphNode* FromNode = CG[From];
-      CallGraphNode* ToNode = CG[To];
-      list<CallGraphNode*> visited;
-      list<Instruction*> trace;
-      findPathToFuncHelper(FromNode, ToNode, trace, visited, shadow, taint);
-      return trace;
-    }
-
-    bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited, map<const Value*,int>* shadow, int taint) {
-      if (CurrNode == FinalNode)
-        return true;
-      else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
-        return false;
-      else if (find(visited.begin(), visited.end(), CurrNode) != visited.end()) // cycle
-        return false;
-      else {
-        visited.push_back(CurrNode);
-        for (CallGraphNode::iterator I = CurrNode->begin(), E = CurrNode->end(); I!=E; I++) {
-          Value* V = I->first;
-          if(CallInst* Call = dyn_cast_or_null<CallInst>(V)) {
-            CallGraphNode* CalleeNode = I->second;
-            bool proceed = true;
-            if (shadow) {
-              // check that Call has at least one tainted arg
-              int idx;
-              for (idx = 0; idx < Call->getNumArgOperands(); idx++) {
-                if((proceed = ((*shadow)[Call->getArgOperand(idx)->stripPointerCasts()] == taint))) {
-                  break;
-                }
-              }
-            }
-            if (proceed && findPathToFuncHelper(CalleeNode, FinalNode, trace, visited, shadow, taint)) {
-              // CurrNode is on a path to FinalNode, so prepend to the trace
-              trace.push_back(Call);
-              return true;
-            }
-          }
-        }
-        return false;
-      }
-    }
-
-    void printTaintSource(CallInst* C) {
-      outs() << "    Source of untrusted data:\n";
-      Function* EnclosingFunc = cast<Function>(C->getParent()->getParent());
-      if (MDNode *N = C->getMetadata("dbg")) {
-        DILocation Loc(N);
-        unsigned Line = Loc.getLineNumber();
-        StringRef File = Loc.getFilename();
-        unsigned FileOnlyIdx = File.find_last_of("/");
-        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-        outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
-      }
-    }
-
-    void prettyPrintTrace(list<Instruction*>& trace) {
-      for (Instruction* I : trace) {
-        Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
-        if (MDNode *N = I->getMetadata("dbg")) {
-          DILocation Loc(N);
-          unsigned Line = Loc.getLineNumber();
-          StringRef File = Loc.getFilename();
-          unsigned FileOnlyIdx = File.find_last_of("/");
-          StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-          outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
-        }
-      }
     }
 
     void loadDynamicCallEdges(Module& M) {
