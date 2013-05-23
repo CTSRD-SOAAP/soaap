@@ -29,10 +29,12 @@
 #include "soaap_perf.h"
 
 #include "Common/Typedefs.h"
+#include "Common/Sandbox.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
+#include "Annotations/SandboxEntryPointAnnotations.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
 #include "Utils/ClassifiedUtils.h"
@@ -65,20 +67,23 @@ namespace soaap {
 //    SmallVector<Instruction*,16> sandboxCreationPoints;
 //    map<Instruction*,int> sandboxCreationPointToName;
 
+    SandboxVector sandboxes;
+
     FunctionIntMap sandboxedMethodToOverhead;
-    FunctionVector persistentSandboxFuncs;
-    FunctionVector ephemeralSandboxFuncs;
-    FunctionVector sandboxEntryPoints;
-    map<Function*,int> sandboxEntryPointToName;
+    FunctionVector persistentSandboxEntryPoints;
+    FunctionVector ephemeralSandboxEntryPoints;
+    FunctionVector allSandboxEntryPoints;
+    //FunctionIntMap sandboxEntryPointToName;
+
     map<Function*,int> sandboxedMethodToNames;
     SmallVector<Function*,16> callgates;
     FunctionIntMap callgateToSandboxes;
     FunctionVector privAnnotMethods;
     FunctionVector privilegedMethods;
-    FunctionSet allReachableMethods;
-    FunctionSet sandboxedMethods;
+    FunctionVector allReachableMethods;
+    FunctionVector sandboxedMethods;
     map<Function*,SmallVector<Function*,16> > funcToSandboxEntryPoint;
-    FunctionSet syscallReachableMethods;
+    FunctionVector syscallReachableMethods;
 
     // classification stuff
     map<Function*,int> sandboxedMethodToClearances;
@@ -119,11 +124,8 @@ namespace soaap {
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);
 
-      //outs() << "* Finding sandbox creation-points\n";
-      //findSandboxCreationPoints(M);
-
-      outs() << "* Finding sandbox entry-points\n";
-      findSandboxEntryPoints(M);
+      outs() << "* Finding sandboxes\n";
+      findSandboxes(M);
 
       outs() << "* Finding global variables\n";
       findSharedGlobalVariables(M);
@@ -456,6 +458,10 @@ namespace soaap {
       }
     }
 
+    void calculateSandboxedMethods(Module& M) {
+      sandboxedMethods = SandboxUtils::calculateSandboxedMethods(sandboxes);
+    }
+
     /*
      * Find functions from which system calls are reachable.
      * This is so that when propagating capabilities through the callgraph
@@ -488,7 +494,7 @@ namespace soaap {
 
         if (!F->isDeclaration()) { // ignore the syscall itself (it will be declaration-only)
           DEBUG(dbgs() << "Adding " << F->getName() << " to syscallReachableMethods\n");
-          syscallReachableMethods.insert(F);
+          syscallReachableMethods.push_back(F);
         }
 
         // Find all functions that call F and add them to the worklist.
@@ -512,7 +518,7 @@ namespace soaap {
     }
 
     void checkOriginOfAccesses(Module& M) {
-      AccessOriginAnalysis analysis(sandboxEntryPoints, privilegedMethods);
+      AccessOriginAnalysis analysis(allSandboxEntryPoints, privilegedMethods);
       analysis.doAnalysis(M);
     }
 
@@ -568,75 +574,74 @@ namespace soaap {
      * Find functions that are annotated to be executed in persistent and
      * ephemeral sandboxes
      */
-    void findSandboxEntryPoints(Module& M) {
-
-      Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)",
-                                       true);
-      SmallVector<StringRef, 4> matches;
-
-      /*
-       * Function annotations are added to the global intrinsic array
-       * called llvm.global.annotations:
-       *
-       * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
-       * @.str5 = private unnamed_addr constant [8 x i8] c"sandbox_persistent\00", section "llvm.metadata"
-       *
-       * @llvm.global.annotations = appending global [1 x { i8*, i8*, i8*, i32 }]
-       *
-       * [{ i8*, i8*, i8*, i32 }
-       *  { i8* bitcast (void (i32, %struct.__sFILE*)* @sandboxed to i8*),  // function
-       *    i8* getelementptr inbounds ([8 x i8]* @.str5, i32 0, i32 0),  // function annotation
-       *    i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file
-       *    i32 5 }]    // line number
-       */
-      GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations");
-      if (lga != NULL) {
-        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
-        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
-          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
-
-          // get the annotation value first
-          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-
-          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-          if (isa<Function>(annotatedVal)) {
-            Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
-            if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
-              outs() << "   Found persistent sandbox entry-point " << annotatedFunc->getName() << "\n";
-              persistentSandboxFuncs.push_back(annotatedFunc);
-              sandboxEntryPoints.push_back(annotatedFunc);
-              // get name if one was specified
-              if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
-                StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
-                outs() << "      Sandbox name: " << sandboxName << "\n";
-                SandboxUtils::assignBitIdxToSandboxName(sandboxName);
-                sandboxEntryPointToName[annotatedFunc] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
-                DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
-              }
-            }
-            else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
-              outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
-              ephemeralSandboxFuncs.push_back(annotatedFunc);
-              sandboxEntryPoints.push_back(annotatedFunc);
-            }
-            else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
-              int overhead;
-              cout << "Threshold set to " << matches[1].str() <<
-                      "%\n";
-              matches[1].getAsInteger(0, overhead);
-              sandboxedMethodToOverhead[annotatedFunc] = overhead;
-            }
-            else if (annotationStrArrayCString.startswith(CLEARANCE)) {
-              StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
-              outs() << "   Sandbox has clearance for \"" << className << "\"\n";
-              ClassifiedUtils::assignBitIdxToClassName(className);
-              sandboxedMethodToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
-            }
-          }
-        }
-      }
+    void findSandboxes(Module& M) {
+      sandboxes = SandboxUtils::findSandboxes(M);
+//      Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)",
+//                                       true);
+//      SmallVector<StringRef, 4> matches;
+//
+//      /*
+//       * Function annotations are added to the global intrinsic array
+//       * called llvm.global.annotations:
+//       *
+//       * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
+//       * @.str5 = private unnamed_addr constant [8 x i8] c"sandbox_persistent\00", section "llvm.metadata"
+//       *
+//       * @llvm.global.annotations = appending global [1 x { i8*, i8*, i8*, i32 }]
+//       *
+//       * [{ i8*, i8*, i8*, i32 }
+//       *  { i8* bitcast (void (i32, %struct.__sFILE*)* @sandboxed to i8*),  // function
+//       *    i8* getelementptr inbounds ([8 x i8]* @.str5, i32 0, i32 0),  // function annotation
+//       *    i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file
+//       *    i32 5 }]    // line number
+//       */
+//      if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
+//        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+//        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+//          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+//
+//          // get the annotation value first
+//          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+//          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+//          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+//
+//          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+//          if (isa<Function>(annotatedVal)) {
+//            Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
+//            if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
+//              outs() << "   Found persistent sandbox entry-point " << annotatedFunc->getName() << "\n";
+//              persistentSandboxEntryPoints.push_back(annotatedFunc);
+//              allSandboxEntryPoints.push_back(annotatedFunc);
+//              // get name if one was specified
+//              if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
+//                StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
+//                outs() << "      Sandbox name: " << sandboxName << "\n";
+//                SandboxUtils::assignBitIdxToSandboxName(sandboxName);
+//                sandboxEntryPointToName[annotatedFunc] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
+//                DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
+//              }
+//            }
+//            else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+//              outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
+//              ephemeralSandboxEntryPoints.push_back(annotatedFunc);
+//              allSandboxEntryPoints.push_back(annotatedFunc);
+//            }
+//            else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
+//              int overhead;
+//              cout << "Threshold set to " << matches[1].str() <<
+//                      "%\n";
+//              matches[1].getAsInteger(0, overhead);
+//              sandboxedMethodToOverhead[annotatedFunc] = overhead;
+//            }
+//            else if (annotationStrArrayCString.startswith(CLEARANCE)) {
+//              StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
+//              outs() << "   Sandbox has clearance for \"" << className << "\"\n";
+//              ClassifiedUtils::assignBitIdxToClassName(className);
+//              sandboxedMethodToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
+//            }
+//          }
+//        }
+//      }
     }
 
     /*
@@ -755,57 +760,6 @@ namespace soaap {
       }
     }
 
-    void calculateSandboxedMethods(Module& M) {
-      CallGraph& CG = getAnalysis<CallGraph>();
-      for (Function* F : sandboxEntryPoints) {
-        CallGraphNode* Node = CG.getOrInsertFunction(F);
-        int sandboxName = 0;
-        if (sandboxEntryPointToName.find(F) != sandboxEntryPointToName.end()) {
-          sandboxName = sandboxEntryPointToName[F]; // sandbox entry point will only have one name
-        }
-        calculateSandboxedMethodsHelper(Node, sandboxedMethodToClearances[F], sandboxName, F);
-      }
-    }
-
-    void calculateSandboxedMethodsHelper(CallGraphNode* node, int clearances, int sandboxName, Function* entryPoint) {
-
-      Function* F = node->getFunction();
-
-      DEBUG(dbgs() << "Visiting " << F->getName() << "\n");
-       
-      if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
-        // cycle detected
-        return;
-      }
-
-      sandboxedMethods.insert(F);
-      allReachableMethods.insert(F);
-      sandboxedMethodToClearances[F] |= clearances;
-
-      //if (F != entryPoint) {
-        funcToSandboxEntryPoint[F].push_back(entryPoint);
-      //}
-
-      if (sandboxName != 0) {
-        DEBUG(dbgs() << "   Assigning name: " << sandboxName << "\n");
-        sandboxedMethodToNames[F] |= sandboxName;
-      }
-
-//      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
-      for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
-        Value* V = I->first;
-        CallGraphNode* calleeNode = I->second;
-        if (Function* calleeFunc = calleeNode->getFunction()) {
-          if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
-            DEBUG(dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
-            sandboxName = sandboxEntryPointToName[calleeFunc];
-            entryPoint = calleeFunc;
-          }
-          calculateSandboxedMethodsHelper(calleeNode, clearances, sandboxName, entryPoint);
-        }
-      }
-    }
-
     void calculatePrivilegedMethods(Module& M) {
       CallGraph& CG = getAnalysis<CallGraph>();
       if (Function* MainFunc = M.getFunction("main")) {
@@ -817,7 +771,7 @@ namespace soaap {
     void calculatePrivilegedMethodsHelper(CallGraphNode* Node) {
       if (Function* F = Node->getFunction()) {
         // if a sandbox entry point, then ignore
-        if (find(sandboxEntryPoints.begin(), sandboxEntryPoints.end(), F) != sandboxEntryPoints.end())
+        if (find(allSandboxEntryPoints.begin(), allSandboxEntryPoints.end(), F) != allSandboxEntryPoints.end())
           return;
         
         // if already visited this function, then ignore as cycle detected
@@ -826,7 +780,7 @@ namespace soaap {
   
         DEBUG(dbgs() << "Added " << F->getName() << " as privileged method\n");
         privilegedMethods.push_back(F);
-        allReachableMethods.insert(F);
+        allReachableMethods.push_back(F);
   
         // recurse on callees
         for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
@@ -1048,12 +1002,12 @@ namespace soaap {
 			 * Iterate through sandboxed functions and apply the necessary
 			 * instrumentation to emulate performance overhead.
 			 */
-			for (Function* F : sandboxEntryPoints) {
+			for (Function* F : allSandboxEntryPoints) {
 				Argument* data_in = NULL;
 				Argument* data_out = NULL;
-				bool persistent = find(persistentSandboxFuncs.begin(),
-					persistentSandboxFuncs.end(), F) !=
-					persistentSandboxFuncs.end();
+				bool persistent = find(persistentSandboxEntryPoints.begin(),
+					persistentSandboxEntryPoints.end(), F) !=
+					persistentSandboxEntryPoints.end();
 				Instruction* firstInst = F->getEntryBlock().getFirstNonPHI();
 
 				/*
@@ -1247,7 +1201,7 @@ namespace soaap {
 			 * exiting the program.  This is achieved when calling the
 			 * appropriate library function with -1 as argument.
 			 */
-			if (!persistentSandboxFuncs.empty()) {
+			if (!persistentSandboxEntryPoints.empty()) {
 				Function* mainFn = M.getFunction("main");
 
 				Function* createPersistentSandbox

@@ -10,7 +10,7 @@ namespace soaap {
 
   class ClassifiedAnalysis: public InfoFlowAnalysis {
     public:
-      ClassifiedAnalysis(FunctionSet& sboxMethods, 
+      ClassifiedAnalysis(FunctionVector& sboxMethods, 
                          FunctionIntMap& sboxMethodToClearances)
                          : sandboxedMethods(sboxMethods), 
                            sandboxedMethodToClearances(sboxMethodToClearances) { }
@@ -18,7 +18,7 @@ namespace soaap {
       virtual void postDataFlowAnalysis(Module& M);
 
     private:
-      FunctionSet sandboxedMethods;
+      FunctionVector sandboxedMethods;
       FunctionIntMap sandboxedMethodToClearances;
   };
 }
