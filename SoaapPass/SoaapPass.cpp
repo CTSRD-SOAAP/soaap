@@ -56,9 +56,6 @@ namespace soaap {
   struct SoaapPass : public ModulePass {
 
     static char ID;
-    static const int UNINITIALISED = INT_MAX;
-    static const int ORIGIN_PRIV = 0;
-    static const int ORIGIN_SANDBOX = 1;
     bool modified;
     bool emPerf;
 
