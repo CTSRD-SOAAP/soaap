@@ -60,8 +60,6 @@ namespace soaap {
     bool emPerf;
 
     map<GlobalVariable*,int> varToPerms;
-    //map<const Value*,int> fdToPerms;
-
     map<GlobalVariable*,int> globalVarToSandboxNames;
 
 //    SmallVector<Instruction*,16> sandboxCreationPoints;
@@ -82,20 +80,8 @@ namespace soaap {
     map<Function*,SmallVector<Function*,16> > funcToSandboxEntryPoint;
     FunctionSet syscallReachableMethods;
 
-    map<const Value*,int> origin;
-    SmallVector<CallInst*,16> untrustedSources;
-
     // classification stuff
-    //map<StringRef,int> classToBitIdx;
-    //map<int,StringRef> bitIdxToClass;
-    //int nextClassBitIdx = 0;
     map<Function*,int> sandboxedMethodToClearances;
-    //map<const Value*,int> valueToClasses;
-    //map<GlobalVariable*,int> varToClasses;
-
-    // sandbox-private stuff
-    //ValueIntMap valueToSandboxNames;
-    //map<GlobalVariable*,int> varToSandboxNames;
 
     // past-vulnerability stuff
     SmallVector<CallInst*,16> pastVulnAnnotatedPoints;
