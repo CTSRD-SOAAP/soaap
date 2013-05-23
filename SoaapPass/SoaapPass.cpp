@@ -34,7 +34,6 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
-#include "Annotations/SandboxEntryPointAnnotations.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
 #include "Utils/ClassifiedUtils.h"
@@ -71,9 +70,7 @@ namespace soaap {
 
     FunctionIntMap sandboxedMethodToOverhead;
     FunctionVector persistentSandboxEntryPoints;
-    FunctionVector ephemeralSandboxEntryPoints;
     FunctionVector allSandboxEntryPoints;
-    //FunctionIntMap sandboxEntryPointToName;
 
     map<Function*,int> sandboxedMethodToNames;
     SmallVector<Function*,16> callgates;
@@ -82,7 +79,6 @@ namespace soaap {
     FunctionVector privilegedMethods;
     FunctionVector allReachableMethods;
     FunctionVector sandboxedMethods;
-    map<Function*,SmallVector<Function*,16> > funcToSandboxEntryPoint;
     FunctionVector syscallReachableMethods;
 
     // classification stuff

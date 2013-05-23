@@ -6,7 +6,6 @@ add_llvm_loadable_module(libsoaap
   Analysis/InfoFlow/SandboxPrivateAnalysis.cpp
   Analysis/InfoFlow/ClassifiedAnalysis.cpp
   Analysis/InfoFlow/CapabilityAnalysis.cpp
-  Annotations/SandboxEntryPointAnnotations.cpp
   Utils/LLVMAnalyses.cpp
   Utils/PrettyPrinters.cpp
   Utils/SandboxUtils.cpp
