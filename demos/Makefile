@@ -1,9 +1,5 @@
 .SUFFIXES: .ll .cg .soaap
 
-SOAAP_BUILD_DIR=/home/khilan/workspace_local/soaap_build
-SOAAP_INCLUDE_PATH=/home/khilan/workspace/soaap/include
-LLVM_BUILD_DIR=/home/khilan/workspace_local/llvm_build
-
 .ll.soaap:
 	opt -S -o $<.soaap -load $(SOAAP_BUILD_DIR)/libsoaap.so -profile-loader -soaap $<
 

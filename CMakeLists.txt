@@ -5,6 +5,8 @@ set(CMAKE_CXX_COMPILER ${LLVM_BINARY_DIR}/bin/clang++)
 set(CMAKE_C_FLAGS "-fPIC")
 set(CMAKE_CXX_FLAGS "-fPIC -fno-rtti -Wno-c++11-extensions")
 
+set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR})
+
 # incorporate CMake features provided by LLVM:
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_BINARY_DIR}/share/llvm/cmake")
 include(LLVMConfig)
