@@ -57,7 +57,6 @@ namespace soaap {
   struct SoaapPass : public ModulePass {
 
     static char ID;
-    bool modified;
     bool emPerf;
 
     map<GlobalVariable*,int> varToPerms;
@@ -93,7 +92,6 @@ namespace soaap {
     SmallVector<StringRef,16> vulnerableVendors;
 
     SoaapPass() : ModulePass(ID) {
-      modified = false;
       emPerf = false;
     }
 
@@ -187,7 +185,7 @@ namespace soaap {
         }   
       }   
 
-      return modified;
+      return false;
     }
 
     void processCmdLineArgs(Module& M) {
