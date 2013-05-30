@@ -1,6 +1,10 @@
 add_llvm_loadable_module(libsoaap
   SoaapPass.cpp
   Common/Sandbox.cpp
+  Analysis/GlobalVariableAnalysis.cpp
+  Analysis/PastVulnerabilityAnalysis.cpp
+  Analysis/PrivilegedCallAnalysis.cpp
+  Analysis/ProvenanceAnalysis.cpp
   Analysis/InfoFlow/AccessOriginAnalysis.cpp
   Analysis/InfoFlow/InfoFlowAnalysis.cpp
   Analysis/InfoFlow/SandboxPrivateAnalysis.cpp
