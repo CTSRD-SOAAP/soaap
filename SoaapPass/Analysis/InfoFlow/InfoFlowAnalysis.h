@@ -11,13 +11,15 @@
 #include "llvm/Analysis/ProfileInfo.h"
 #include "llvm/Analysis/CallGraph.h"
 
+#include "Analysis/Analysis.h"
+
 using namespace std;
 using namespace llvm;
 
 namespace soaap {
   typedef list<const Value*> ValueList;
 
-  class InfoFlowAnalysis {
+  class InfoFlowAnalysis : public Analysis {
     public:
       virtual void doAnalysis(Module& M);
     protected:
