@@ -2,5 +2,5 @@
 
 using namespace soaap;
 
-void PrivilegedCallAnalysis::doAnalysis(Module& M) {
+void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
 }

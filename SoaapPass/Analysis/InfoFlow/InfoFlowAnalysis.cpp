@@ -8,7 +8,7 @@
 using namespace soaap;
 using namespace llvm;
 
-void InfoFlowAnalysis::doAnalysis(Module& M) {
+void InfoFlowAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   ValueList worklist;
   initialise(worklist, M);
   performDataFlowAnalysis(worklist, M);

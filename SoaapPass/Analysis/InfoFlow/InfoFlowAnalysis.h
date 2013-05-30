@@ -21,7 +21,7 @@ namespace soaap {
 
   class InfoFlowAnalysis : public Analysis {
     public:
-      virtual void doAnalysis(Module& M);
+      virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
     protected:
       map<const Value*, int> state;
       virtual void initialise(ValueList& worklist, Module& M) = 0;

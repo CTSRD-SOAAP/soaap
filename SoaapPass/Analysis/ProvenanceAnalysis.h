@@ -7,7 +7,7 @@ namespace soaap {
 
   class ProvenanceAnalysis : public Analysis {
     public:
-      virtual void doAnalysis(Module& M);
+      virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
     
     private:
       

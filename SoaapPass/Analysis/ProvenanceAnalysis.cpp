@@ -2,5 +2,5 @@
 
 using namespace soaap;
 
-void ProvenanceAnalysis::doAnalysis(Module& M) {
+void ProvenanceAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
 }

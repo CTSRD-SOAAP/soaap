@@ -26,8 +26,12 @@ FunctionVector Sandbox::getFunctions() {
   return functions;
 }
 
-GlobalVariableIntMap Sandbox::getVariablePermissions() {
+GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
   return sharedVarToPerms;
+}
+
+bool Sandbox::isAllowedToReadGlobalVar(GlobalVariable* gv) {
+  return sharedVarToPerms.find(gv) != sharedVarToPerms.end() && sharedVarToPerms[gv] & VAR_READ_MASK;
 }
 
 void Sandbox::findSandboxedFunctions() {

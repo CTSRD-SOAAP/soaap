@@ -7,7 +7,7 @@ namespace soaap {
 
   class PrivilegedCallAnalysis : public Analysis {
     public:
-      virtual void doAnalysis(Module& M);
+      virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
     
     private:
       

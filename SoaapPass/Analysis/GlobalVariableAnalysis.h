@@ -7,10 +7,11 @@ namespace soaap {
 
   class GlobalVariableAnalysis : public Analysis {
     public:
-      virtual void doAnalysis(Module& M);
+      GlobalVariableAnalysis(FunctionVector& privMethods) : privilegedMethods(privMethods) { }
+      virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
     
     private:
-      
+      FunctionVector privilegedMethods;
   };
 
 }
