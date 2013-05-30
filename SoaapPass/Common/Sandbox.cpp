@@ -26,6 +26,10 @@ FunctionVector Sandbox::getFunctions() {
   return functions;
 }
 
+GlobalVariableIntMap Sandbox::getVariablePermissions() {
+  return sharedVarToPerms;
+}
+
 void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* node = CG->getOrInsertFunction(entryPoint);

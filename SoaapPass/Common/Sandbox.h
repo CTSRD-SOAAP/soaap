@@ -7,12 +7,14 @@
 using namespace llvm;
 
 namespace soaap {
+  typedef map<GlobalVariable*,int> GlobalVariableIntMap;
   class Sandbox {
     public:
       Sandbox(string n, int i, Function* entry, bool p, Module& m);
       int getNameIdx();
       Function* getEntryPoint();
       FunctionVector getFunctions();
+      GlobalVariableIntMap getVariablePermissions();
 
     private:
       Module& module;
@@ -23,7 +25,7 @@ namespace soaap {
       int clearances;
       FunctionVector callgates;
       FunctionVector functions;
-      map<GlobalVariable*,int> sharedVarToPerms;
+      GlobalVariableIntMap sharedVarToPerms;
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
