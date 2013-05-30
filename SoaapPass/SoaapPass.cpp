@@ -60,9 +60,6 @@ namespace soaap {
     static char ID;
     bool emPerf;
 
-//    SmallVector<Instruction*,16> sandboxCreationPoints;
-//    map<Instruction*,int> sandboxCreationPointToName;
-
     SandboxVector sandboxes;
 
     FunctionIntMap sandboxedMethodToOverhead;
@@ -514,31 +511,6 @@ namespace soaap {
       analysis.doAnalysis(M, sandboxes);
     }
 
-    /*
-    void findSandboxCreationPoints(Module& M) {
-      // look for calls to llvm.annotation.i32(NULL,"SOAAP_PERSISTENT_SANDBOX_CREATE",0,0)
-      if (Function* AnnotationFn = M.getFunction("llvm.annotation.i32")) {
-        for (Value::use_iterator I=AnnotationFn->use_begin(), E=AnnotationFn->use_end();
-             (I != E) && isa<CallInst>(*I); I++) {
-          CallInst* Call = cast<CallInst>(*I);
-          // get name of sandbox in 2nd arg
-          if (GlobalVariable* AnnotStrGlobal = dyn_cast<GlobalVariable>(Call->getArgOperand(1)->stripPointerCasts())) {
-            ConstantDataArray* AnnotStrGlobalArr = dyn_cast<ConstantDataArray>(AnnotStrGlobal->getInitializer());
-            StringRef AnnotStr = AnnotStrGlobalArr->getAsCString();
-            if (AnnotStr.startswith(SOAAP_PERSISTENT_SANDBOX_CREATE)) {
-              // sandbox-creation point
-              StringRef sandboxName = AnnotStr.substr(strlen(SOAAP_PERSISTENT_SANDBOX_CREATE)+1);
-              outs() << "      Sandbox name: " << sandboxName << "\n";
-              SandboxUtils::assignBitIdxToSandboxName(sandboxName);
-              sandboxCreationPointToName[Call] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
-              sandboxCreationPoints.push_back(Call);
-            }
-          }
-        }
-      }
-    }
-    */
-
     void findPrivilegedAnnotations(Module& M) {
       if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
         ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
@@ -568,72 +540,6 @@ namespace soaap {
      */
     void findSandboxes(Module& M) {
       sandboxes = SandboxUtils::findSandboxes(M);
-//      Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)",
-//                                       true);
-//      SmallVector<StringRef, 4> matches;
-//
-//      /*
-//       * Function annotations are added to the global intrinsic array
-//       * called llvm.global.annotations:
-//       *
-//       * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
-//       * @.str5 = private unnamed_addr constant [8 x i8] c"sandbox_persistent\00", section "llvm.metadata"
-//       *
-//       * @llvm.global.annotations = appending global [1 x { i8*, i8*, i8*, i32 }]
-//       *
-//       * [{ i8*, i8*, i8*, i32 }
-//       *  { i8* bitcast (void (i32, %struct.__sFILE*)* @sandboxed to i8*),  // function
-//       *    i8* getelementptr inbounds ([8 x i8]* @.str5, i32 0, i32 0),  // function annotation
-//       *    i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file
-//       *    i32 5 }]    // line number
-//       */
-//      if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
-//        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
-//        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
-//          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
-//
-//          // get the annotation value first
-//          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-//          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-//          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-//
-//          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-//          if (isa<Function>(annotatedVal)) {
-//            Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
-//            if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
-//              outs() << "   Found persistent sandbox entry-point " << annotatedFunc->getName() << "\n";
-//              persistentSandboxEntryPoints.push_back(annotatedFunc);
-//              allSandboxEntryPoints.push_back(annotatedFunc);
-//              // get name if one was specified
-//              if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
-//                StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
-//                outs() << "      Sandbox name: " << sandboxName << "\n";
-//                SandboxUtils::assignBitIdxToSandboxName(sandboxName);
-//                sandboxEntryPointToName[annotatedFunc] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
-//                DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
-//              }
-//            }
-//            else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
-//              outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
-//              ephemeralSandboxEntryPoints.push_back(annotatedFunc);
-//              allSandboxEntryPoints.push_back(annotatedFunc);
-//            }
-//            else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
-//              int overhead;
-//              cout << "Threshold set to " << matches[1].str() <<
-//                      "%\n";
-//              matches[1].getAsInteger(0, overhead);
-//              sandboxedMethodToOverhead[annotatedFunc] = overhead;
-//            }
-//            else if (annotationStrArrayCString.startswith(CLEARANCE)) {
-//              StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
-//              outs() << "   Sandbox has clearance for \"" << className << "\"\n";
-//              ClassifiedUtils::assignBitIdxToClassName(className);
-//              sandboxedMethodToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
-//            }
-//          }
-//        }
-//      }
     }
 
     void checkPropagationOfSandboxPrivateData(Module& M) {
@@ -986,7 +892,6 @@ namespace soaap {
 						terminateCall->insertBefore(mainLastInst);
 					}
 				}
-
 			}
 		}
 	};
@@ -995,9 +900,8 @@ namespace soaap {
 	static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
 
 	void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  		PM.add(new SoaapPass);
-  	}
+    PM.add(new SoaapPass);
+  }
 
 	RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
-
 }

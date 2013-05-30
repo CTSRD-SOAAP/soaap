@@ -10,7 +10,7 @@ namespace soaap {
   typedef map<GlobalVariable*,int> GlobalVariableIntMap;
   class Sandbox {
     public:
-      Sandbox(string n, int i, Function* entry, bool p, Module& m);
+      Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
       int getNameIdx();
       Function* getEntryPoint();
       FunctionVector getFunctions();
@@ -27,6 +27,7 @@ namespace soaap {
       FunctionVector callgates;
       FunctionVector functions;
       GlobalVariableIntMap sharedVarToPerms;
+      int overhead;
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);

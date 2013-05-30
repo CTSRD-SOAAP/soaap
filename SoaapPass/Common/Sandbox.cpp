@@ -8,8 +8,8 @@
 
 using namespace soaap;
 
-Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m) 
-  : name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m) {
+Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
+  : name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
   findSandboxedFunctions();
   findSharedGlobalVariables();
 }
@@ -119,5 +119,5 @@ void Sandbox::findSharedGlobalVariables() {
       }
     }
   }
-
 }
+

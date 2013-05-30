@@ -1,8 +1,10 @@
+#include "Utils/ClassifiedUtils.h"
 #include "Utils/SandboxUtils.h"
 #include "Utils/LLVMAnalyses.h"
 #include "soaap.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Regex.h"
 #include "llvm/IR/GlobalVariable.h"
 
 using namespace soaap;
@@ -72,9 +74,15 @@ bool SandboxUtils::isSandboxEntryPoint(Module& M, Function* F) {
   return false;
 }
 
-
 SandboxVector SandboxUtils::findSandboxes(Module& M) {
   SandboxVector sandboxes;
+  FunctionIntMap funcToOverhead;
+  FunctionIntMap funcToClearances;
+  map<Function*,string> funcToPersistentSandboxName;
+  FunctionVector ephemeralSandboxes;
+
+  Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)", true);
+  SmallVector<StringRef, 4> matches;
   if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
     ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
     for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
@@ -84,52 +92,68 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
       GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
       ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
       StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-
       GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
       if (isa<Function>(annotatedVal)) {
         Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
         if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
           outs() << "   Found persistent sandbox entry-point " << annotatedFunc->getName() << "\n";
-          
-          //persistentSandboxEntryPoints.push_back(annotatedFunc);
-          //allSandboxEntryPoints.push_back(annotatedFunc);
           // get name if one was specified
           if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
             outs() << "      Sandbox name: " << sandboxName << "\n";
-            int idx = assignBitIdxToSandboxName(sandboxName);
-            sandboxes.push_back(new Sandbox(sandboxName, idx, annotatedFunc, true, M));
-            //sandboxEntryPointToName[annotatedFunc] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
-            //DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
+            if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
+              // TODO: output error that this function is already an entry point for another sandbox
+            }
+            else {
+              funcToPersistentSandboxName[annotatedFunc] = sandboxName;
+            }
           }
         }
         else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
           outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
-          sandboxes.push_back(new Sandbox("", -1, annotatedFunc, false, M));
-          //ephemeralSandboxEntryPoints.push_back(annotatedFunc);
-          //allSandboxEntryPoints.push_back(annotatedFunc);
+          if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
+            // TODO: output error that this function is already an entry point for another sandbox
+          }
+          else {
+            ephemeralSandboxes.push_back(annotatedFunc);
+          }
         }
-        /*
         else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
           int overhead;
-          cout << "Threshold set to " << matches[1].str() <<
+          outs() << "Threshold set to " << matches[1].str() <<
                   "%\n";
           matches[1].getAsInteger(0, overhead);
-          sandboxedMethodToOverhead[annotatedFunc] = overhead;
+          funcToOverhead[annotatedFunc] = overhead;
         }
         else if (annotationStrArrayCString.startswith(CLEARANCE)) {
           StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
           outs() << "   Sandbox has clearance for \"" << className << "\"\n";
           ClassifiedUtils::assignBitIdxToClassName(className);
-          sandboxedMethodToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
+          funcToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
         }
-        */
       }
     }
   }
+
+  // TODO: sanity check overhead and clearanceannotations
+
+  // now combine all annotation information to create Sandbox instances
+  for (map<Function*,string>::iterator I=funcToPersistentSandboxName.begin(), E=funcToPersistentSandboxName.end(); I!=E; I++) {
+    Function* entryPoint = I->first;
+    string sandboxName = I->second;
+    int idx = assignBitIdxToSandboxName(sandboxName);
+    int overhead = funcToOverhead[entryPoint];
+    int clearances = funcToClearances[entryPoint];
+    sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, true, M, overhead, clearances));
+  }
+  for (Function* entryPoint : ephemeralSandboxes) {
+    int overhead = funcToOverhead[entryPoint];
+    int clearances = funcToClearances[entryPoint];
+    sandboxes.push_back(new Sandbox("", -1, entryPoint, false, M, overhead, clearances));
+  }
+
   return sandboxes;
 }
-
 
 FunctionVector SandboxUtils::calculateSandboxedMethods(SandboxVector& sandboxes) {
   FunctionVector sandboxedMethods;
@@ -167,7 +191,7 @@ void SandboxUtils::calculateSandboxedMethodsHelper(CallGraphNode* node, int sand
   }
   */
 
-//      cout << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
+//      outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
   for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
     Value* V = I->first;
     CallGraphNode* calleeNode = I->second;
