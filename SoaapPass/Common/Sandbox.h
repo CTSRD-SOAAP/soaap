@@ -18,14 +18,16 @@ namespace soaap {
       Module& module;
       string name;
       int nameIdx;
-      int clearances;
-      FunctionVector callgates;
       Function* entryPoint;
       bool persistent;
+      int clearances;
+      FunctionVector callgates;
       FunctionVector functions;
-
+      map<GlobalVariable*,int> sharedVarToPerms;
+      
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
+      void findSharedGlobalVariables();
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;
 }
