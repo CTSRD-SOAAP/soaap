@@ -12,6 +12,7 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   : name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
   findSandboxedFunctions();
   findSharedGlobalVariables();
+  findCallgates();
 }
 
 Function* Sandbox::getEntryPoint() {
@@ -115,6 +116,47 @@ void Sandbox::findSharedGlobalVariables() {
             sharedVarToPerms[annotatedVar] |= VAR_WRITE_MASK;
           }
           dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
+        }
+      }
+    }
+  }
+}
+
+void Sandbox::findCallgates() {
+  /*
+   * Callgates are declared using the variadic macro
+   * __callgates(fns...), that passes the functions as arguments
+   * to the function __soaap_declare_callgates_helper:
+   *
+   * #define __soaap_callgates(fns...) \
+   *    void __soaap_declare_callgates() { \
+   *      __soaap_declare_callgates_helper(0, fns); \
+   *    }
+   *
+   * Hence, we must find the "call @__soaap_declare_callgates_helper"
+   * instruction and obtain the list of functions from its arguments
+   */
+  for (Function& F : module.getFunctionList()) {
+    if (F.getName().startswith("__soaap_declare_callgates_helper_")) {
+      DEBUG(dbgs() << "Found __soaap_declare_callgates_helper_\n");
+      StringRef sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
+      dbgs() << "   Sandbox name: " << sandboxName << "\n";
+      if (sandboxName == name) {
+        for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
+          User* user = u.getUse().getUser();
+          if (isa<CallInst>(user)) {
+            CallInst* annotateCallgatesCall = dyn_cast<CallInst>(user);
+            /*
+             * Start at 1 because we skip the first unused argument
+             * (The C language requires that there be at least one
+             * non-variable argument).
+             */
+            for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
+              Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
+              outs() << "   Callgate " << i << " is " << callgate->getName() << "\n";
+              callgates.push_back(callgate);
+            }
+          }
         }
       }
     }

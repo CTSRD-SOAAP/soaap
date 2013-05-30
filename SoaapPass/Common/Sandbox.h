@@ -32,6 +32,7 @@ namespace soaap {
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
       void findSharedGlobalVariables();
+      void findCallgates();
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;
 }
