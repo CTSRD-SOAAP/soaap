@@ -4,6 +4,7 @@
 #include "Common/Typedefs.h"
 #include "Common/Sandbox.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Analysis/CallGraph.h"
 #include <string>
 #include <map>
@@ -19,6 +20,7 @@ namespace soaap {
       static int assignBitIdxToSandboxName(string sandboxName);
       static int getBitIdxFromSandboxName(string sandboxName);
       static string stringifySandboxNames(int sandboxNames);
+      static bool isSandboxEntryPoint(Module& M, Function* F);
     
     private:
       static map<string,int> sandboxNameToBitIdx;

@@ -47,6 +47,32 @@ int SandboxUtils::getBitIdxFromSandboxName(string sandboxName) {
   return sandboxNameToBitIdx[sandboxName];
 }
 
+bool SandboxUtils::isSandboxEntryPoint(Module& M, Function* F) {
+  if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
+    ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+    for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+      ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+      // get the annotation value first
+      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+      StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+
+      GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+      if (isa<Function>(annotatedVal)) {
+        Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
+        if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+          DEBUG(dbgs() << "   Found sandbox entrypoint " << annotatedFunc->getName() << "\n");
+          if (annotatedFunc == F) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+
 SandboxVector SandboxUtils::findSandboxes(Module& M) {
   SandboxVector sandboxes;
   if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
@@ -72,14 +98,14 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
             outs() << "      Sandbox name: " << sandboxName << "\n";
             int idx = assignBitIdxToSandboxName(sandboxName);
-            sandboxes.push_back(new Sandbox(sandboxName, idx, annotatedFunc, true));
+            sandboxes.push_back(new Sandbox(sandboxName, idx, annotatedFunc, true, M));
             //sandboxEntryPointToName[annotatedFunc] = (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
             //DEBUG(dbgs() << "sandboxEntryPointToName[" << annotatedFunc->getName() << "]: " << sandboxEntryPointToName[annotatedFunc] << "\n");
           }
         }
         else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
           outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
-          sandboxes.push_back(new Sandbox("", -1, annotatedFunc, false));
+          sandboxes.push_back(new Sandbox("", -1, annotatedFunc, false, M));
           //ephemeralSandboxEntryPoints.push_back(annotatedFunc);
           //allSandboxEntryPoints.push_back(annotatedFunc);
         }

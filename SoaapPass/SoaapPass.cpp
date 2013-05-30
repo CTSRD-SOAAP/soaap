@@ -96,11 +96,11 @@ namespace soaap {
     }
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-      if (emPerf)
-        return;
-      AU.setPreservesCFG();
-      AU.addRequired<CallGraph>();
-      AU.addRequired<ProfileInfo>();
+      if (!emPerf) {
+        AU.setPreservesCFG();
+        AU.addRequired<CallGraph>();
+        AU.addRequired<ProfileInfo>();
+      }
     }
 
     virtual bool runOnModule(Module& M) {
@@ -111,7 +111,7 @@ namespace soaap {
       ProfileInfo& PI = getAnalysis<ProfileInfo>();
       LLVMAnalyses::setCallGraphAnalysis(&CG);
       LLVMAnalyses::setProfileInfoAnalysis(&PI);
-
+      
       //outs() << "* Adding dynamic call edges to callgraph (if available)\n";
       //loadDynamicCallEdges(M);
 
