@@ -2,6 +2,7 @@
 #define SOAAP_ANALYSIS_PRIVILEGEDCALLANALYSIS_H
 
 #include "Analysis/Analysis.h"
+#include "Common/Typedefs.h"
 
 namespace soaap {
 
@@ -10,7 +11,7 @@ namespace soaap {
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
     
     private:
-      
+      FunctionVector privAnnotFuncs; // function annotated as being privileged
   };
 
 }

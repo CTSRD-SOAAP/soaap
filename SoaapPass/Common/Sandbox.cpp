@@ -19,6 +19,10 @@ Function* Sandbox::getEntryPoint() {
   return entryPoint;
 }
 
+string Sandbox::getName() {
+  return name;
+}
+
 int Sandbox::getNameIdx() {
   return nameIdx;
 }
@@ -33,6 +37,10 @@ GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
 
 bool Sandbox::isAllowedToReadGlobalVar(GlobalVariable* gv) {
   return sharedVarToPerms.find(gv) != sharedVarToPerms.end() && sharedVarToPerms[gv] & VAR_READ_MASK;
+}
+
+FunctionVector Sandbox::getCallgates() {
+  return callgates;
 }
 
 void Sandbox::findSandboxedFunctions() {
@@ -122,6 +130,12 @@ void Sandbox::findSharedGlobalVariables() {
   }
 }
 
+/*
+ * Find those functions that have been declared as being callgates
+ * using the __callgates(...) macro. A callgate is a method whose
+ * execution requires privileges different to those possessed by
+ * the current sandbox.
+ */
 void Sandbox::findCallgates() {
   /*
    * Callgates are declared using the variadic macro

@@ -11,11 +11,13 @@ namespace soaap {
   class Sandbox {
     public:
       Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
+      string getName();
       int getNameIdx();
       Function* getEntryPoint();
       FunctionVector getFunctions();
       GlobalVariableIntMap getGlobalVarPerms();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
+      FunctionVector getCallgates();
 
     private:
       Module& module;
