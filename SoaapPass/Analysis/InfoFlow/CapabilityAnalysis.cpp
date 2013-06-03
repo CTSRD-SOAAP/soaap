@@ -8,7 +8,7 @@
 
 using namespace soaap;
 
-void CapabilityAnalysis::initialise(ValueList& worklist, Module& M) {
+void CapabilityAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
 
   /*
    * Find those file descriptor parameters that are shared with the
@@ -82,7 +82,7 @@ int CapabilityAnalysis::performMeet(int fromVal, int toVal) {
   return fromVal & toVal;
 }
 
-void CapabilityAnalysis::postDataFlowAnalysis(Module& M) {
+void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   validateDescriptorAccesses(M, "read", FD_READ_MASK);
   validateDescriptorAccesses(M, "write", FD_WRITE_MASK);
 }

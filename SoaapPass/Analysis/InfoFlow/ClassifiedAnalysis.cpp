@@ -6,7 +6,7 @@
 
 using namespace soaap;
 
-void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M) {
+void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
 
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
@@ -61,7 +61,7 @@ void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M) {
 
 }
 
-void ClassifiedAnalysis::postDataFlowAnalysis(Module& M) {
+void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // validate that classified data is never accessed inside sandboxed contexts that
   // don't have clearance for its class.
   for (Function* F : sandboxedMethods) {

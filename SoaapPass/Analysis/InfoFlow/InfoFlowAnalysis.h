@@ -24,12 +24,12 @@ namespace soaap {
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
     protected:
       map<const Value*, int> state;
-      virtual void initialise(ValueList& worklist, Module& M) = 0;
+      virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueList&, Module& M);
       virtual int performMeet(int fromVal, int toVal);
       virtual bool propagateToValue(const Value* from, const Value* to, Module& M);
       virtual void propagateToCallee(const CallInst* CI, const Function* callee, ValueList& worklist, const Value* V, Module& M);
-      virtual void postDataFlowAnalysis(Module& M) = 0;
+      virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
   };
 
 }

@@ -14,8 +14,8 @@ namespace soaap {
                          FunctionIntMap& sboxMethodToClearances)
                          : sandboxedMethods(sboxMethods), 
                            sandboxedMethodToClearances(sboxMethodToClearances) { }
-      virtual void initialise(ValueList& worklist, Module& M);
-      virtual void postDataFlowAnalysis(Module& M);
+      virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes);
+      virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
 
     private:
       FunctionVector sandboxedMethods;

@@ -6,7 +6,7 @@
 
 using namespace soaap;
 
-void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M) {
+void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
     for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
@@ -85,7 +85,7 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M) {
 
 }
 
-void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M) {
+void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // validate that sandbox-private data is never accessed in other sandboxed contexts
   for (Function* F : allReachableMethods) {
     DEBUG(dbgs() << "Function: " << F->getName());

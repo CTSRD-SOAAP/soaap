@@ -8,7 +8,7 @@
 
 using namespace soaap;
 
-void AccessOriginAnalysis::initialise(ValueList& worklist, Module& M) {
+void AccessOriginAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
   for (Function* F : sandboxEntryPoints) {
     // find calls of F, if F actually returns something!
     if (!F->getReturnType()->isVoidTy()) {
@@ -23,7 +23,7 @@ void AccessOriginAnalysis::initialise(ValueList& worklist, Module& M) {
   }
 }
 
-void AccessOriginAnalysis::postDataFlowAnalysis(Module& M) {
+void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // check that no untrusted function pointers are called in privileged methods
   for (Function* F : privilegedMethods) {
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {

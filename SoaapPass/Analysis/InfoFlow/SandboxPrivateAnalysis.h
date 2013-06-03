@@ -16,8 +16,8 @@ namespace soaap {
                              : privilegedMethods(privMethods), sandboxedMethods(sboxMethods), 
                                allReachableMethods(allMethods), callgates(cgates), 
                                sandboxedMethodToNames(sboxMethodToNames) { }
-      virtual void initialise(ValueList& worklist, Module& M);
-      virtual void postDataFlowAnalysis(Module& M);
+      virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes);
+      virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
 
     private:
       FunctionVector privilegedMethods;

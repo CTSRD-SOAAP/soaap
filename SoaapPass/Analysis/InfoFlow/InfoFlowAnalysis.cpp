@@ -10,9 +10,9 @@ using namespace llvm;
 
 void InfoFlowAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   ValueList worklist;
-  initialise(worklist, M);
+  initialise(worklist, M, sandboxes);
   performDataFlowAnalysis(worklist, M);
-  postDataFlowAnalysis(M);
+  postDataFlowAnalysis(M, sandboxes);
 }
 
 void InfoFlowAnalysis::performDataFlowAnalysis(ValueList& worklist, Module& M) {
