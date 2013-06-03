@@ -31,6 +31,7 @@
 #include "Common/Typedefs.h"
 #include "Common/Sandbox.h"
 #include "Analysis/GlobalVariableAnalysis.h"
+#include "Analysis/VulnerabilityAnalysis.h"
 #include "Analysis/PrivilegedCallAnalysis.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
@@ -77,13 +78,8 @@ namespace soaap {
     // classification stuff
     map<Function*,int> sandboxedMethodToClearances;
 
-    // past-vulnerability stuff
-    SmallVector<CallInst*,16> pastVulnAnnotatedPoints;
-    FunctionVector pastVulnAnnotatedFuncs;
-    map<Function*,string> pastVulnAnnotatedFuncToCVE;
-    
     // provenance
-    SmallVector<StringRef,16> vulnerableVendors;
+    StringVector vulnerableVendors;
 
     SoaapPass() : ModulePass(ID) {
       emPerf = false;
@@ -114,12 +110,6 @@ namespace soaap {
 
       outs() << "* Finding sandboxes\n";
       findSandboxes(M);
-
-      outs() << "* Finding past vulnerability annotations\n";
-      findPastVulnerabilityAnnotations(M);
-
-      outs() << "* Finding code provenanace annotations\n";
-      findCodeProvenanaceAnnotations(M);
 
       if (emPerf) {
         instrumentPerfEmul(M);
@@ -181,205 +171,14 @@ namespace soaap {
       }
     }
 
-    void findCodeProvenanaceAnnotations(Module& M) {
-      // provenance is recorded in compilation units with a variable called
-      // __soaap_provenance_var. This variable has hidden visibility so that
-      // the linker doesn't complain when linking multiple compilation units
-      // together.
-      string provenanceVarBaseName = "__soaap_provenance";
-      SmallVector<DICompileUnit,16> CUs;
-      if (NamedMDNode* CUMDNodes = M.getNamedMetadata("llvm.dbg.cu")) {
-        for(unsigned i = 0, e = CUMDNodes->getNumOperands(); i != e; i++) {
-          MDNode* CUMDNode = CUMDNodes->getOperand(i);
-          DICompileUnit CU(CUMDNode);
-          CUs.push_back(CU);
-        }
-      }
-
-      // each __soaap_provenance global var is defined in exactly one CU,
-      // so remove a CU from CUs once it has be attributed to a var
-      for (GlobalVariable& G : M.getGlobalList()) {
-        if (G.getName().startswith(provenanceVarBaseName)) {
-          dbgs() << "Found global variable " << G.getName() << "\n";
-          GlobalVariable* provenanceStrVar = dyn_cast<GlobalVariable>(G.getInitializer()->stripPointerCasts());
-          ConstantDataArray* provenanceArr = dyn_cast<ConstantDataArray>(provenanceStrVar->getInitializer());
-          StringRef provenanceStr = provenanceArr->getAsCString(); // getAsString adds '\0' as an additional character
-          dbgs() << "  Provenance: " << provenanceStr << "\n";
-
-          if (find(vulnerableVendors.begin(), vulnerableVendors.end(), provenanceStr) != vulnerableVendors.end()) {
-            outs() << "   " << provenanceStr << " is a vulnerable vendor\n";
-            // Find out what the containing compilation unit and all its functions
-            for(unsigned i = 0, ei = CUs.size(); i != ei; i++) {
-              DICompileUnit CU = CUs[i];
-              DIArray CUGlobals = CU.getGlobalVariables();
-              for (unsigned j = 0, ej = CUGlobals.getNumElements(); j != ej; j++) {
-                DIGlobalVariable CUGlobal = static_cast<DIGlobalVariable>(CUGlobals.getElement(j));
-                if (CUGlobal.getGlobal() == &G) {
-                  outs() << "    Found containing compile unit for " << G.getName() << ", list functions:\n";
-                  DIArray CUSubs = CU.getSubprograms();
-                  for (unsigned k = 0, ek = CUSubs.getNumElements(); k != ek; k++) {
-                    DISubprogram CUSub = static_cast<DISubprogram>(CUSubs.getElement(k));
-                    if (Function* CUFunc = CUSub.getFunction()) {
-                      outs() << "      " << CUFunc->getName() << "()\n";
-                      // record that CUFunc is vulnerable
-                      if (find(pastVulnAnnotatedFuncs.begin(), pastVulnAnnotatedFuncs.end(), CUFunc) == pastVulnAnnotatedFuncs.end()) {
-                        pastVulnAnnotatedFuncs.push_back(CUFunc);
-                      }
-                    }
-                  }
-                  CUs.erase(CUs.begin()+i); // remove CU from CUs
-                  goto outerloop;
-                }
-              }
-            }
-            outerloop:
-            ;
-          }
-        }
-      }
-    }
-
-    void findPastVulnerabilityAnnotations(Module& M) {
-      // Find all annotated code blocks. Note, we do this by inserting calls to 
-      // the function __soaap_past_vulnerability_at_point. This function is declared
-      // static to avoid linking problems when linking multiple modules. However,
-      // as a result of this, a number may be appended to its name to make unique.
-      // We therefore have to search through all the functions in M and find those
-      // that start with __soaap_past_vulnerability_at_point
-      string pastVulnFuncBaseName = "__soaap_past_vulnerability_at_point";
-      for (Function& F : M.getFunctionList()) {
-        if (F.getName().startswith(pastVulnFuncBaseName)) {
-          dbgs() << "   Found " << F.getName() << " function\n";
-          for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
-            if (CallInst* call = dyn_cast<CallInst>(u.getUse().getUser())) {
-              //call->dump();
-              pastVulnAnnotatedPoints.push_back(call);
-            }
-          }
-        }
-      }
-
-      // Find all annotated functions
-      GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations");
-      if (lga != NULL) {
-        ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
-        for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
-          ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
-
-          // get the annotation value first
-          GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-          ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-          StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-
-          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-          if (isa<Function>(annotatedVal)) {
-            Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
-            if (annotationStrArrayCString.startswith(PAST_VULNERABILITY)) {
-              dbgs() << "   Found annotated function " << annotatedFunc->getName() << "\n";
-              pastVulnAnnotatedFuncs.push_back(annotatedFunc);
-              pastVulnAnnotatedFuncToCVE[annotatedFunc] = annotationStrArrayCString.substr(strlen(PAST_VULNERABILITY)+1);
-            }
-          }
-        }
-      }
-    }
-
     void checkPrivilegedCalls(Module& M) {
       PrivilegedCallAnalysis analysis;
       analysis.doAnalysis(M, sandboxes);
     }
 
     void checkLeakedRights(Module& M) {
-      for (CallInst* C : pastVulnAnnotatedPoints) {
-        // for each vulnerability, find out whether it is in a sandbox or not 
-        // and what the leaked rights are
-        /*dbgs() << "   past vuln annot point: ";
-        C->dump();*/
-        Function* F = C->getParent()->getParent();
-        if (GlobalVariable* CVEGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(0)->stripPointerCasts())) {
-          ConstantDataArray* CVEGlobalArr = dyn_cast<ConstantDataArray>(CVEGlobal->getInitializer());
-          StringRef CVE = CVEGlobalArr->getAsCString();
-          DEBUG(dbgs() << "Enclosing function is " << F->getName() << "\n");
-
-          if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
-            outs() << "\n";
-            outs() << " *** Sandboxed function \"" << F->getName() << "\" has a past-vulnerability annotation for \"" << CVE << "\".\n";
-            outs() << " *** Another vulnerability here would not grant ambient authority to the attacker but would leak the following restricted rights:\n"     ;
-            // F may run in a sandbox
-            // find out what was passed into the sandbox (shared global variables, file descriptors)
-            outs() << "TODO: check leak of global variables\n";
-            /*
-            for (pair<GlobalVariable*,int> varPermPair : varToPerms) {
-              GlobalVariable* G = varPermPair.first;
-              int varPerms = varPermPair.second;
-              StringRef varPermsStr = "";
-              if (varPerms == (VAR_READ_MASK | VAR_WRITE_MASK)) {
-                varPermsStr = "Read and write";
-              }
-              else if (varPerms & VAR_READ_MASK) {
-                varPermsStr = "Read";
-              }
-              else if (varPerms) {
-                varPermsStr = "Write";
-              }
-              if (varPermsStr != "")
-                outs () << " +++ " << varPermsStr << " access to global variable \"" << G->getName() << "\"\n";
-            }
-            */
-            
-            outs() << "TODO: check leaking of capabilities\n";
-            /*
-            for(Function* entryPoint : funcToSandboxEntryPoint[F]) {
-              for (pair<const Value*,int> fdPermPair : fdToPerms) {
-                const Argument* fd = dyn_cast<const Argument>(fdPermPair.first);
-                int perms = fdPermPair.second;
-                for (Function::const_arg_iterator AI=entryPoint->arg_begin(), AE=entryPoint->arg_end(); AI!=AE; AI++) {
-                  if (fd == AI) {
-                    StringRef fdPerms = "";
-                    if (perms == (FD_READ_MASK | FD_WRITE_MASK)) {
-                      fdPerms = "Read and write";
-                    }
-                    else if (perms & FD_READ_MASK) {
-                      fdPerms = "Read";
-                    }
-                    else if (perms) {
-                      fdPerms = "Write";
-                    }
-                    if (fdPerms != "")
-                      outs() << " +++ " << fdPerms << " access to file descriptor \"" << fd->getName() << "\" passed into sandbox entrypoint \"" << entryPoint->getName() << "\"\n";
-                  }
-
-                }
-              }
-            }
-            */
-          }
-          if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
-            // enclosingFunc may run with ambient authority
-            outs() << "\n";
-            outs() << " *** Function \"" << F->getName() << "\" has a past-vulnerability annotation for \"" << CVE << "\".\n";
-            outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
-            outs() << " *** network and file system access.\n"; 
-            outs() << " Possible trace:\n";
-            PrettyPrinters::ppPrivilegedPathToFunction(F, M);
-            outs() << "\n\n";
-          }
-        }
-
-      }
-      for (Function* P : privilegedMethods) {
-        if (find(pastVulnAnnotatedFuncs.begin(), pastVulnAnnotatedFuncs.end(), P) != pastVulnAnnotatedFuncs.end()) {
-          string CVE = pastVulnAnnotatedFuncToCVE[P];
-          // enclosingFunc may run with ambient authority
-          outs() << "\n";
-          outs() << " *** Function " << P->getName() << " has a past-vulnerability annotation for " << CVE << ".\n";
-          outs() << " *** Another vulnerability here would leak ambient authority to the attacker including full\n";
-          outs() << " *** network and file system access.\n"; 
-          outs() << " Possible trace:\n";
-          PrettyPrinters::ppPrivilegedPathToFunction(P, M);
-        }
-      }
-
+      VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors);
+      analysis.doAnalysis(M, sandboxes);
     }
 
     void loadDynamicCallEdges(Module& M) {
@@ -494,27 +293,27 @@ namespace soaap {
       CallGraph& CG = getAnalysis<CallGraph>();
       if (Function* MainFunc = M.getFunction("main")) {
         CallGraphNode* MainNode = CG[MainFunc];
-        calculatePrivilegedMethodsHelper(MainNode);
+        calculatePrivilegedMethodsHelper(M, MainNode);
       }
     }
 
-    void calculatePrivilegedMethodsHelper(CallGraphNode* Node) {
+    void calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* Node) {
       if (Function* F = Node->getFunction()) {
         // if a sandbox entry point, then ignore
-        if (find(allSandboxEntryPoints.begin(), allSandboxEntryPoints.end(), F) != allSandboxEntryPoints.end())
+        if (SandboxUtils::isSandboxEntryPoint(M, F))
           return;
         
         // if already visited this function, then ignore as cycle detected
         if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
           return;
   
-        DEBUG(dbgs() << "Added " << F->getName() << " as privileged method\n");
+        dbgs() << "Added " << F->getName() << " as privileged method\n";
         privilegedMethods.push_back(F);
         allReachableMethods.push_back(F);
   
         // recurse on callees
         for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
-          calculatePrivilegedMethodsHelper(I->second);
+          calculatePrivilegedMethodsHelper(M, I->second);
         }
       }
     }

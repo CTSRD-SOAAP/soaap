@@ -16,6 +16,7 @@ namespace soaap {
   typedef map<Function*,int> FunctionIntMap;
   typedef SmallVector<CallInst*,16> CallInstVector;
   typedef map<const Value*,int> ValueIntMap;
+  typedef SmallVector<string,16> StringVector;
 }
 
 #endif
