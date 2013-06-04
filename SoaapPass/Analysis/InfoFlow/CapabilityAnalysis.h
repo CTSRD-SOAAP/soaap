@@ -12,14 +12,12 @@ namespace soaap {
 
   class CapabilityAnalysis : public InfoFlowAnalysis {
     public:
-      CapabilityAnalysis(FunctionVector& sboxedMethods) : sandboxedMethods(sboxedMethods) { }
       virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual int performMeet(int fromVal, int toVal);
 
     private:
-      FunctionVector sandboxedMethods;
-      void validateDescriptorAccesses(Module& M, string syscall, int requiredPerm);
+      void validateDescriptorAccesses(Module& M, SandboxVector& sandboxes, string syscall, int requiredPerm);
   };
 }
 

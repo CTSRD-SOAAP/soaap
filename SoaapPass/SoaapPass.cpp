@@ -285,7 +285,7 @@ namespace soaap {
     }
 
     void checkFileDescriptors(Module& M) {
-      CapabilityAnalysis analysis(sandboxedMethods);
+      CapabilityAnalysis analysis;
       analysis.doAnalysis(M, sandboxes);
     }
 
