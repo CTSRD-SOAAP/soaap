@@ -262,7 +262,7 @@ namespace soaap {
     }
 
     void checkOriginOfAccesses(Module& M) {
-      AccessOriginAnalysis analysis(allSandboxEntryPoints, privilegedMethods);
+      AccessOriginAnalysis analysis(privilegedMethods);
       analysis.doAnalysis(M, sandboxes);
     }
 

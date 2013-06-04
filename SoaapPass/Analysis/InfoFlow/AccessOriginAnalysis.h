@@ -12,14 +12,12 @@ namespace soaap {
     static const int ORIGIN_SANDBOX = 1;
 
     public:
-      AccessOriginAnalysis(FunctionVector& privileged, FunctionVector& sandboxEntries) :
-            privilegedMethods(privileged), sandboxEntryPoints(sandboxEntries) { }
+      AccessOriginAnalysis(FunctionVector& privileged) : privilegedMethods(privileged) { }
       virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
 
     private:
       FunctionVector privilegedMethods;
-      FunctionVector sandboxEntryPoints;
       CallInstVector untrustedSources;
 
       void ppPrivilegedPathToInstruction(Instruction* I, Module& M);

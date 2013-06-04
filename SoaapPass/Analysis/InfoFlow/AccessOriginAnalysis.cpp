@@ -9,7 +9,8 @@
 using namespace soaap;
 
 void AccessOriginAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
-  for (Function* F : sandboxEntryPoints) {
+  for (Sandbox* S : sandboxes) {
+    Function* F = S->getEntryPoint();
     // find calls of F, if F actually returns something!
     if (!F->getReturnType()->isVoidTy()) {
       for (Value::use_iterator I=F->use_begin(), E=F->use_end(); I!=E; I++) {
