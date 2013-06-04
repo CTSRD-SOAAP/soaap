@@ -43,6 +43,10 @@ FunctionVector Sandbox::getCallgates() {
   return callgates;
 }
 
+int Sandbox::getClearances() {
+  return clearances;
+}
+
 void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* node = CG->getOrInsertFunction(entryPoint);

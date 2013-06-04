@@ -18,6 +18,7 @@ namespace soaap {
       GlobalVariableIntMap getGlobalVarPerms();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
       FunctionVector getCallgates();
+      int getClearances();
 
     private:
       Module& module;

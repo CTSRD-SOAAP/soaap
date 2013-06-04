@@ -280,7 +280,7 @@ namespace soaap {
     }
 
     void checkPropagationOfClassifiedData(Module& M) {
-      ClassifiedAnalysis analysis(sandboxedMethods, sandboxedMethodToClearances);
+      ClassifiedAnalysis analysis;
       analysis.doAnalysis(M, sandboxes);
     }
 

@@ -64,24 +64,28 @@ void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M, SandboxVecto
 void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // validate that classified data is never accessed inside sandboxed contexts that
   // don't have clearance for its class.
-  for (Function* F : sandboxedMethods) {
-    DEBUG(dbgs() << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(sandboxedMethodToClearances[F]) << "\n");
-    for (BasicBlock& BB : F->getBasicBlockList()) {
-      for (Instruction& I : BB.getInstList()) {
-        DEBUG(dbgs() << "   Instruction:\n");
-        DEBUG(I.dump());
-        if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
-          Value* v = load->getPointerOperand();
-          DEBUG(dbgs() << "      Value:\n");
-          DEBUG(v->dump());
-          DEBUG(dbgs() << "      Value classes: " << state[v] << ", " << ClassifiedUtils::stringifyClassNames(state[v]) << "\n");
-          if (!(state[v] == 0 || state[v] == sandboxedMethodToClearances[F] || (state[v] & sandboxedMethodToClearances[F]))) {
-            outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(sandboxedMethodToClearances[F]) << "\n";
-            if (MDNode *N = I.getMetadata("dbg")) {
-              DILocation loc(N);
-              outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+  for (Sandbox* S : sandboxes) {
+    FunctionVector sandboxedFuncs = S->getFunctions();
+    int clearances = S->getClearances();
+    for (Function* F : sandboxedFuncs) {
+      DEBUG(dbgs() << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
+      for (BasicBlock& BB : F->getBasicBlockList()) {
+        for (Instruction& I : BB.getInstList()) {
+          DEBUG(dbgs() << "   Instruction:\n");
+          DEBUG(I.dump());
+          if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+            Value* v = load->getPointerOperand();
+            DEBUG(dbgs() << "      Value:\n");
+            DEBUG(v->dump());
+            DEBUG(dbgs() << "      Value classes: " << state[v] << ", " << ClassifiedUtils::stringifyClassNames(state[v]) << "\n");
+            if (!(state[v] == 0 || (state[v] & clearances) == state[v])) {
+              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
+              if (MDNode *N = I.getMetadata("dbg")) {
+                DILocation loc(N);
+                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+              }
+              outs() << "\n";
             }
-            outs() << "\n";
           }
         }
       }
