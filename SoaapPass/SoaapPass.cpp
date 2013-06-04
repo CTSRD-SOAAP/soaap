@@ -55,12 +55,14 @@ static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
                 "be treated as vulnerable"),
        cl::value_desc("list of vendors"), cl::CommaSeparated);
 
+static cl::opt<bool> ClEmPerf("soaap-emulate-performance",
+       cl::desc("Emulate sandboxing performance"));
+
 namespace soaap {
 
   struct SoaapPass : public ModulePass {
 
     static char ID;
-    bool emPerf;
 
     SandboxVector sandboxes;
 
@@ -74,11 +76,10 @@ namespace soaap {
     StringVector vulnerableVendors;
 
     SoaapPass() : ModulePass(ID) {
-      emPerf = false;
     }
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-      if (!emPerf) {
+      if (!ClEmPerf) { 
         AU.setPreservesCFG();
         AU.addRequired<CallGraph>();
         AU.addRequired<ProfileInfo>();
@@ -103,7 +104,7 @@ namespace soaap {
       outs() << "* Finding sandboxes\n";
       findSandboxes(M);
 
-      if (emPerf) {
+      if (ClEmPerf) {
         instrumentPerfEmul(M);
       }
       else {
