@@ -10,22 +10,14 @@ namespace soaap {
 
   class SandboxPrivateAnalysis : public InfoFlowAnalysis {
     public:
-      SandboxPrivateAnalysis(FunctionVector& privMethods, FunctionVector& sboxMethods, 
-                             FunctionVector& allMethods, FunctionVector& cgates, 
-                             FunctionIntMap& sboxMethodToNames)
-                             : privilegedMethods(privMethods), sandboxedMethods(sboxMethods), 
-                               allReachableMethods(allMethods), callgates(cgates), 
-                               sandboxedMethodToNames(sboxMethodToNames) { }
+      SandboxPrivateAnalysis(FunctionVector& privMethods, FunctionVector& cgates) 
+                             : privilegedMethods(privMethods), callgates(cgates) { } 
       virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
 
     private:
       FunctionVector privilegedMethods;
-      FunctionVector sandboxedMethods;
-      FunctionVector allReachableMethods;
       FunctionVector callgates;
-      FunctionIntMap sandboxedMethodToNames;
-
   };
 }
 #endif 

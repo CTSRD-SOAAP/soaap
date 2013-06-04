@@ -71,7 +71,6 @@ namespace soaap {
     map<Function*,int> sandboxedMethodToNames;
     FunctionVector callgates;
     FunctionVector privilegedMethods;
-    FunctionVector allReachableMethods;
     FunctionVector sandboxedMethods;
     FunctionVector syscallReachableMethods;
 
@@ -275,7 +274,7 @@ namespace soaap {
     }
 
     void checkPropagationOfSandboxPrivateData(Module& M) {
-      SandboxPrivateAnalysis analysis(privilegedMethods, sandboxedMethods, allReachableMethods, callgates, sandboxedMethodToNames);
+      SandboxPrivateAnalysis analysis(privilegedMethods, callgates);
       analysis.doAnalysis(M, sandboxes);
     }
 
@@ -309,7 +308,6 @@ namespace soaap {
   
         dbgs() << "Added " << F->getName() << " as privileged method\n";
         privilegedMethods.push_back(F);
-        allReachableMethods.push_back(F);
   
         // recurse on callees
         for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {

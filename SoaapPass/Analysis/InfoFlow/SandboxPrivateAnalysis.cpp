@@ -87,11 +87,7 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
 
 void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // validate that sandbox-private data is never accessed in other sandboxed contexts
-  for (Function* F : allReachableMethods) {
-    DEBUG(dbgs() << "Function: " << F->getName());
-    if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
-      DEBUG(dbgs() << ", sandbox names: " << SandboxUtils::stringifySandboxNames(sandboxedMethodToNames[F]) << "\n");
-    }
+  for (Function* F : privilegedMethods) {
     for (BasicBlock& BB : F->getBasicBlockList()) {
       for (Instruction& I : BB.getInstList()) {
         DEBUG(dbgs() << "   Instruction:\n");
@@ -102,20 +98,40 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
           DEBUG(dbgs() << "      Value:\n");
           DEBUG(v->dump());
           DEBUG(dbgs() << "      Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
-          if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end()) {
-            if (state[v] != 0) {
-              outs() << " *** Privileged method " << F->getName() << " read data value private to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << "\n";
-              if (MDNode *N = I.getMetadata("dbg")) {
-                DILocation loc(N);
-                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
-              }
-              outs() << "\n";
+          if (state[v] != 0) {
+            outs() << " *** Privileged method " << F->getName() << " read data value private to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << "\n";
+            if (MDNode *N = I.getMetadata("dbg")) {
+              DILocation loc(N);
+              outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
             }
+            outs() << "\n";
           }
-          if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
-            //outs() << " S: " << F->getName() << "\n";
-            if (!(state[v] == 0 || state[v] == sandboxedMethodToNames[F] || (state[v] & sandboxedMethodToNames[F]))) {
-              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(sandboxedMethodToNames[F]) << "\n";
+        }
+      }
+    }
+  }
+
+  // check sandboxes
+  FunctionIntMap sandboxEntryPointToName;
+  for (Sandbox* S : sandboxes) {
+    FunctionVector sandboxedFuncs = S->getFunctions();
+    int name = 1 << S->getNameIdx();
+    Function* entryPoint = S->getEntryPoint();
+    sandboxEntryPointToName[entryPoint] = name;
+    for (Function* F : sandboxedFuncs) {
+      DEBUG(dbgs() << "Function: " << F->getName());
+      for (BasicBlock& BB : F->getBasicBlockList()) {
+        for (Instruction& I : BB.getInstList()) {
+          DEBUG(dbgs() << "   Instruction:\n");
+          DEBUG(I.dump());
+          LoadInst* load2 = dyn_cast<LoadInst>(&I);
+          if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+            Value* v = load->getPointerOperand()->stripPointerCasts();
+            DEBUG(dbgs() << "      Value:\n");
+            DEBUG(v->dump());
+            DEBUG(dbgs() << "      Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
+            if (!(state[v] == 0 || (state[v] & name) == state[v])) {
+              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
                 DILocation loc(N);
                 outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -137,12 +153,12 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   //      (i.e. cross-domain calls).
   //   5) Assignments to environment variables.
   //   6) Arguments to system calls
-  for (Function* F : allReachableMethods) {
-    DEBUG(dbgs() << "Function: " << F->getName());
-    int sandboxNames = sandboxedMethodToNames[F];
-    if (sandboxNames != 0) {
-      DEBUG(dbgs() << ", sandbox names: " << SandboxUtils::stringifySandboxNames(sandboxedMethodToNames[F]) << "\n");
-
+  for (Sandbox* S : sandboxes) {
+    FunctionVector sandboxedFuncs = S->getFunctions();
+    int name = 1 << S->getNameIdx();
+    for (Function* F : sandboxedFuncs) {
+      DEBUG(dbgs() << "Function: " << F->getName());
+      DEBUG(dbgs() << ", sandbox names: " << SandboxUtils::stringifySandboxNames(name) << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
           DEBUG(dbgs() << "   Instruction:\n");
@@ -154,8 +170,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             if (GlobalVariable* gv = dyn_cast<GlobalVariable>(lhs)) {
               Value* rhs = store->getValueOperand();
               // if the rhs is private to the current sandbox, then flag an error
-              if (state[rhs] & sandboxNames) {
-                outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(sandboxNames) << " may leak private data through global variable " << gv->getName() << "\n";
+              if (state[rhs] & name) {
+                outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through global variable " << gv->getName() << "\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
                   outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -171,8 +187,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               if (Callee->getName() == "setenv") {
                 Value* arg = call->getArgOperand(1);
               
-                if (state[arg] & sandboxNames) {
-                  outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(sandboxNames) << " may leak private data through env var ";
+                if (state[arg] & name) {
+                  outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through env var ";
                   if (GlobalVariable* envVarGlobal = dyn_cast<GlobalVariable>(call->getArgOperand(0)->stripPointerCasts())) {
                     ConstantDataArray* envVarArray = dyn_cast<ConstantDataArray>(envVarGlobal->getInitializer());
                     StringRef envVarName = envVarArray->getAsString();
@@ -191,8 +207,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 DEBUG(dbgs() << "Extern callee: " << Callee->getName() << "\n");
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
-                  if (state[arg] & sandboxNames) {
-                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(sandboxNames) << " may leak private data through the extern function " << Callee->getName() << "\n";
+                  if (state[arg] & name) {
+                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through the extern function " << Callee->getName() << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -205,8 +221,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 // cross-domain call to callgate
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
-                  if (state[arg] & sandboxNames) {
-                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(sandboxNames) << " may leak private data through callgate " << Callee->getName() << "\n";
+                  if (state[arg] & name) {
+                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through callgate " << Callee->getName() << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -216,8 +232,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 }
                 outs() << "\n";
               }
-              else if (sandboxedMethodToNames[Callee] != sandboxNames) { // possible cross-sandbox call
-                outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(sandboxNames) << " may leak private data through a cross-sandbox call into: " << SandboxUtils::stringifySandboxNames(sandboxedMethodToNames[Callee]) << "\n";
+              else if (SandboxUtils::isSandboxEntryPoint(M, Callee)) { // possible cross-sandbox call
+                outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through a cross-sandbox call into: " << SandboxUtils::stringifySandboxNames(sandboxEntryPointToName[Callee]) << "\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
                   outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -228,9 +244,6 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
           }
         }
       }
-    }
-    else {
-      DEBUG(dbgs() << "\n");
     }
   }
 }
