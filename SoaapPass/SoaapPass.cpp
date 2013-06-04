@@ -68,14 +68,8 @@ namespace soaap {
     FunctionVector persistentSandboxEntryPoints;
     FunctionVector allSandboxEntryPoints;
 
-    map<Function*,int> sandboxedMethodToNames;
     FunctionVector callgates;
     FunctionVector privilegedMethods;
-    FunctionVector sandboxedMethods;
-    FunctionVector syscallReachableMethods;
-
-    // classification stuff
-    map<Function*,int> sandboxedMethodToClearances;
 
     // provenance
     StringVector vulnerableVendors;
@@ -115,11 +109,6 @@ namespace soaap {
       }
       else {
         // do the checks statically
-
-        outs() << "* Calculating sandboxed methods\n";
-        calculateSandboxedMethods(M);
-        outs() << "   " << sandboxedMethods.size() << " methods found\n";
-
         outs() << "* Calculating privileged methods\n";
         calculatePrivilegedMethods(M);
         
@@ -127,9 +116,6 @@ namespace soaap {
         checkGlobalVariables(M);
 
         outs() << "* Checking file descriptor accesses\n";
-        outs() << "   Calculating syscall-reachable methods\n";
-        calculateSyscallReachableMethods(M);
-        outs() << "   Found " << syscallReachableMethods.size() << " methods\n";
         checkFileDescriptors(M);
 
         outs() << "* Checking propagation of data from sandboxes to privileged components\n";
@@ -201,74 +187,11 @@ namespace soaap {
       }
     }
 
-    void calculateSandboxedMethods(Module& M) {
-      sandboxedMethods = SandboxUtils::calculateSandboxedMethods(sandboxes);
-    }
-
-    /*
-     * Find functions from which system calls are reachable.
-     * This is so that when propagating capabilities through the callgraph
-     * we can prune methods from which system calls are not reachable.
-     * 
-     * pre: calculateSandboxedMethods() has been run
-     */
-    void calculateSyscallReachableMethods(Module& M) {
-      list<Function*> worklist;
-      if (Function* read = M.getFunction("read"))
-        worklist.push_back(read);
-      if (Function* write = M.getFunction("write"))
-        worklist.push_back(write);
-
-      ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>();
-
-      /* process functions in worklist backwards from uses all the way back
-         to outermost sandbox functions */
-      while (!worklist.empty()) {
-        Function* F = worklist.front();
-        worklist.pop_front();
-
-        // prune out functions not reachable from a sandbox
-        if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) == sandboxedMethods.end())
-          continue;
-
-        // prune out functions already visited
-        if (find(syscallReachableMethods.begin(), syscallReachableMethods.end(), F) != syscallReachableMethods.end()) 
-          continue;
-
-        if (!F->isDeclaration()) { // ignore the syscall itself (it will be declaration-only)
-          DEBUG(dbgs() << "Adding " << F->getName() << " to syscallReachableMethods\n");
-          syscallReachableMethods.push_back(F);
-        }
-
-        // Find all functions that call F and add them to the worklist.
-        // Normally we could do this with the use_iterator, however there
-        // may be dynamic edges too.
-        for (Value::use_iterator I = F->use_begin(), E = F->use_end(); I != E; I++) {
-          if (CallInst* C = dyn_cast<CallInst>(*I)) {
-            Function* Caller = C->getParent()->getParent();
-            if (find(worklist.begin(), worklist.end(), Caller) == worklist.end())
-              worklist.push_back(Caller);
-          }
-        }
-        if (PI) {
-          for (const CallInst* C : PI->getDynamicCallers(F)) {
-            Function* Caller = const_cast<Function*>(C->getParent()->getParent());
-            if (find(worklist.begin(), worklist.end(), Caller) == worklist.end())
-              worklist.push_back(Caller);
-          }
-        }
-      }
-    }
-
     void checkOriginOfAccesses(Module& M) {
       AccessOriginAnalysis analysis(privilegedMethods);
       analysis.doAnalysis(M, sandboxes);
     }
 
-    /*
-     * Find functions that are annotated to be executed in persistent and
-     * ephemeral sandboxes
-     */
     void findSandboxes(Module& M) {
       sandboxes = SandboxUtils::findSandboxes(M);
     }
