@@ -68,7 +68,6 @@ namespace soaap {
     FunctionVector persistentSandboxEntryPoints;
     FunctionVector allSandboxEntryPoints;
 
-    FunctionVector callgates;
     FunctionVector privilegedMethods;
 
     // provenance
@@ -197,7 +196,7 @@ namespace soaap {
     }
 
     void checkPropagationOfSandboxPrivateData(Module& M) {
-      SandboxPrivateAnalysis analysis(privilegedMethods, callgates);
+      SandboxPrivateAnalysis analysis(privilegedMethods);
       analysis.doAnalysis(M, sandboxes);
     }
 
@@ -212,31 +211,7 @@ namespace soaap {
     }
 
     void calculatePrivilegedMethods(Module& M) {
-      CallGraph& CG = getAnalysis<CallGraph>();
-      if (Function* MainFunc = M.getFunction("main")) {
-        CallGraphNode* MainNode = CG[MainFunc];
-        calculatePrivilegedMethodsHelper(M, MainNode);
-      }
-    }
-
-    void calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* Node) {
-      if (Function* F = Node->getFunction()) {
-        // if a sandbox entry point, then ignore
-        if (SandboxUtils::isSandboxEntryPoint(M, F))
-          return;
-        
-        // if already visited this function, then ignore as cycle detected
-        if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
-          return;
-  
-        dbgs() << "Added " << F->getName() << " as privileged method\n";
-        privilegedMethods.push_back(F);
-  
-        // recurse on callees
-        for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
-          calculatePrivilegedMethodsHelper(M, I->second);
-        }
-      }
+      privilegedMethods = SandboxUtils::calculatePrivilegedMethods(M);
     }
 
     void checkGlobalVariables(Module& M) {

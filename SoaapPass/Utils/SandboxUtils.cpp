@@ -177,19 +177,6 @@ void SandboxUtils::calculateSandboxedMethodsHelper(CallGraphNode* node, int sand
   }
 
   sandboxedMethods.push_back(F);
-  //allReachableMethods.insert(F);
-  //sandboxedMethodToClearances[F] |= clearances;
-
-  //if (F != entryPoint) {
-    //funcToSandboxEntryPoint[F].push_back(entryPoint);
-  //}
-
-  /*
-  if (sandboxName != 0) {
-    DEBUG(dbgs() << "   Assigning name: " << sandboxName << "\n");
-    sandboxedMethodToNames[F] |= sandboxName;
-  }
-  */
 
 //      outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
   for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
@@ -203,6 +190,36 @@ void SandboxUtils::calculateSandboxedMethodsHelper(CallGraphNode* node, int sand
         entryPoint = calleeFunc;
       }*/
       calculateSandboxedMethodsHelper(calleeNode, sandboxName, entryPoint, sandboxedMethods);
+    }
+  }
+}
+
+FunctionVector SandboxUtils::calculatePrivilegedMethods(Module& M) {
+  FunctionVector privilegedMethods;
+  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  if (Function* MainFunc = M.getFunction("main")) {
+    CallGraphNode* MainNode = (*CG)[MainFunc];
+    calculatePrivilegedMethodsHelper(M, MainNode, privilegedMethods);
+  }
+  return privilegedMethods;
+}
+
+void SandboxUtils::calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* Node, FunctionVector& privilegedMethods) {
+  if (Function* F = Node->getFunction()) {
+    // if a sandbox entry point, then ignore
+    if (isSandboxEntryPoint(M, F))
+      return;
+    
+    // if already visited this function, then ignore as cycle detected
+    if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
+      return;
+
+    dbgs() << "Added " << F->getName() << " as privileged method\n";
+    privilegedMethods.push_back(F);
+
+    // recurse on callees
+    for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
+      calculatePrivilegedMethodsHelper(M, I->second, privilegedMethods);
     }
   }
 }

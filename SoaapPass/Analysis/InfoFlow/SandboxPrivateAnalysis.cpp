@@ -155,6 +155,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   //   6) Arguments to system calls
   for (Sandbox* S : sandboxes) {
     FunctionVector sandboxedFuncs = S->getFunctions();
+    FunctionVector callgates = S->getCallgates();
     int name = 1 << S->getNameIdx();
     for (Function* F : sandboxedFuncs) {
       DEBUG(dbgs() << "Function: " << F->getName());

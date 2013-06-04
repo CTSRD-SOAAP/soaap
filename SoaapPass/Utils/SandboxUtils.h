@@ -21,12 +21,14 @@ namespace soaap {
       static int getBitIdxFromSandboxName(string sandboxName);
       static string stringifySandboxNames(int sandboxNames);
       static bool isSandboxEntryPoint(Module& M, Function* F);
+      static FunctionVector calculatePrivilegedMethods(Module& M);
     
     private:
       static map<string,int> sandboxNameToBitIdx;
       static map<int,string> bitIdxToSandboxName;
       static int nextSandboxNameBitIdx;
       static void calculateSandboxedMethodsHelper(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
+      static void calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* Node, FunctionVector& privilegedMethods);
   };
 }
 
