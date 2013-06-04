@@ -37,6 +37,7 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
+#include "Utils/CallGraphUtils.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
 #include "Utils/ClassifiedUtils.h"
@@ -75,8 +76,7 @@ namespace soaap {
     // provenance
     StringVector vulnerableVendors;
 
-    SoaapPass() : ModulePass(ID) {
-    }
+    SoaapPass() : ModulePass(ID) { }
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       if (!ClEmPerf) { 
@@ -95,8 +95,8 @@ namespace soaap {
       LLVMAnalyses::setCallGraphAnalysis(&CG);
       LLVMAnalyses::setProfileInfoAnalysis(&PI);
       
-      //outs() << "* Adding dynamic call edges to callgraph (if available)\n";
-      //loadDynamicCallEdges(M);
+      outs() << "* Adding dynamic call edges to callgraph (if available)\n";
+      CallGraphUtils::loadDynamicCallGraphEdges(M);
 
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);
@@ -164,27 +164,6 @@ namespace soaap {
     void checkLeakedRights(Module& M) {
       VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors);
       analysis.doAnalysis(M, sandboxes);
-    }
-
-    void loadDynamicCallEdges(Module& M) {
-      if (ProfileInfo* PI = getAnalysisIfAvailable<ProfileInfo>()) {
-        CallGraph& CG = getAnalysis<CallGraph>();
-        for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
-          if (F1->isDeclaration()) continue;
-          for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
-            if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-              C->dump();
-              for (const Function* F2 : PI->getDynamicCallees(C)) {
-                DEBUG(dbgs() << "F2: " << F2->getName() << "\n");
-                CallGraphNode* F1Node = CG.getOrInsertFunction(F1);
-                CallGraphNode* F2Node = CG.getOrInsertFunction(F2);
-                DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
-                F1Node->addCalledFunction(CallSite(C), F2Node);
-              }
-            }
-          }
-        }
-      }
     }
 
     void checkOriginOfAccesses(Module& M) {
