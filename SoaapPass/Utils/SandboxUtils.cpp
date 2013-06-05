@@ -102,7 +102,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
             outs() << "      Sandbox name: " << sandboxName << "\n";
             if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
-              // TODO: output error that this function is already an entry point for another sandbox
+              outs() << "   *** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
             }
             else {
               funcToPersistentSandboxName[annotatedFunc] = sandboxName;
@@ -112,7 +112,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
         else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
           outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
           if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
-            // TODO: output error that this function is already an entry point for another sandbox
+            outs() << "   *** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
           }
           else {
             ephemeralSandboxes.push_back(annotatedFunc);
@@ -135,7 +135,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     }
   }
 
-  // TODO: sanity check overhead and clearanceannotations
+  // TODO: sanity check overhead and clearance annotations
 
   // now combine all annotation information to create Sandbox instances
   for (map<Function*,string>::iterator I=funcToPersistentSandboxName.begin(), E=funcToPersistentSandboxName.end(); I!=E; I++) {
