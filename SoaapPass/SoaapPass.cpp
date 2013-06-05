@@ -1,29 +1,7 @@
 #include "llvm/Pass.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Regex.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/PassManager.h"
-#include "llvm/ADT/ilist.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/Type.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/SmallSet.h"
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/Analysis/CallGraph.h"
-#include "llvm/DebugInfo.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Analysis/ProfileInfo.h"
-#include "llvm/Support/InstIterator.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/CFG.h"
 
 #include "soaap.h"
 
@@ -40,13 +18,6 @@
 #include "Utils/CallGraphUtils.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
-#include "Utils/ClassifiedUtils.h"
-#include "Utils/PrettyPrinters.h"
-
-#include <iostream>
-#include <vector>
-#include <climits>
-#include <functional>
 
 using namespace llvm;
 using namespace std;
@@ -126,17 +97,6 @@ namespace soaap {
         outs() << "* Checking for calls to privileged functions from sandboxes\n";
         checkPrivilegedCalls(M);
       }
-
-      //WORKAROUND: remove calls to llvm.ptr.annotate.p0i8, otherwise LLVM will
-      //            crash when generating object code.
-      if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
-        outs() << "BUG WORKAROUND: Removing calls to intrinisc @llvm.ptr.annotation.p0i8\n";
-        for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-          IntrinsicInst* intrinsicCall = dyn_cast<IntrinsicInst>(u.getUse().getUser());
-          BasicBlock::iterator ii(intrinsicCall);
-          ReplaceInstWithValue(intrinsicCall->getParent()->getInstList(), ii, intrinsicCall->getOperand(0));
-        }   
-      }   
 
       return false;
     }
