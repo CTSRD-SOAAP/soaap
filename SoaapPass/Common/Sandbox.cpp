@@ -47,6 +47,14 @@ int Sandbox::getClearances() {
   return clearances;
 }
 
+int Sandbox::getOverhead() {
+  return overhead;
+}
+
+bool Sandbox::isPersistent() {
+  return persistent;
+}
+
 void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* node = CG->getOrInsertFunction(entryPoint);

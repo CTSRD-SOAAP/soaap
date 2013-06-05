@@ -19,6 +19,8 @@ namespace soaap {
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
       FunctionVector getCallgates();
       int getClearances();
+      int getOverhead();
+      bool isPersistent();
 
     private:
       Module& module;
