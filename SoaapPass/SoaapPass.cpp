@@ -36,6 +36,7 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
+#include "Instrument/PerformanceEmulationInstrumenter.h"
 #include "Utils/CallGraphUtils.h"
 #include "Utils/LLVMAnalyses.h"
 #include "Utils/SandboxUtils.h"
@@ -198,16 +199,18 @@ namespace soaap {
       analysis.doAnalysis(M, sandboxes);
     }
 
-		void instrumentPerfEmul(Module& M) {
-		}
-	};
+    void instrumentPerfEmul(Module& M) {
+      PerformanceEmulationInstrumenter instrumenter;
+      instrumenter.instrument(M, sandboxes);
+    }
+  };
 
-	char SoaapPass::ID = 0;
-	static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
+  char SoaapPass::ID = 0;
+  static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
 
-	void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
+  void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
     PM.add(new SoaapPass);
   }
 
-	RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
+  RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
 }
