@@ -66,14 +66,7 @@ namespace soaap {
     static char ID;
 
     SandboxVector sandboxes;
-
-    FunctionIntMap sandboxedMethodToOverhead;
-    FunctionVector persistentSandboxEntryPoints;
-    FunctionVector allSandboxEntryPoints;
-
     FunctionVector privilegedMethods;
-
-    // provenance
     StringVector vulnerableVendors;
 
     SoaapPass() : ModulePass(ID) { }
