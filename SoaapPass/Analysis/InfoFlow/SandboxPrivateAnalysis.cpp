@@ -146,7 +146,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
 
   // Validate that data cannot leak out of a sandbox.
   // Currently, SOAAP looks for escapement via:
-  //   1) Assignments to global variables.
+  //   1) Assignments to shared global variables.
   //   2) Arguments to functions for which there is no body (due to incomplete call graph).
   //   3) Arguments to functions of callgates.
   //   4) Arguments to functions that are executed in a different sandbox

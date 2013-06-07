@@ -16,6 +16,7 @@ namespace soaap {
       Function* getEntryPoint();
       FunctionVector getFunctions();
       GlobalVariableIntMap getGlobalVarPerms();
+      ValueIntMap getCapabilities();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
       FunctionVector getCallgates();
       int getClearances();
@@ -32,12 +33,14 @@ namespace soaap {
       FunctionVector callgates;
       FunctionVector functions;
       GlobalVariableIntMap sharedVarToPerms;
+      ValueIntMap caps;
       int overhead;
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
       void findSharedGlobalVariables();
       void findCallgates();
+      void findCapabilities();
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;
 }

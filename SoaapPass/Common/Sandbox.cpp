@@ -13,6 +13,7 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   findSandboxedFunctions();
   findSharedGlobalVariables();
   findCallgates();
+  findCapabilities();
 }
 
 Function* Sandbox::getEntryPoint() {
@@ -35,6 +36,10 @@ GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
   return sharedVarToPerms;
 }
 
+ValueIntMap Sandbox::getCapabilities() {
+  return caps;
+}
+
 bool Sandbox::isAllowedToReadGlobalVar(GlobalVariable* gv) {
   return sharedVarToPerms.find(gv) != sharedVarToPerms.end() && sharedVarToPerms[gv] & VAR_READ_MASK;
 }
@@ -54,6 +59,7 @@ int Sandbox::getOverhead() {
 bool Sandbox::isPersistent() {
   return persistent;
 }
+
 
 void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
@@ -189,3 +195,71 @@ void Sandbox::findCallgates() {
   }
 }
 
+void Sandbox::findCapabilities() {
+  /*
+   * Find those file descriptor parameters that are shared with the
+   * sandboxed method.
+   *
+   * These will be annotated parameters that are turned by
+   * Clang/LLVM into calls to the intrinsic function
+   * llvm.var.annotation, with the param as the arg. This is how
+   * local variable annotations are represented in general in LLVM
+   *
+   * A parameter annotation looks like this:
+   * void m(int ifd __fd_read) { ... }
+   *
+   * It is turned into an intrinsic call as follows:
+   *
+   * call void @llvm.var.annotation(
+   *   i8* %ifd.addr1,      // param (llvm creates a local var for the param by appending .addrN to the end of the param name)
+   *   i8* getelementptr inbounds ([8 x i8]* @.str2, i32 0, i32 0),  // annotation
+   *   i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file name
+   *   i32 5)              // line number
+   *
+   * @.str2 = private unnamed_addr constant [8 x i8] c"fd_read\00", section "llvm.metadata"
+   * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
+   */
+   
+  for (BasicBlock& BB : entryPoint->getBasicBlockList()) {
+    for (Instruction& I : BB.getInstList()) {
+      if (CallInst* call = dyn_cast<CallInst>(&I)) {
+        if (Function* callee = call->getCalledFunction()) {
+          if (callee->getName() == "llvm.var.annotation") {
+            Value* annotatedVar = dyn_cast<Value>(call->getOperand(0)->stripPointerCasts());
+
+            GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(call->getOperand(1)->stripPointerCasts());
+            ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+
+            DEBUG(dbgs() << "    annotation: " << annotationStrValCString << "\n");
+
+            /*
+             * Find out the enclosing function and record which
+             * param was annotated. We have to do this because
+             * llvm creates a local var for the param by appending
+             * .addrN to the end of the param name and associates
+             * the annotation with the newly created local var
+             * i.e. see ifd and ifd.addr1 above
+             */
+            Argument* annotatedArg = NULL;
+            for (Argument &arg : entryPoint->getArgumentList()) {
+              if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
+                annotatedArg = &arg;
+              }
+            }
+
+            if (annotatedArg != NULL) {
+              if (annotationStrValCString == FD_READ) {
+                caps[annotatedArg] |= FD_READ_MASK;
+              }
+              else if (annotationStrValCString == FD_WRITE) {
+                caps[annotatedArg] |= FD_WRITE_MASK;
+              }
+              DEBUG(dbgs() << "   found annotated file descriptor " << annotatedArg->getName() << "\n");
+            }
+          }
+        }
+      }
+    }
+  }
+}
