@@ -1,6 +1,6 @@
 #include "Common/Sandbox.h"
-#include "Utils/LLVMAnalyses.h"
-#include "Utils/SandboxUtils.h"
+#include "Util/LLVMAnalyses.h"
+#include "Util/SandboxUtils.h"
 #include "soaap.h"
 
 #include "llvm/Support/Debug.h"

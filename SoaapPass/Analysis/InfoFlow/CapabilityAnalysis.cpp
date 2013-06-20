@@ -2,8 +2,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
-#include "Utils/LLVMAnalyses.h"
-#include "Utils/PrettyPrinters.h"
+#include "Util/LLVMAnalyses.h"
+#include "Util/PrettyPrinters.h"
 #include "soaap.h"
 
 using namespace soaap;

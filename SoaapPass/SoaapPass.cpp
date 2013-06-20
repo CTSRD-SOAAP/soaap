@@ -15,9 +15,9 @@
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
-#include "Utils/CallGraphUtils.h"
-#include "Utils/LLVMAnalyses.h"
-#include "Utils/SandboxUtils.h"
+#include "Util/CallGraphUtils.h"
+#include "Util/LLVMAnalyses.h"
+#include "Util/SandboxUtils.h"
 
 using namespace llvm;
 using namespace std;

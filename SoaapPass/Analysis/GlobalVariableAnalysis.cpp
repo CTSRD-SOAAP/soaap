@@ -1,7 +1,7 @@
 #include "Analysis/GlobalVariableAnalysis.h"
 
 #include "soaap.h"
-#include "Utils/SandboxUtils.h"
+#include "Util/SandboxUtils.h"
 #include "Common/Sandbox.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"

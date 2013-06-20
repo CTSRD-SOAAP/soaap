@@ -1,5 +1,5 @@
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
-#include "Utils/ClassifiedUtils.h"
+#include "Util/ClassifiedUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/DebugInfo.h"
 #include "soaap.h"

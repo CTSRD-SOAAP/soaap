@@ -3,7 +3,7 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"
-#include "Utils/LLVMAnalyses.h"
+#include "Util/LLVMAnalyses.h"
 
 using namespace soaap;
 using namespace llvm;

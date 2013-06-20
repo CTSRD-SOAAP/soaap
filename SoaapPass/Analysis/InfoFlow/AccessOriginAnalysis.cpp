@@ -3,8 +3,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/InstIterator.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
-#include "Utils/LLVMAnalyses.h"
-#include "Utils/PrettyPrinters.h"
+#include "Util/LLVMAnalyses.h"
+#include "Util/PrettyPrinters.h"
 
 using namespace soaap;
 

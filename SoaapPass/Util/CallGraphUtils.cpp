@@ -1,5 +1,5 @@
-#include "Utils/CallGraphUtils.h"
-#include "Utils/LLVMAnalyses.h"
+#include "Util/CallGraphUtils.h"
+#include "Util/LLVMAnalyses.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"

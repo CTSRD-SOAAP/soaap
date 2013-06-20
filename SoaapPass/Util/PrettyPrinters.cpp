@@ -1,5 +1,5 @@
-#include "Utils/PrettyPrinters.h"
-#include "Utils/LLVMAnalyses.h"
+#include "Util/PrettyPrinters.h"
+#include "Util/LLVMAnalyses.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/DebugInfo.h"
 
