@@ -4,9 +4,9 @@
 #define DATA_IN "DATA_IN"
 #define DATA_OUT "DATA_OUT"
 
-#define __data_in __attribute__((annotate(DATA_IN)))
-#define __data_out  __attribute__((annotate(DATA_OUT)))
-#define __sandbox_overhead(A) __attribute((annotate("perf_overhead_(" #A ")")))
+#define __soaap_data_in __attribute__((annotate(DATA_IN)))
+#define __soaap_data_out  __attribute__((annotate(DATA_OUT)))
+#define __soaap_overhead(A) __attribute((annotate("perf_overhead_(" #A ")")))
 
 #include <time.h>
 #include <stdio.h>
