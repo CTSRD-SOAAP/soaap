@@ -87,6 +87,7 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
 
 void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // validate that sandbox-private data is never accessed in other sandboxed contexts
+  /*
   for (Function* F : privilegedMethods) {
     for (BasicBlock& BB : F->getBasicBlockList()) {
       for (Instruction& I : BB.getInstList()) {
@@ -110,6 +111,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
       }
     }
   }
+  */
 
   // check sandboxes
   FunctionIntMap sandboxEntryPointToName;
