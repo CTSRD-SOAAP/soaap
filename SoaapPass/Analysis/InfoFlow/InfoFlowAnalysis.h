@@ -28,7 +28,8 @@ namespace soaap {
       virtual void performDataFlowAnalysis(ValueList&, Module& M);
       virtual int performMeet(int fromVal, int toVal);
       virtual bool propagateToValue(const Value* from, const Value* to, Module& M);
-      virtual void propagateToCallee(const CallInst* CI, const Function* callee, ValueList& worklist, const Value* V, Module& M);
+      virtual void propagateToCallees(const CallInst* CI, const Value* V, ValueList& worklist, Module& M);
+      virtual void propagateToCallers(const ReturnInst* RI, const Value* V, ValueList& worklist, Module& M);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
   };
 

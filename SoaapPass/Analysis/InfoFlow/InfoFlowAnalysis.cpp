@@ -2,7 +2,9 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"
+#include "Util/CallGraphUtils.h"
 #include "Util/LLVMAnalyses.h"
 
 using namespace soaap;
@@ -31,26 +33,17 @@ void InfoFlowAnalysis::performDataFlowAnalysis(ValueList& worklist, Module& M) {
         V2 = SI->getPointerOperand();
       }
       else if (const CallInst* CI = dyn_cast<const CallInst>(*VI)) {
-        // propagate to the callee function's argument
-        // find the index of the use position
-        //outs() << "CALL: ";
-        //CI->dump();
-        //Function* Caller = const_cast<Function*>(CI->getParent()->getParent());
-        //outs() << "CALLER: " << Caller->getName() << "\n";
-        if (Function* callee = CI->getCalledFunction()) {
-          propagateToCallee(CI, callee, worklist, V, M);
+        // propagate to the callee(s)
+        DEBUG(dbgs() << "Call instruction; propagating to callees\n");
+        propagateToCallees(CI, V, worklist, M);
+        continue;
+      }
+      else if (const ReturnInst* RI = dyn_cast<const ReturnInst>(*VI)) {
+        if (Value* RetVal = RI->getReturnValue()) {
+          DEBUG(dbgs() << "Return instruction; propagating to callers\n");
+          DEBUG(RI->dump());
+          propagateToCallers(RI, RetVal, worklist, M);
         }
-        else if (const Value* FP = CI->getCalledValue())  { // dynamic callees
-          ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis();
-          DEBUG(dbgs() << "dynamic call edge propagation\n");
-          DEBUG(CI->dump());
-          list<const Function*> callees = PI->getDynamicCallees(CI);
-          DEBUG(dbgs() << "number of dynamic callees: " << callees.size() << "\n");
-          for (const Function* callee : callees) {
-            DEBUG(dbgs() << "  " << callee->getName() << "\n");
-            propagateToCallee(CI, callee, worklist, V, M);
-          }
-        } 
         continue;
       }
       else {
@@ -79,26 +72,34 @@ bool InfoFlowAnalysis::propagateToValue(const Value* from, const Value* to, Modu
   }
 }
 
-void InfoFlowAnalysis::propagateToCallee(const CallInst* CI, const Function* callee, ValueList& worklist, const Value* V, Module& M) {
-  DEBUG(dbgs() << "Propagating to callee " << callee->getName() << "\n");
-  int idx;
-  for (idx = 0; idx < CI->getNumArgOperands(); idx++) {
-    if (CI->getArgOperand(idx)->stripPointerCasts() == V) {
-    // now find the parameter object. Annoyingly there is no way
-    // of getting the Argument at a particular index, so...
-      for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++) {
-      //outs() << "arg no: " << AI->getArgNo() << "\n";
-        if (AI->getArgNo() == idx) {
-          //outs() << "Pushing arg " << AI->getName() << "\n";
+void InfoFlowAnalysis::propagateToCallees(const CallInst* CI, const Value* V, ValueList& worklist, Module& M) {
+  for (const Function* callee : CallGraphUtils::getCallees(CI, M)) {
+    DEBUG(dbgs() << "Propagating to callee " << callee->getName() << "\n");
+    // NOTE: no way to index a function's list of parameters
+    int argIdx = 0;
+    for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
+      if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
+        if (propagateToValue(V, AI, M)) { // propagate 
           if (find(worklist.begin(), worklist.end(), AI) == worklist.end()) {
             worklist.push_back(AI);
-            propagateToValue(V, AI, M); // propagate 
           }
         }
       }
     }
   }
 }
+
+void InfoFlowAnalysis::propagateToCallers(const ReturnInst* RI, const Value* V, ValueList& worklist, Module& M) {
+  const Function* F = RI->getParent()->getParent();
+  for (const CallInst* C : CallGraphUtils::getCallers(F, M)) {
+    if (propagateToValue(V, C, M)) {
+      if (find(worklist.begin(), worklist.end(), C) == worklist.end()) {
+        worklist.push_back(C);
+      }
+    }
+  }
+}
+
 
 int InfoFlowAnalysis::performMeet(int from, int to) {
   return from | to;
