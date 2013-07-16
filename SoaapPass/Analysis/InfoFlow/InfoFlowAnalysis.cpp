@@ -5,10 +5,12 @@
 #include "llvm/IR/Function.h"
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/DebugUtils.h"
 #include "Util/LLVMAnalyses.h"
 
 using namespace soaap;
 using namespace llvm;
+
 
 void InfoFlowAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   ValueList worklist;
@@ -22,11 +24,11 @@ void InfoFlowAnalysis::performDataFlowAnalysis(ValueList& worklist, Module& M) {
   while (!worklist.empty()) {
     const Value* V = worklist.front();
     worklist.pop_front();
-    DEBUG(outs() << "*** Popped " << V->getName() << "\n");
-    DEBUG(V->dump());
+    DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", value dump: "; V->dump(););
+    DEBUG(dbgs() << INDENT_2 << "Finding uses\n");
     for (Value::const_use_iterator VI=V->use_begin(), VE=V->use_end(); VI != VE; VI++) {
       const Value* V2;
-      DEBUG(VI->dump());
+      DEBUG(dbgs() << INDENT_3 << "Use: "; VI->dump(););
       if (const StoreInst* SI = dyn_cast<const StoreInst>(*VI)) {
         if (V == SI->getPointerOperand()) // to avoid infinite looping
           continue;
@@ -34,14 +36,13 @@ void InfoFlowAnalysis::performDataFlowAnalysis(ValueList& worklist, Module& M) {
       }
       else if (const CallInst* CI = dyn_cast<const CallInst>(*VI)) {
         // propagate to the callee(s)
-        DEBUG(dbgs() << "Call instruction; propagating to callees\n");
+        DEBUG(dbgs() << INDENT_4 << "Call instruction; propagating to callees\n");
         propagateToCallees(CI, V, worklist, M);
         continue;
       }
       else if (const ReturnInst* RI = dyn_cast<const ReturnInst>(*VI)) {
         if (Value* RetVal = RI->getReturnValue()) {
-          DEBUG(dbgs() << "Return instruction; propagating to callers\n");
-          DEBUG(RI->dump());
+          DEBUG(dbgs() << INDENT_4 << "Return instruction; propagating to callers\n");
           propagateToCallers(RI, RetVal, worklist, M);
         }
         continue;
@@ -54,7 +55,7 @@ void InfoFlowAnalysis::performDataFlowAnalysis(ValueList& worklist, Module& M) {
           worklist.push_back(V2);
         }
       }
-      DEBUG(outs() << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
+      DEBUG(dbgs() << INDENT_4 << "Propagating " << V->getName() << " to " << V2->getName() << "\n");
     }
   }
 }
@@ -74,7 +75,7 @@ bool InfoFlowAnalysis::propagateToValue(const Value* from, const Value* to, Modu
 
 void InfoFlowAnalysis::propagateToCallees(const CallInst* CI, const Value* V, ValueList& worklist, Module& M) {
   for (const Function* callee : CallGraphUtils::getCallees(CI, M)) {
-    DEBUG(dbgs() << "Propagating to callee " << callee->getName() << "\n");
+    DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
     // NOTE: no way to index a function's list of parameters
     int argIdx = 0;
     for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
@@ -92,6 +93,7 @@ void InfoFlowAnalysis::propagateToCallees(const CallInst* CI, const Value* V, Va
 void InfoFlowAnalysis::propagateToCallers(const ReturnInst* RI, const Value* V, ValueList& worklist, Module& M) {
   const Function* F = RI->getParent()->getParent();
   for (const CallInst* C : CallGraphUtils::getCallers(F, M)) {
+    DEBUG(dbgs() << INDENT_5 << "Propagating to caller "; C->dump(););
     if (propagateToValue(V, C, M)) {
       if (find(worklist.begin(), worklist.end(), C) == worklist.end()) {
         worklist.push_back(C);

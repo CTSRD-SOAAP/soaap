@@ -5,7 +5,7 @@ SOAAP_INCLUDE_PATH=/home/kg365/workspace/soaap/include
 LLVM_BUILD_DIR=/home/kg365/pool/llvm
 
 .bc.soaap:
-	opt -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap -o /dev/null ${.IMPSRC}
+	opt ${SOAAP_FLAGS} -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap -o /dev/null ${.IMPSRC}
 
 .c.bc:
 	clang -c -g -I $(SOAAP_INCLUDE_PATH) -emit-llvm -o ${.TARGET} ${.IMPSRC}

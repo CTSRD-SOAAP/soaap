@@ -1,4 +1,5 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
+#include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/DebugInfo.h"
@@ -24,8 +25,7 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           SandboxUtils::assignBitIdxToSandboxName(sandboxName);
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
-          DEBUG(dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n");
-        
+          DEBUG(dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
           worklist.push_back(annotatedVar);
           state[annotateCall] |= (1 << bitIdx);
         }
@@ -48,8 +48,7 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           SandboxUtils::assignBitIdxToSandboxName(sandboxName);
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
-          DEBUG(dbgs() << "   Sandbox-private annotation " << annotationStrValCString << " found:\n");
-          DEBUG(annotatedVar->dump());
+          DEBUG(dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
           worklist.push_back(annotatedVar);
           state[annotatedVar] |= (1 << bitIdx);
         }
@@ -74,7 +73,7 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
           if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
-            DEBUG(dbgs() << "    Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
+            DEBUG(dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
             SandboxUtils::assignBitIdxToSandboxName(sandboxName);
             state[annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
           }
@@ -121,17 +120,15 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
     Function* entryPoint = S->getEntryPoint();
     sandboxEntryPointToName[entryPoint] = name;
     for (Function* F : sandboxedFuncs) {
-      DEBUG(dbgs() << "Function: " << F->getName());
+      DEBUG(dbgs() << INDENT_1 << "Function: " << F->getName() << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
-          DEBUG(dbgs() << "   Instruction:\n");
-          DEBUG(I.dump());
+          DEBUG(dbgs() << INDENT_2 << "Instruction: "; I.dump(););
           LoadInst* load2 = dyn_cast<LoadInst>(&I);
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand()->stripPointerCasts();
-            DEBUG(dbgs() << "      Value:\n");
-            DEBUG(v->dump());
-            DEBUG(dbgs() << "      Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
+            DEBUG(dbgs() << INDENT_3 << "Value: "; v->dump(););
+            DEBUG(dbgs() << INDENT_3 << "Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
             if (!(state[v] == 0 || (state[v] & name) == state[v])) {
               outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
@@ -160,12 +157,11 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
     FunctionVector callgates = S->getCallgates();
     int name = 1 << S->getNameIdx();
     for (Function* F : sandboxedFuncs) {
-      DEBUG(dbgs() << "Function: " << F->getName());
+      DEBUG(dbgs() << INDENT_1 << "Function: " << F->getName());
       DEBUG(dbgs() << ", sandbox names: " << SandboxUtils::stringifySandboxNames(name) << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
-          DEBUG(dbgs() << "   Instruction:\n");
-          DEBUG(I.dump());
+          DEBUG(dbgs() << INDENT_2 << "Instruction: "; I.dump(););
           // if assignment to a global variable, then check taint of value
           // being assigned
           if (StoreInst* store = dyn_cast<StoreInst>(&I)) {

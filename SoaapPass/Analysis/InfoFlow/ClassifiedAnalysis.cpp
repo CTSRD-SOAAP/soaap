@@ -1,5 +1,6 @@
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Util/ClassifiedUtils.h"
+#include "Util/DebugUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/DebugInfo.h"
 #include "soaap.h"
@@ -25,7 +26,7 @@ void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M, SandboxVecto
           ClassifiedUtils::assignBitIdxToClassName(className);
           int bitIdx = ClassifiedUtils::getBitIdxFromClassName(className);
         
-          dbgs() << "   Classification annotation " << annotationStrValCString << " found:\n";
+          dbgs() << INDENT_1 << "Classification annotation " << annotationStrValCString << " found:\n";
         
           worklist.push_back(annotatedVar);
           state[annotatedVar] |= (1 << bitIdx);
@@ -68,16 +69,14 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
     FunctionVector sandboxedFuncs = S->getFunctions();
     int clearances = S->getClearances();
     for (Function* F : sandboxedFuncs) {
-      DEBUG(dbgs() << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
+      DEBUG(dbgs() << INDENT_1 << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
-          DEBUG(dbgs() << "   Instruction:\n");
-          DEBUG(I.dump());
+          DEBUG(dbgs() << INDENT_2 << "Instruction: "; I.dump(););
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand();
-            DEBUG(dbgs() << "      Value:\n");
-            DEBUG(v->dump());
-            DEBUG(dbgs() << "      Value classes: " << state[v] << ", " << ClassifiedUtils::stringifyClassNames(state[v]) << "\n");
+            DEBUG(dbgs() << INDENT_3 << "Value dump: "; v->dump(););
+            DEBUG(dbgs() << INDENT_3 << "Value classes: " << state[v] << ", " << ClassifiedUtils::stringifyClassNames(state[v]) << "\n");
             if (!(state[v] == 0 || (state[v] & clearances) == state[v])) {
               outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
