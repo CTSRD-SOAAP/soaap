@@ -22,7 +22,6 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
         
         if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
-          SandboxUtils::assignBitIdxToSandboxName(sandboxName);
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
           DEBUG(dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
@@ -45,7 +44,6 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
         StringRef annotationStrValCString = annotationStrValArray->getAsCString();
         if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
-          SandboxUtils::assignBitIdxToSandboxName(sandboxName);
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
           DEBUG(dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
@@ -74,7 +72,6 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
             DEBUG(dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
-            SandboxUtils::assignBitIdxToSandboxName(sandboxName);
             state[annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
           }
         }
@@ -151,7 +148,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   //   4) Arguments to functions that are executed in a different sandbox
   //      (i.e. cross-domain calls).
   //   5) Assignments to environment variables.
-  //   6) Arguments to system calls
+  //   6) Arguments to system calls.
+  //   7) Return from the sandbox entrypoint.
   for (Sandbox* S : sandboxes) {
     FunctionVector sandboxedFuncs = S->getFunctions();
     FunctionVector callgates = S->getCallgates();
@@ -238,6 +236,16 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
                 }
                 outs() << "\n";
+              }
+            }
+          }
+          else if (ReturnInst* ret = dyn_cast<ReturnInst>(&I)) {
+            // we are returning from the sandbox entrypoint function
+            if (F == S->getEntryPoint()) {
+              if (Value* retVal = ret->getReturnValue()) {
+                if (state[retVal] & name) {
+                  outs() << " *** Sandbox \"" << S->getName() << "\" may leak private data when returning a value from entrypoint \"" << F->getName() << "\"\n"; 
+                }
               }
             }
           }
