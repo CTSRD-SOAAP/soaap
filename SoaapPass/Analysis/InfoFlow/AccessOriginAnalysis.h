@@ -13,7 +13,7 @@ namespace soaap {
 
     public:
       AccessOriginAnalysis(FunctionVector& privileged) : privilegedMethods(privileged) { }
-      virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes);
+      virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
 
     private:

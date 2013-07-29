@@ -1,4 +1,5 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
+#include "Util/ContextUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -7,7 +8,7 @@
 
 using namespace soaap;
 
-void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
+void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
     for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
@@ -25,8 +26,11 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
           DEBUG(dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
-          worklist.push_back(annotatedVar);
-          state[annotateCall] |= (1 << bitIdx);
+          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), sandboxes, M);
+          for (Context* C : Cs) {
+            addToWorklist(annotateCall, C, worklist);
+            state[C][annotateCall] |= (1 << bitIdx);
+          }
         }
       }
     }
@@ -47,8 +51,11 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
           DEBUG(dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
-          worklist.push_back(annotatedVar);
-          state[annotatedVar] |= (1 << bitIdx);
+          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), sandboxes, M); 
+          for (Context* C : Cs) {
+            state[C][annotatedVar] |= (1 << bitIdx);
+            addToWorklist(annotatedVar, C, worklist);
+          }
         }
       }
     }
@@ -72,7 +79,8 @@ void SandboxPrivateAnalysis::initialise(ValueList& worklist, Module& M, SandboxV
           if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
             DEBUG(dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
-            state[annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
+            state[NO_CONTEXT][annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
+            addToWorklist(annotatedVar, NO_CONTEXT, worklist);
           }
         }
       }
@@ -125,9 +133,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand()->stripPointerCasts();
             DEBUG(dbgs() << INDENT_3 << "Value: "; v->dump(););
-            DEBUG(dbgs() << INDENT_3 << "Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
-            if (!(state[v] == 0 || (state[v] & name) == state[v])) {
-              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << "\n";
+            DEBUG(dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
+            if (!(state[S][v] == 0 || (state[S][v] & name) == state[S][v])) {
+              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[S][v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
                 DILocation loc(N);
                 outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -167,7 +175,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             if (GlobalVariable* gv = dyn_cast<GlobalVariable>(lhs)) {
               Value* rhs = store->getValueOperand();
               // if the rhs is private to the current sandbox, then flag an error
-              if (state[rhs] & name) {
+              if (state[S][rhs] & name) {
                 outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through global variable " << gv->getName() << "\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
@@ -184,7 +192,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               if (Callee->getName() == "setenv") {
                 Value* arg = call->getArgOperand(1);
               
-                if (state[arg] & name) {
+                if (state[S][arg] & name) {
                   outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through env var ";
                   if (GlobalVariable* envVarGlobal = dyn_cast<GlobalVariable>(call->getArgOperand(0)->stripPointerCasts())) {
                     ConstantDataArray* envVarArray = dyn_cast<ConstantDataArray>(envVarGlobal->getInitializer());
@@ -204,7 +212,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 DEBUG(dbgs() << "Extern callee: " << Callee->getName() << "\n");
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
-                  if (state[arg] & name) {
+                  if (state[S][arg] & name) {
                     outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through the extern function " << Callee->getName() << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
@@ -218,7 +226,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 // cross-domain call to callgate
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
-                  if (state[arg] & name) {
+                  if (state[S][arg] & name) {
                     outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through callgate " << Callee->getName() << "\n";
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
@@ -243,7 +251,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             // we are returning from the sandbox entrypoint function
             if (F == S->getEntryPoint()) {
               if (Value* retVal = ret->getReturnValue()) {
-                if (state[retVal] & name) {
+                if (state[S][retVal] & name) {
                   outs() << " *** Sandbox \"" << S->getName() << "\" may leak private data when returning a value from entrypoint \"" << F->getName() << "\"\n"; 
                 }
               }

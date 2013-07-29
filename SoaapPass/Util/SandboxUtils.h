@@ -16,19 +16,23 @@ namespace soaap {
   class SandboxUtils {
     public:
       static SandboxVector findSandboxes(Module& M);
-      static FunctionVector calculateSandboxedMethods(SandboxVector& sandboxes);
+      static FunctionVector getSandboxedMethods(SandboxVector& sandboxes);
       static int assignBitIdxToSandboxName(string sandboxName);
       static int getBitIdxFromSandboxName(string sandboxName);
       static string stringifySandboxNames(int sandboxNames);
       static bool isSandboxEntryPoint(Module& M, Function* F);
-      static FunctionVector calculatePrivilegedMethods(Module& M);
+      static FunctionVector getPrivilegedMethods(Module& M);
+      static bool isPrivilegedMethod(Function* F, Module& M);
+      static Sandbox* getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes);
+      static SandboxVector getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes);
     
     private:
       static map<string,int> sandboxNameToBitIdx;
       static map<int,string> bitIdxToSandboxName;
       static int nextSandboxNameBitIdx;
-      static void calculateSandboxedMethodsHelper(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
-      static void calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* Node, FunctionVector& privilegedMethods);
+      static FunctionVector privilegedMethods;
+      static void calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
+      static void calculatePrivilegedMethods(Module& M, CallGraphNode* Node);
   };
 }
 

@@ -17,20 +17,27 @@ using namespace std;
 using namespace llvm;
 
 namespace soaap {
-  typedef list<const Value*> ValueList;
+  typedef pair<const Value*, Context*> ValueContextPair;
+  typedef list<ValueContextPair> ValueContextPairList;
+  typedef map<const Value*, int> DataflowFacts;
 
   class InfoFlowAnalysis : public Analysis {
     public:
+      // There are three types of context: no context, privileged context and sandbox
+      static Context* const NO_CONTEXT;
+      static Context* const PRIV_CONTEXT;
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
+
     protected:
-      map<const Value*, int> state;
-      virtual void initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) = 0;
-      virtual void performDataFlowAnalysis(ValueList&, Module& M);
+      map<Context*, DataflowFacts> state;
+      virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
+      virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
       virtual int performMeet(int fromVal, int toVal);
-      virtual bool propagateToValue(const Value* from, const Value* to, Module& M);
-      virtual void propagateToCallees(const CallInst* CI, const Value* V, ValueList& worklist, Module& M);
-      virtual void propagateToCallers(const ReturnInst* RI, const Value* V, ValueList& worklist, Module& M);
+      virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
+      virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
+      virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
+      virtual void addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist);
   };
 
 }

@@ -144,7 +144,7 @@ namespace soaap {
     }
 
     void calculatePrivilegedMethods(Module& M) {
-      privilegedMethods = SandboxUtils::calculatePrivilegedMethods(M);
+      privilegedMethods = SandboxUtils::getPrivilegedMethods(M);
     }
 
     void checkGlobalVariables(Module& M) {

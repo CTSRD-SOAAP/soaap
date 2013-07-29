@@ -13,6 +13,7 @@ using namespace llvm;
 int SandboxUtils::nextSandboxNameBitIdx = 0;
 map<string,int> SandboxUtils::sandboxNameToBitIdx;
 map<int,string> SandboxUtils::bitIdxToSandboxName;
+FunctionVector SandboxUtils::privilegedMethods;
 
 string SandboxUtils::stringifySandboxNames(int sandboxNames) {
   string sandboxNamesStr = "[";
@@ -155,19 +156,19 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   return sandboxes;
 }
 
-FunctionVector SandboxUtils::calculateSandboxedMethods(SandboxVector& sandboxes) {
+FunctionVector SandboxUtils::getSandboxedMethods(SandboxVector& sandboxes) {
   FunctionVector sandboxedMethods;
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Sandbox* S : sandboxes) {
     Function* F = S->getEntryPoint();
     CallGraphNode* Node = CG->getOrInsertFunction(F);
     int sandboxName = S->getNameIdx();
-    calculateSandboxedMethodsHelper(Node, sandboxName, F, sandboxedMethods);
+    calculateSandboxedMethods(Node, sandboxName, F, sandboxedMethods);
   }
   return sandboxedMethods;
 }
 
-void SandboxUtils::calculateSandboxedMethodsHelper(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods) {
+void SandboxUtils::calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods) {
   Function* F = node->getFunction();
   DEBUG(dbgs() << "Visiting " << F->getName() << "\n");
    
@@ -189,22 +190,23 @@ void SandboxUtils::calculateSandboxedMethodsHelper(CallGraphNode* node, int sand
         sandboxName = sandboxEntryPointToName[calleeFunc];
         entryPoint = calleeFunc;
       }*/
-      calculateSandboxedMethodsHelper(calleeNode, sandboxName, entryPoint, sandboxedMethods);
+      calculateSandboxedMethods(calleeNode, sandboxName, entryPoint, sandboxedMethods);
     }
   }
 }
 
-FunctionVector SandboxUtils::calculatePrivilegedMethods(Module& M) {
-  FunctionVector privilegedMethods;
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-  if (Function* MainFunc = M.getFunction("main")) {
-    CallGraphNode* MainNode = (*CG)[MainFunc];
-    calculatePrivilegedMethodsHelper(M, MainNode, privilegedMethods);
+FunctionVector SandboxUtils::getPrivilegedMethods(Module& M) {
+  if (privilegedMethods.empty()) {
+    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+    if (Function* MainFunc = M.getFunction("main")) {
+      CallGraphNode* MainNode = (*CG)[MainFunc];
+      calculatePrivilegedMethods(M, MainNode);
+    }
   }
   return privilegedMethods;
 }
 
-void SandboxUtils::calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* Node, FunctionVector& privilegedMethods) {
+void SandboxUtils::calculatePrivilegedMethods(Module& M, CallGraphNode* Node) {
   if (Function* F = Node->getFunction()) {
     // if a sandbox entry point, then ignore
     if (isSandboxEntryPoint(M, F))
@@ -219,7 +221,35 @@ void SandboxUtils::calculatePrivilegedMethodsHelper(Module& M, CallGraphNode* No
 
     // recurse on callees
     for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
-      calculatePrivilegedMethodsHelper(M, I->second, privilegedMethods);
+      calculatePrivilegedMethods(M, I->second);
     }
   }
+}
+
+bool SandboxUtils::isPrivilegedMethod(Function* F, Module& M) {
+  if (privilegedMethods.empty()) {
+    getPrivilegedMethods(M); // force calculation
+  }
+  return find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end();
+}
+
+Sandbox* SandboxUtils::getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    if (S->getEntryPoint() == F) {
+      return S;
+    }
+  }
+  dbgs() << "Could not find sandbox for entrypoint " << F->getName() << "\n";
+  return NULL;
+}
+
+SandboxVector SandboxUtils::getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes) {
+  SandboxVector containers;
+  for (Sandbox* S : sandboxes) {
+    FunctionVector sFuncs = S->getFunctions();
+    if (find(sFuncs.begin(), sFuncs.end(), F) != sFuncs.end()) {
+      containers.push_back(S);
+    }
+  }
+  return containers;
 }

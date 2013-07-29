@@ -3,21 +3,23 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/InstIterator.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
+#include "Util/CallGraphUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
+#include "Util/SandboxUtils.h"
 
 using namespace soaap;
 
-void AccessOriginAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
-  for (Sandbox* S : sandboxes) {
-    Function* F = S->getEntryPoint();
-    // find calls of F, if F actually returns something!
-    if (!F->getReturnType()->isVoidTy()) {
-      for (Value::use_iterator I=F->use_begin(), E=F->use_end(); I!=E; I++) {
-        if (CallInst* C = dyn_cast<CallInst>(*I)) {
-          worklist.push_back(C);
-          state[C] = ORIGIN_SANDBOX;
-          untrustedSources.push_back(C);
+void AccessOriginAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
+  for (Function* F : privilegedMethods) {
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
+      if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+        for (Function* callee : CallGraphUtils::getCallees(C, M)) {
+          if (SandboxUtils::isSandboxEntryPoint(M, callee)) {
+            addToWorklist(C, PRIV_CONTEXT, worklist);
+            state[PRIV_CONTEXT][C] = ORIGIN_SANDBOX;
+            untrustedSources.push_back(C);
+          }
         }
       }
     }
@@ -30,9 +32,8 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (C->getCalledFunction() == NULL) {
-          if (state[C->getCalledValue()] == ORIGIN_SANDBOX) {
-            Function* caller = cast<Function>(C->getParent()->getParent());
-            outs() << " *** Untrusted function pointer call in " << caller->getName() << "\n";
+          if (state[PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
+            outs() << " *** Untrusted function pointer call in " << F->getName() << "\n";
             if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
               DILocation loc(N);                      // DILocation is in DebugInfo.h
               unsigned line = loc.getLineNumber();
@@ -61,7 +62,7 @@ void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module&
       Function* Via = C->getParent()->getParent();
       DEBUG(outs() << MainFn->getName() << " -> " << Via->getName() << " -> " << Target->getName() << "\n");
       list<Instruction*> trace1 = PrettyPrinters::findPathToFunc(MainFn, Via, NULL, -1);
-      list<Instruction*> trace2 = PrettyPrinters::findPathToFunc(Via, Target, &state, ORIGIN_SANDBOX);
+      list<Instruction*> trace2 = PrettyPrinters::findPathToFunc(Via, Target, &state[PRIV_CONTEXT], ORIGIN_SANDBOX);
       // check that we have successfully been able to find a full trace!
       if (!trace1.empty() && !trace2.empty()) {
         PrettyPrinters::ppTaintSource(C);

@@ -43,7 +43,7 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                 DEBUG(dbgs() << "   Found privileged call: "); 
                 DEBUG(C->dump());
                 if (find(callgates.begin(), callgates.end(), Target) == callgates.end()) {
-                  outs() << " *** Sandbox " << S->getName() << " call privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
+                  outs() << " *** Sandbox \"" << S->getName() << "\" calls privileged function \"" << Target->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
                   if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
                     DILocation Loc(N);                      // DILocation is in DebugInfo.h
                     unsigned Line = Loc.getLineNumber();

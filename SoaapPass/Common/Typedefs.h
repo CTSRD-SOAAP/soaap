@@ -7,6 +7,8 @@
 #include "llvm/ADT/SmallSet.h"
 #include <map>
 
+#include "Analysis/InfoFlow/Context.h"
+
 using namespace std;
 using namespace llvm;
 
@@ -17,6 +19,7 @@ namespace soaap {
   typedef SmallVector<CallInst*,16> CallInstVector;
   typedef map<const Value*,int> ValueIntMap;
   typedef SmallVector<string,16> StringVector;
+  typedef SmallVector<Context*,8> ContextVector;
 }
 
 #endif

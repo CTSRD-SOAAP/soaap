@@ -8,12 +8,12 @@
 
 using namespace soaap;
 
-void CapabilityAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
+void CapabilityAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     ValueIntMap caps = S->getCapabilities();
     for (pair<const Value*,int> cap : caps) {
-      state[cap.first] = cap.second;
-      worklist.push_back(cap.first);
+      state[S][cap.first] = cap.second;
+      addToWorklist(cap.first, S, worklist);
     }
   }
 }
@@ -40,7 +40,7 @@ void CapabilityAnalysis::validateDescriptorAccesses(Module& M, SandboxVector& sa
         Function* Caller = cast<Function>(Call->getParent()->getParent());
         if (find(sandboxedFuncs.begin(), sandboxedFuncs.end(), Caller) != sandboxedFuncs.end()) {
           Value* fd = Call->getArgOperand(0);
-          if (!(state[fd] & requiredPerm)) {
+          if (!(state[S][fd] & requiredPerm)) {
             outs() << " *** Insufficient privileges for \"" << syscall << "()\" in sandboxed method \"" << Caller->getName() << "\"\n";
             if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
               DILocation Loc(N);                      // DILocation is in DebugInfo.h

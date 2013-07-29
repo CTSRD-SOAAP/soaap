@@ -17,7 +17,7 @@ int main() {
   return 0;
 }
 
-__soaap_sandbox_persistent
+//__soaap_sandbox_persistent
 //__soaap_clearance("secret")
 void doauth(struct cred* c) {
 //  strcpy(c->user, "me");

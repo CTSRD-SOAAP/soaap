@@ -7,7 +7,7 @@
 
 using namespace soaap;
 
-void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M, SandboxVector& sandboxes) {
+void ClassifiedAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
 
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
@@ -28,8 +28,8 @@ void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M, SandboxVecto
         
           dbgs() << INDENT_1 << "Classification annotation " << annotationStrValCString << " found:\n";
         
-          worklist.push_back(annotatedVar);
-          state[annotatedVar] |= (1 << bitIdx);
+          state[NO_CONTEXT][annotatedVar] |= (1 << bitIdx);
+          addToWorklist(annotatedVar, NO_CONTEXT, worklist);
         }
       }
     }
@@ -53,7 +53,8 @@ void ClassifiedAnalysis::initialise(ValueList& worklist, Module& M, SandboxVecto
           if (annotationStrArrayCString.startswith(CLASSIFY)) {
             StringRef className = annotationStrArrayCString.substr(strlen(CLASSIFY)+1);
             ClassifiedUtils::assignBitIdxToClassName(className);
-            state[annotatedVar] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
+            state[NO_CONTEXT][annotatedVar] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
+            addToWorklist(annotatedVar, NO_CONTEXT, worklist);
           }
         }
       }
@@ -66,6 +67,7 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
   // validate that classified data is never accessed inside sandboxed contexts that
   // don't have clearance for its class.
   for (Sandbox* S : sandboxes) {
+    DEBUG(dbgs() << INDENT_1 << "Sandbox: " << S->getName() << "\n");
     FunctionVector sandboxedFuncs = S->getFunctions();
     int clearances = S->getClearances();
     for (Function* F : sandboxedFuncs) {
@@ -76,9 +78,9 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand();
             DEBUG(dbgs() << INDENT_3 << "Value dump: "; v->dump(););
-            DEBUG(dbgs() << INDENT_3 << "Value classes: " << state[v] << ", " << ClassifiedUtils::stringifyClassNames(state[v]) << "\n");
-            if (!(state[v] == 0 || (state[v] & clearances) == state[v])) {
-              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
+            DEBUG(dbgs() << INDENT_3 << "Value classes: " << state[S][v] << ", " << ClassifiedUtils::stringifyClassNames(state[S][v]) << "\n");
+            if (!(state[S][v] == 0 || (state[S][v] & clearances) == state[S][v])) {
+              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[S][v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
                 DILocation loc(N);
                 outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";

@@ -11,6 +11,7 @@ add_llvm_loadable_module(libsoaap
   Analysis/InfoFlow/CapabilityAnalysis.cpp
   Instrument/PerformanceEmulationInstrumenter.cpp
   Util/CallGraphUtils.cpp
+  Util/ContextUtils.cpp
   Util/LLVMAnalyses.cpp
   Util/PrettyPrinters.cpp
   Util/SandboxUtils.cpp
