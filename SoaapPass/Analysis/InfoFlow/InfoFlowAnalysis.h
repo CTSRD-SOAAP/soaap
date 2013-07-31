@@ -23,9 +23,11 @@ namespace soaap {
 
   class InfoFlowAnalysis : public Analysis {
     public:
-      // There are three types of context: no context, privileged context and sandbox
+      // There are three types of context: no context, privileged context and sandbox.
+      // A fourth context "single" is used for context-insensitivity
       static Context* const NO_CONTEXT;
       static Context* const PRIV_CONTEXT;
+      static Context* const SINGLE_CONTEXT;
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
 
     protected:

@@ -1,11 +1,11 @@
 .SUFFIXES: .c .bc .cg .soaap
 
-SOAAP_BUILD_DIR=/home/kg365/pool/soaap
-SOAAP_INCLUDE_PATH=/home/kg365/workspace/soaap/include
-LLVM_BUILD_DIR=/home/kg365/pool/llvm
+SOAAP_BUILD_DIR=/home/khilan/workspace_local/soaap_build
+SOAAP_INCLUDE_PATH=/home/khilan/workspace/soaap/include
+LLVM_BUILD_DIR=/home/khilan/workspace_local/llvm_build
 
 .bc.soaap:
-	opt ${SOAAP_FLAGS} -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap -o /dev/null ${.IMPSRC}
+	opt -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap ${SOAAP_FLAGS} -o /dev/null ${.IMPSRC}
 
 .c.bc:
 	clang -c -g -I $(SOAAP_INCLUDE_PATH) -emit-llvm -o ${.TARGET} ${.IMPSRC}

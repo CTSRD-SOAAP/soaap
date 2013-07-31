@@ -15,6 +15,7 @@ using namespace llvm;
 
 Context* const InfoFlowAnalysis::NO_CONTEXT = new Context();
 Context* const InfoFlowAnalysis::PRIV_CONTEXT = new Context();
+Context* const InfoFlowAnalysis::SINGLE_CONTEXT = new Context();
 
 
 void InfoFlowAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
@@ -25,6 +26,23 @@ void InfoFlowAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
 }
 
 void InfoFlowAnalysis::performDataFlowAnalysis(ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
+
+  // merge contexts if this is a context-insensitive analysis
+  if (ContextUtils::IsContextInsensitiveAnalysis) {
+    DEBUG(dbgs() << INDENT_1 << "Merging contexts\n");
+    worklist.clear();
+    for (map<Context*,DataflowFacts>::iterator I=state.begin(), E=state.end(); I != E; I++) {
+      Context* C = I->first;
+      DataflowFacts F = I->second;
+      for (DataflowFacts::iterator DI=F.begin(), DE=F.end(); DI != DE; DI++) {
+        const Value* V = DI->first;
+        int T = DI->second;
+        state[SINGLE_CONTEXT][V] = T;
+        addToWorklist(V, SINGLE_CONTEXT, worklist);
+      }
+    }
+  }
+
   // perform propagation until fixed point is reached
   while (!worklist.empty()) {
     ValueContextPair P = worklist.front();
@@ -88,6 +106,21 @@ void InfoFlowAnalysis::performDataFlowAnalysis(ValueContextPairList& worklist, S
       }
     }
   }
+
+  // unmerge contexts if this is a context-insensitive analysis
+  if (ContextUtils::IsContextInsensitiveAnalysis) {
+    DEBUG(dbgs() << INDENT_1 << "Unmerging contexts\n");
+    ContextVector Cs = ContextUtils::getAllContexts(sandboxes);
+    DataflowFacts F = state[SINGLE_CONTEXT];
+    for (DataflowFacts::iterator I=F.begin(), E=F.end(); I != E; I++) {
+      const Value* V = I->first;
+      int T = I->second;
+      for (Context* C : Cs) {
+        state[C][V] = T;
+      }
+    }
+  }
+
 }
 
 void InfoFlowAnalysis::addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist) {

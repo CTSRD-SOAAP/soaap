@@ -16,6 +16,7 @@
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/ContextUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/SandboxUtils.h"
 
@@ -29,6 +30,9 @@ static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
 
 static cl::opt<bool> ClEmPerf("soaap-emulate-performance",
        cl::desc("Emulate sandboxing performance"));
+
+static cl::opt<bool> ClContextInsens("soaap-context-insens",
+       cl::desc("Don't use context-sensitive analysis"));
 
 namespace soaap {
 
@@ -52,13 +56,18 @@ namespace soaap {
 
     virtual bool runOnModule(Module& M) {
 
-      outs() << "* Running " << getPassName() << "\n";
+      outs() << "* Running " << getPassName();
+      if (ClContextInsens) {
+        outs() << " in context-insensitive mode";
+        ContextUtils::setIsContextInsensitiveAnalysis(true);
+      }
+      outs() << "\n";
     
       CallGraph& CG = getAnalysis<CallGraph>();
       ProfileInfo& PI = getAnalysis<ProfileInfo>();
       LLVMAnalyses::setCallGraphAnalysis(&CG);
       LLVMAnalyses::setProfileInfoAnalysis(&PI);
-      
+
       outs() << "* Adding dynamic call edges to callgraph (if available)\n";
       CallGraphUtils::loadDynamicCallGraphEdges(M);
 
