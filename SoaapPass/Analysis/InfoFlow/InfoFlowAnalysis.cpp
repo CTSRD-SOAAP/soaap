@@ -17,7 +17,6 @@ Context* const InfoFlowAnalysis::NO_CONTEXT = new Context();
 Context* const InfoFlowAnalysis::PRIV_CONTEXT = new Context();
 Context* const InfoFlowAnalysis::SINGLE_CONTEXT = new Context();
 
-
 void InfoFlowAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   ValueContextPairList worklist;
   initialise(worklist, M, sandboxes);
