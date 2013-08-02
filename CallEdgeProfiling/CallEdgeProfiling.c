@@ -29,8 +29,8 @@ static unsigned parentPid;
 
 // lock
 static unsigned* lockState;
-void lock(void);
-void unlock(void);
+void soaap_lock(void);
+void soaap_unlock(void);
 
 /* CallEdgeProfAtExitHandler - When the program exits, just write out the profiling
  * data.
@@ -51,6 +51,8 @@ static void soaap_call_edge_prof_atexit_handler(void) {
 int soaap_start_call_edge_profiling(int argc, const char **argv,
                               unsigned* arrayStart, unsigned numElements) {
   DPRINTF("profiling started by %d", getpid());
+  DPRINTF("numElements: %d", numElements);
+  DPRINTF("size of array: %d", (numElements+1)*sizeof(unsigned));
 
   int Ret = save_arguments(argc, argv);
   NumElements = numElements;
@@ -65,7 +67,7 @@ int soaap_start_call_edge_profiling(int argc, const char **argv,
   
   // force the llvmprof.out file to be created in the privileged parent
   //int outFile = getOutFile(); 
-  DPRINTF("NumElements: %d\n");
+  //DPRINTF("NumElements: %d\n");
   
   // setup atexit handler
   atexit(soaap_call_edge_prof_atexit_handler);
@@ -73,18 +75,18 @@ int soaap_start_call_edge_profiling(int argc, const char **argv,
 }
 
 void soaap_increment_call_edge_counter(int callerId, int calleeId, int numFuncs) {
-  lock();
+  soaap_lock();
   DPRINTF("Incrementing %d -> %d (%d)", callerId, calleeId, numFuncs);
   ArrayStart[callerId*(numFuncs+1)+calleeId]++;
-  unlock();
+  soaap_unlock();
 }
 
-void lock() {
+void soaap_lock() {
   while(__sync_bool_compare_and_swap(lockState, 0, 1)) { }
   DPRINTF("Lock acquired");
 }
 
-void unlock() {
+void soaap_unlock() {
   *lockState = 0;
   __sync_synchronize();
   DPRINTF("Lock released");
