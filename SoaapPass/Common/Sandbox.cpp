@@ -10,9 +10,13 @@ using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
+	DEBUG(dbgs() << "Finding sandboxed functions\n");
   findSandboxedFunctions();
+	DEBUG(dbgs() << "Finding shared global variables\n");
   findSharedGlobalVariables();
+	DEBUG(dbgs() << "Finding callgates\n");
   findCallgates();
+	DEBUG(dbgs() << "Finding capabilities\n");
   findCapabilities();
 }
 

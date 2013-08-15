@@ -18,6 +18,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define DEBUG 1
+#define PROF 1
 
 /* DPRINTF */
 #ifdef DEBUG

@@ -47,11 +47,9 @@ namespace soaap {
     SoaapPass() : ModulePass(ID) { }
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-      if (!ClEmPerf) { 
-        AU.setPreservesCFG();
-        AU.addRequired<CallGraph>();
-        AU.addRequired<ProfileInfo>();
-      }
+      AU.setPreservesCFG();
+      AU.addRequired<CallGraph>();
+      AU.addRequired<ProfileInfo>();
     }
 
     virtual bool runOnModule(Module& M) {
@@ -62,7 +60,7 @@ namespace soaap {
         ContextUtils::setIsContextInsensitiveAnalysis(true);
       }
       outs() << "\n";
-    
+ 
       CallGraph& CG = getAnalysis<CallGraph>();
       ProfileInfo& PI = getAnalysis<ProfileInfo>();
       LLVMAnalyses::setCallGraphAnalysis(&CG);

@@ -145,7 +145,9 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     int idx = assignBitIdxToSandboxName(sandboxName);
     int overhead = funcToOverhead[entryPoint];
     int clearances = funcToClearances[entryPoint];
+		DEBUG(dbgs() << "Creating new Sandbox instance\n");
     sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, true, M, overhead, clearances));
+		DEBUG(dbgs() << "Created new Sandbox instance\n");
   }
   for (Function* entryPoint : ephemeralSandboxes) {
     int overhead = funcToOverhead[entryPoint];
@@ -153,6 +155,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     sandboxes.push_back(new Sandbox("", -1, entryPoint, false, M, overhead, clearances));
   }
 
+	DEBUG(dbgs() << "Returning sandboxes vector\n");
   return sandboxes;
 }
 

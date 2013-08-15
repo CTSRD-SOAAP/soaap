@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
   remote_auth_user(argc);
 }
 
- __soaap_privileged
+__soaap_privileged
 int check_login(char* user, char* pwd) {
   // Access /etc/passwd and check user/pwd
   return 0;
