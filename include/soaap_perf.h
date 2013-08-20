@@ -108,7 +108,7 @@ soaap_perf_enter_persistent_sbox()
 
   DPRINTF("Emulating performance of entering persistent sandbox.");
   DPRINTF("Sending request over RPC.");
-  write(pfds[1], soaap_buf, buflen);
+  int nbytes = write(pfds[1], soaap_buf, 1);
   DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
   
 }
