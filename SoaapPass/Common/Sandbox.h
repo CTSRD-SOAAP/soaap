@@ -24,6 +24,7 @@ namespace soaap {
       int getClearances();
       int getOverhead();
       bool isPersistent();
+      CallInstVector getCreationPoints();
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
 
     private:
@@ -35,6 +36,7 @@ namespace soaap {
       int clearances;
       FunctionVector callgates;
       FunctionVector functions;
+      CallInstVector creationPoints;
       GlobalVariableIntMap sharedVarToPerms;
       ValueIntMap caps;
       int overhead;
@@ -44,6 +46,7 @@ namespace soaap {
       void findSharedGlobalVariables();
       void findCallgates();
       void findCapabilities();
+      void findCreationPoints();
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;
 }

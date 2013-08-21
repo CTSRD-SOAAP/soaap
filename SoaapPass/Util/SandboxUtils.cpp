@@ -1,4 +1,5 @@
 #include "Util/ClassifiedUtils.h"
+#include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "soaap.h"
@@ -64,7 +65,7 @@ bool SandboxUtils::isSandboxEntryPoint(Module& M, Function* F) {
       if (isa<Function>(annotatedVal)) {
         Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
         if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
-          DEBUG(dbgs() << "   Found sandbox entrypoint " << annotatedFunc->getName() << "\n");
+          //DEBUG(dbgs() << "   Found sandbox entrypoint " << annotatedFunc->getName() << "\n");
           if (annotatedFunc == F) {
             return true;
           }
@@ -97,13 +98,13 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
       if (isa<Function>(annotatedVal)) {
         Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
         if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
-          outs() << "   Found persistent sandbox entry-point " << annotatedFunc->getName() << "\n";
+          outs() << INDENT_1 << "Found persistent sandbox entrypoint " << annotatedFunc->getName() << "\n";
           // get name if one was specified
           if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
-            outs() << "      Sandbox name: " << sandboxName << "\n";
+            outs() << INDENT_2 << "Sandbox name: " << sandboxName << "\n";
             if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
-              outs() << "   *** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
+              outs() << INDENT_1 << "*** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
             }
             else {
               funcToPersistentSandboxName[annotatedFunc] = sandboxName;
@@ -111,9 +112,9 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
           }
         }
         else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
-          outs() << "   Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
+          outs() << INDENT_1 << "Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
           if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
-            outs() << "   *** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
+            outs() << INDENT_1 << "*** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
           }
           else {
             ephemeralSandboxes.push_back(annotatedFunc);
@@ -121,14 +122,14 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
         }
         else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
           int overhead;
-          outs() << "Threshold set to " << matches[1].str() <<
+          outs() << INDENT_2 << "Threshold set to " << matches[1].str() <<
                   "%\n";
           matches[1].getAsInteger(0, overhead);
           funcToOverhead[annotatedFunc] = overhead;
         }
         else if (annotationStrArrayCString.startswith(CLEARANCE)) {
           StringRef className = annotationStrArrayCString.substr(strlen(CLEARANCE)+1);
-          outs() << "   Sandbox has clearance for \"" << className << "\"\n";
+          outs() << INDENT_2 << "Sandbox has clearance for \"" << className << "\"\n";
           ClassifiedUtils::assignBitIdxToClassName(className);
           funcToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
         }
@@ -145,9 +146,9 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     int idx = assignBitIdxToSandboxName(sandboxName);
     int overhead = funcToOverhead[entryPoint];
     int clearances = funcToClearances[entryPoint];
-		DEBUG(dbgs() << "Creating new Sandbox instance\n");
+		DEBUG(dbgs() << INDENT_2 << "Creating new Sandbox instance\n");
     sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, true, M, overhead, clearances));
-		DEBUG(dbgs() << "Created new Sandbox instance\n");
+		DEBUG(dbgs() << INDENT_2 << "Created new Sandbox instance\n");
   }
   for (Function* entryPoint : ephemeralSandboxes) {
     int overhead = funcToOverhead[entryPoint];
@@ -155,7 +156,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     sandboxes.push_back(new Sandbox("", -1, entryPoint, false, M, overhead, clearances));
   }
 
-	DEBUG(dbgs() << "Returning sandboxes vector\n");
+	DEBUG(dbgs() << INDENT_1 << "Returning sandboxes vector\n");
   return sandboxes;
 }
 
@@ -219,7 +220,7 @@ void SandboxUtils::calculatePrivilegedMethods(Module& M, CallGraphNode* Node) {
     if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
       return;
 
-    dbgs() << "Added " << F->getName() << " as privileged method\n";
+    DEBUG(dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
     privilegedMethods.push_back(F);
 
     // recurse on callees

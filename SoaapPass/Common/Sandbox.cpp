@@ -1,23 +1,29 @@
 #include "Common/Sandbox.h"
+#include "Util/DebugUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/SandboxUtils.h"
 #include "soaap.h"
 
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/IntrinsicInst.h"
 
 using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
-	DEBUG(dbgs() << "Finding sandboxed functions\n");
+	DEBUG(dbgs() << INDENT_2 << "Finding sandboxed functions\n");
   findSandboxedFunctions();
-	DEBUG(dbgs() << "Finding shared global variables\n");
+	DEBUG(dbgs() << INDENT_2 << "Finding shared global variables\n");
   findSharedGlobalVariables();
-	DEBUG(dbgs() << "Finding callgates\n");
+	DEBUG(dbgs() << INDENT_2 << "Finding callgates\n");
   findCallgates();
-	DEBUG(dbgs() << "Finding capabilities\n");
+	DEBUG(dbgs() << INDENT_2 << "Finding capabilities\n");
   findCapabilities();
+  if (persistent) {
+    DEBUG(dbgs() << INDENT_2 << "Finding persistent creation points\n");
+    findCreationPoints();
+  }
 }
 
 Function* Sandbox::getEntryPoint() {
@@ -77,7 +83,7 @@ void Sandbox::findSandboxedFunctions() {
 
 void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
   Function* F = node->getFunction();
-  DEBUG(dbgs() << "Visiting " << F->getName() << "\n");
+  DEBUG(dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
    
   // check for cycle
   if (find(functions.begin(), functions.end(), F) != functions.end()) {
@@ -142,14 +148,14 @@ void Sandbox::findSharedGlobalVariables() {
           if (sandboxName == name) {
             sharedVarToPerms[annotatedVar] |= VAR_READ_MASK;
           }
-          dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
+          dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n";
         }
         else if (annotationStrArrayCString.startswith(VAR_WRITE)) {
           StringRef sandboxName = annotationStrArrayCString.substr(strlen(VAR_WRITE)+1);
           if (sandboxName == name) {
             sharedVarToPerms[annotatedVar] |= VAR_WRITE_MASK;
           }
-          dbgs() << "   Found annotated global var " << annotatedVar->getName() << "\n";
+          dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n";
         }
       }
     }
@@ -178,9 +184,9 @@ void Sandbox::findCallgates() {
    */
   for (Function& F : module.getFunctionList()) {
     if (F.getName().startswith("__soaap_declare_callgates_helper_")) {
-      DEBUG(dbgs() << "Found __soaap_declare_callgates_helper_\n");
+      DEBUG(dbgs() << INDENT_3 << "Found __soaap_declare_callgates_helper_\n");
       StringRef sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
-      dbgs() << "   Sandbox name: " << sandboxName << "\n";
+      dbgs() << INDENT_3 << "Sandbox name: " << sandboxName << "\n";
       if (sandboxName == name) {
         for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
           User* user = u.getUse().getUser();
@@ -193,7 +199,7 @@ void Sandbox::findCallgates() {
              */
             for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
               Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
-              outs() << "   Callgate " << i << " is " << callgate->getName() << "\n";
+              outs() << INDENT_3 << "Callgate " << i << " is " << callgate->getName() << "\n";
               callgates.push_back(callgate);
             }
           }
@@ -239,7 +245,7 @@ void Sandbox::findCapabilities() {
             ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
 
-            DEBUG(dbgs() << "    annotation: " << annotationStrValCString << "\n");
+            DEBUG(dbgs() << INDENT_3 << "Annotation: " << annotationStrValCString << "\n");
 
             /*
              * Find out the enclosing function and record which
@@ -263,8 +269,31 @@ void Sandbox::findCapabilities() {
               else if (annotationStrValCString == FD_WRITE) {
                 caps[annotatedArg] |= FD_WRITE_MASK;
               }
-              DEBUG(dbgs() << "   found annotated file descriptor " << annotatedArg->getName() << "\n");
+              DEBUG(dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+void Sandbox::findCreationPoints() {
+  // look for calls to __builtin_annotation(SOAAP_PERSISTENT_SANDBOX_CREATE_<NAME_OF_SANDBOX>)
+  if (Function* AnnotFunc = module.getFunction("llvm.annotation.i32")) {
+    for (Value::use_iterator UI = AnnotFunc->use_begin(), UE = AnnotFunc->use_end(); UI != UE; ++UI) {
+      User* U = UI.getUse().getUser();
+      if (isa<IntrinsicInst>(U)) {
+        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        
+        if (annotationStrValCString.startswith(SOAAP_PERSISTENT_SANDBOX_CREATE)) {
+          StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_PERSISTENT_SANDBOX_CREATE)+1); //+1 because of _
+          if (sandboxName == name) {
+            DEBUG(dbgs() << INDENT_3 << "Found creation point: "; annotateCall->dump(););
+            creationPoints.push_back(annotateCall);
           }
         }
       }

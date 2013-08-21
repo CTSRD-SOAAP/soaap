@@ -1,6 +1,7 @@
 #include "Analysis/GlobalVariableAnalysis.h"
 
 #include "soaap.h"
+#include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
 #include "Common/Sandbox.h"
 #include "llvm/DebugInfo.h"
@@ -76,7 +77,7 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   // that will therefore not be seen by sandboxes (assuming that the
   // the sandbox process is forked at the start of main).
   for (Function* F : privilegedMethods) {
-    DEBUG(dbgs() << "Privileged function: " << F->getName().str() << "\n");
+    DEBUG(dbgs() << INDENT_1 << "Privileged function: " << F->getName().str() << "\n");
     SmallVector<GlobalVariable*,10> alreadyReported;
     for (BasicBlock& BB : F->getBasicBlockList()) {
       for (Instruction& I : BB.getInstList()) {
