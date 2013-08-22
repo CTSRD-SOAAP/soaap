@@ -337,7 +337,6 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
       else if (CallInst* CI = dyn_cast<CallInst>(&I)) {
         trace.push_front(CI);
         FunctionVector callees = CallGraphUtils::getCallees(CI, module);
-        outs() << "Obtained callees\n";
         for (Function* callee : callees) {
           if (callee == entryPoint) {
             // error
