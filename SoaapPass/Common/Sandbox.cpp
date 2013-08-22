@@ -1,9 +1,12 @@
 #include "Common/Sandbox.h"
+#include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/LLVMAnalyses.h"
+#include "Util/PrettyPrinters.h"
 #include "Util/SandboxUtils.h"
 #include "soaap.h"
 
+#include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -298,5 +301,72 @@ void Sandbox::findCreationPoints() {
         }
       }
     }
+  }
+
+  validateEntryPointCalls();
+}
+
+// check that all entrypoint calls are dominated by a creation call
+void Sandbox::validateEntryPointCalls() {
+  // We traverse the whole-program CFG starting from main, treating sandbox 
+  // creation-point calls as leaves (i.e. we don't traverse past them). If
+  // after this, an entrypoint call is still reached, then a path has been
+  // found without going through a creation-point call.
+  Function* MainFunc = module.getFunction("main");
+  BasicBlock& EntryBB = MainFunc->getEntryBlock();
+  BasicBlockVector visited;
+  InstTrace trace;
+  validateEntryPointCallsHelper(&EntryBB, visited, trace);
+}
+
+bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace) {
+  if (find(visited.begin(), visited.end(), BB) != visited.end()) {
+    return false;
+  }
+  else {
+    // Check instructions in BB (in order):
+    //  - if a creation-point call, then stop.
+    //  - if an entrypoint call, then flag an error.
+    //  - if a function call, recurse on callee's entry bb
+    // Otherwise, recurse on BB's successors
+    visited.push_back(BB);
+    for (Instruction& I : *BB) {
+      if (find(creationPoints.begin(), creationPoints.end(), &I) != creationPoints.end()) {
+        return true;
+      }
+      else if (CallInst* CI = dyn_cast<CallInst>(&I)) {
+        trace.push_front(CI);
+        FunctionVector callees = CallGraphUtils::getCallees(CI, module);
+        for (Function* callee : callees) {
+          if (callee == entryPoint) {
+            // error
+            outs() << "\n";
+            outs() << " *** Found call to sandbox entrypoint \"" << entryPoint->getName() << "\" that is not preceded by sandbox creation\n";
+            outs() << " Possible trace:\n";
+            PrettyPrinters::ppTrace(trace);
+            outs() << "\n";
+            trace.pop_front();
+            return false;
+          }
+          else {
+            // recurse on callee's entry bb
+            if (validateEntryPointCallsHelper(&callee->getEntryBlock(), visited, trace)) {
+              trace.pop_front();
+              return true; // all paths through callee have a creation-point
+            }
+          }
+        }
+        trace.pop_front();
+      }
+    }
+
+    // Recurse on BB's successors
+    bool creationOnAllPaths = (succ_begin(BB) != succ_end(BB)); // true <-> at least one successor bb
+    for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; ++SI) {
+      BasicBlock* SuccBB = *SI;
+      creationOnAllPaths = creationOnAllPaths && validateEntryPointCallsHelper(SuccBB, visited, trace);
+    }
+
+    return creationOnAllPaths;
   }
 }

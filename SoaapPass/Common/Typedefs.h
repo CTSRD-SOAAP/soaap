@@ -5,7 +5,9 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
+#include <list>
 #include <map>
+#include <vector>
 
 #include "Analysis/InfoFlow/Context.h"
 
@@ -20,6 +22,8 @@ namespace soaap {
   typedef map<const Value*,int> ValueIntMap;
   typedef SmallVector<string,16> StringVector;
   typedef SmallVector<Context*,8> ContextVector;
+  typedef vector<BasicBlock*> BasicBlockVector;  // use <vector> as can be large
+  typedef list<Instruction*> InstTrace;
 }
 
 #endif

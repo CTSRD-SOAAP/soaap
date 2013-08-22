@@ -5,7 +5,7 @@
 
 using namespace soaap;
 
-bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, list<Instruction*>& trace, list<CallGraphNode*>& visited, ValueIntMap* shadow, int taint) {
+bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, InstTrace& trace, list<CallGraphNode*>& visited, ValueIntMap* shadow, int taint) {
   if (CurrNode == FinalNode)
     return true;
   else if (CurrNode->getFunction() == NULL) // non-function node (e.g. External node)
@@ -39,12 +39,12 @@ bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, lis
   }
 }
 
-list<Instruction*> PrettyPrinters::findPathToFunc(Function* From, Function* To, ValueIntMap* shadow, int taint) {
+InstTrace PrettyPrinters::findPathToFunc(Function* From, Function* To, ValueIntMap* shadow, int taint) {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* FromNode = (*CG)[From];
   CallGraphNode* ToNode = (*CG)[To];
   list<CallGraphNode*> visited;
-  list<Instruction*> trace;
+  InstTrace trace;
   findPathToFuncHelper(FromNode, ToNode, trace, visited, shadow, taint);
   return trace;
 }
@@ -54,7 +54,7 @@ void PrettyPrinters::ppPrivilegedPathToFunction(Function* Target, Module& M) {
     // Find privileged path to instruction I, via a function that calls a sandboxed callee
     CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     CallGraphNode* TargetNode = (*CG)[Target];
-    list<Instruction*> trace = findPathToFunc(MainFn, Target, NULL, -1);
+    InstTrace trace = findPathToFunc(MainFn, Target, NULL, -1);
     ppTrace(trace);
     outs() << "\n";
   }
@@ -73,7 +73,7 @@ void PrettyPrinters::ppTaintSource(CallInst* C) {
   }
 }
 
-void PrettyPrinters::ppTrace(list<Instruction*>& trace) {
+void PrettyPrinters::ppTrace(InstTrace& trace) {
   for (Instruction* I : trace) {
     Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
     if (MDNode *N = I->getMetadata("dbg")) {

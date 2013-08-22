@@ -47,6 +47,8 @@ namespace soaap {
       void findCallgates();
       void findCapabilities();
       void findCreationPoints();
+      void validateEntryPointCalls();
+      bool validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace);
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;
 }
