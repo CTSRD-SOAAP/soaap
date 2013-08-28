@@ -77,6 +77,9 @@ bool Sandbox::isPersistent() {
   return persistent;
 }
 
+CallInstVector Sandbox::getCreationPoints() {
+  return creationPoints;
+}
 
 void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
@@ -348,7 +351,7 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
             trace.pop_front();
             return false;
           }
-          else if (!callee->hasExternalLinkage()) {
+          else if (!callee->isDeclaration()) {
             // recurse on callee's entry bb
             if (validateEntryPointCallsHelper(&callee->getEntryBlock(), visited, trace)) {
               trace.pop_front();

@@ -33,8 +33,8 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
 }
 
 FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
-  DEBUG(dbgs() << INDENT_5 << "Getting callees for "; C->dump(););
-  if (callToCallees.find(C) == callToCallees.end()) {
+  DEBUG(dbgs() << INDENT_5 << "Getting callees for " << *C << "\n");
+  if (callToCallees.empty()) {
     populateCallCalleeCaches(M);
   }
   return callToCallees[C];
@@ -42,7 +42,7 @@ FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
 
 CallInstVector CallGraphUtils::getCallers(const Function* F, Module& M) {
   DEBUG(dbgs() << INDENT_5 << "Getting callers for " << F->getName() << "\n");
-  if (calleeToCalls.find(F) == calleeToCalls.end()) {
+  if (calleeToCalls.empty()) {
     populateCallCalleeCaches(M);
   }
   return calleeToCalls[F];
