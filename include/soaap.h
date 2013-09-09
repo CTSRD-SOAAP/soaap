@@ -73,6 +73,8 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
 #define __soaap_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
 
+#define __soaap_sync_data(N)
+
 #define SOAAP_EPHEMERAL_SANDBOX_CREATE "SOAAP_EPHEMERAL_SANDBOX_CREATE"
 #define SOAAP_EPHEMERAL_SANDBOX_KILL "SOAAP_EPHEMERAL_SANDBOX_KILL"
 #define __soaap_create_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_CREATE"_"N)
@@ -94,9 +96,10 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 		__soaap_declare_callgates_helper_##N(0, fns); \
 	} 
 
-#define SOAAP_PRIVILEGED "PRIVILEGED"
+#define SOAAP_PRIVILEGED "SOAAP_PRIVILEGED"
 #define __soaap_privileged __attribute__((annotate(SOAAP_PRIVILEGED)))
 
-#define __soaap_sync_data(N)
+#define SOAAP_FP "SOAAP_FP"
+#define __soaap_fp(fns...) __attribute__((annotate(SOAAP_FP"_"#fns)))
 
 #endif /* SOAAP_H */

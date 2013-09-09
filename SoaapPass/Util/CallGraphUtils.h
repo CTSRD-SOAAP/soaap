@@ -10,6 +10,7 @@ namespace soaap {
   class CallGraphUtils {
     public:
       static void loadDynamicCallGraphEdges(Module& M);
+      static void loadAnnotatedCallGraphEdges(Module& M);
       static FunctionVector getCallees(const CallInst* C, Module& M);
       static CallInstVector getCallers(const Function* F, Module& M);
     

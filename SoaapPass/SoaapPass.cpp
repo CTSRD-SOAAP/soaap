@@ -66,8 +66,9 @@ namespace soaap {
       LLVMAnalyses::setCallGraphAnalysis(&CG);
       LLVMAnalyses::setProfileInfoAnalysis(&PI);
 
-      outs() << "* Adding dynamic call edges to callgraph (if available)\n";
+      outs() << "* Adding dynamic/annotated call edges to callgraph (if available)\n";
       CallGraphUtils::loadDynamicCallGraphEdges(M);
+      CallGraphUtils::loadAnnotatedCallGraphEdges(M);
 
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);
