@@ -17,6 +17,7 @@ namespace soaap {
     private:
       static map<const CallInst*, FunctionVector> callToCallees;
       static map<const Function*, CallInstVector> calleeToCalls;
+      static map<CallInst*, FunctionVector> fpCallToCallees;
       static void populateCallCalleeCaches(Module& M);
   };
 }

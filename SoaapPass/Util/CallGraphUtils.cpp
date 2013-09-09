@@ -16,6 +16,7 @@ using namespace llvm;
 
 map<const CallInst*, FunctionVector> CallGraphUtils::callToCallees;
 map<const Function*, CallInstVector> CallGraphUtils::calleeToCalls;
+map<CallInst*, FunctionVector> CallGraphUtils::fpCallToCallees;
 
 void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
   if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
@@ -41,7 +42,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // find annotated function pointers and add edges from the calls of the fp to targets
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   if (Function* F = M.getFunction("llvm.var.annotation")) {
-    map<Value*, FunctionVector> fpToCallees;
+    map<Value*, FunctionVector> fpToTargets;
     for (User::use_iterator UI = F->use_begin(), UE = F->use_end(); UI != UE; UI++) {
       User* user = UI.getUse().getUser();
       if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user)) {
@@ -66,7 +67,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
               callees.push_back(callee);
             }
           }
-          fpToCallees[annotatedVar] = callees;
+          fpToTargets[annotatedVar] = callees;
         }
       }
     }
@@ -76,21 +77,17 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
       if (F->isDeclaration()) continue;
       for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (C->getCalledFunction() == NULL) {
-            Value* FP = C->getCalledValue();
-            DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *FP << "\n");
-            if (LoadInst* L = dyn_cast<LoadInst>(FP)) {
-              FP = L->getPointerOperand();
-            }
-            if (fpToCallees.find(FP) != fpToCallees.end()) {
-              FunctionVector callees = fpToCallees[FP];
-              Function* caller = C->getParent()->getParent();
-              CallGraphNode* callerNode = CG->getOrInsertFunction(caller);
-              for (Function* callee : callees) {
-                CallGraphNode* calleeNode = CG->getOrInsertFunction(callee);
-                DEBUG(dbgs() << INDENT_2 << "loadAnnotatedCallGraphEdges: adding " << caller->getName() << " -> " << callee->getName() << "\n");
-                callerNode->addCalledFunction(CallSite(C), calleeNode);
+        if (!isa<IntrinsicInst>(&*I)) {
+          if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+            if (C->getCalledFunction() == NULL) {
+              Value* FP = C->getCalledValue();
+              DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
+              DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
+              if (LoadInst* L = dyn_cast<LoadInst>(FP)) {
+                FP = L->getPointerOperand();
+              }
+              if (fpToTargets.find(FP) != fpToTargets.end()) {
+                fpCallToCallees[C] = fpToTargets[FP];
               }
             }
           }
@@ -131,11 +128,18 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             callees.push_back(callee);
           }
         }
-        else if (Value* FP = C->getCalledValue())  { // dynamic callees
-          ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis();
-          for (const Function* callee : PI->getDynamicCallees(C)) {
-            DEBUG(dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
-            callees.push_back((Function*)callee);
+        else if (Value* FP = C->getCalledValue())  { // dynamic/annotated callees
+          if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
+            for (const Function* callee : PI->getDynamicCallees(C)) {
+              DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
+              callees.push_back((Function*)callee);
+            }
+          }
+          if (fpCallToCallees.find(C) != fpCallToCallees.end()) {
+            for (Function* callee : fpCallToCallees[C]) {
+              DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
+              callees.push_back(callee);
+            }
           }
         }
         callToCallees[C] = callees;
