@@ -272,7 +272,8 @@ void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
         DILocation loc(N);
         outs() << " (" << loc.getFilename().str() << ")";
       }
-      outs() << "\n\n";
+      outs() << "\n";
     }
+    outs() << "\n";
   }
 }
