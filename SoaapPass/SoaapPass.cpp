@@ -34,6 +34,9 @@ static cl::opt<bool> ClEmPerf("soaap-emulate-performance",
 static cl::opt<bool> ClContextInsens("soaap-context-insens",
        cl::desc("Don't use context-sensitive analysis"));
 
+static cl::opt<bool> ClListSandboxedFuncs("soaap-list-sandboxed-funcs",
+       cl::desc("List sandboxed functions"));
+
 namespace soaap {
 
   struct SoaapPass : public ModulePass {
@@ -75,6 +78,11 @@ namespace soaap {
 
       outs() << "* Finding sandboxes\n";
       findSandboxes(M);
+
+      if (ClListSandboxedFuncs) {
+        outs() << "* Listing sandboxed functions\n";
+        SandboxUtils::outputSandboxedFunctions(sandboxes);
+      }
 
       if (ClEmPerf) {
         instrumentPerfEmul(M);

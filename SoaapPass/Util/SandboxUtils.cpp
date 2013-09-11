@@ -3,6 +3,7 @@
 #include "Util/SandboxUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "soaap.h"
+#include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Regex.h"
@@ -256,4 +257,22 @@ SandboxVector SandboxUtils::getSandboxesContainingMethod(Function* F, SandboxVec
     }
   }
   return containers;
+}
+
+void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    outs() << INDENT_1 << "Sandbox: " << S->getName() << " (" << (S->isPersistent() ? "persistent" : "ephemeral") << ")\n";
+    for (Function* F : S->getFunctions()) {
+      if (F->isDeclaration()) { continue; }
+      outs() << INDENT_2 << F->getName();
+      // get filename of file
+      Instruction* I = F->getEntryBlock().getTerminator();
+      //dbgs() << INDENT_3 << "I: " << *I << "\n";
+      if (MDNode *N = I->getMetadata("dbg")) {
+        DILocation loc(N);
+        outs() << " (" << loc.getFilename().str() << ")";
+      }
+      outs() << "\n\n";
+    }
+  }
 }
