@@ -5,7 +5,6 @@ add_llvm_loadable_module(libsoaap
   Analysis/VulnerabilityAnalysis.cpp
   Analysis/PrivilegedCallAnalysis.cpp
   Analysis/InfoFlow/AccessOriginAnalysis.cpp
-  Analysis/InfoFlow/InfoFlowAnalysis.cpp
   Analysis/InfoFlow/SandboxPrivateAnalysis.cpp
   Analysis/InfoFlow/ClassifiedAnalysis.cpp
   Analysis/InfoFlow/CapabilityAnalysis.cpp

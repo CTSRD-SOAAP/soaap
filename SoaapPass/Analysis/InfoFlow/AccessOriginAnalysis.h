@@ -6,7 +6,7 @@
 
 namespace soaap {
 
-  class AccessOriginAnalysis : public InfoFlowAnalysis {
+  class AccessOriginAnalysis : public InfoFlowAnalysis<int> {
     static const int UNINITIALISED = INT_MAX;
     static const int ORIGIN_PRIV = 0;
     static const int ORIGIN_SANDBOX = 1;

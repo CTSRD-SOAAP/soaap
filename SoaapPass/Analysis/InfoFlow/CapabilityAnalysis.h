@@ -10,7 +10,7 @@ using namespace std;
 
 namespace soaap {
 
-  class CapabilityAnalysis : public InfoFlowAnalysis {
+  class CapabilityAnalysis : public InfoFlowAnalysis<int> {
     public:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);

@@ -1,7 +1,9 @@
 #ifndef SOAAP_UTILS_CONTEXTUTILS_H
 #define SOAAP_UTILS_CONTEXTUTILS_H
 
-#include "Analysis/InfoFlow/InfoFlowAnalysis.h"
+#include "llvm/IR/Function.h"
+#include "Common/Typedefs.h"
+#include "Common/Sandbox.h"
 
 using namespace llvm;
 

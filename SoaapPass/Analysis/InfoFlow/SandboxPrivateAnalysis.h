@@ -8,7 +8,7 @@ using namespace llvm;
 
 namespace soaap {
 
-  class SandboxPrivateAnalysis : public InfoFlowAnalysis {
+  class SandboxPrivateAnalysis : public InfoFlowAnalysis<int> {
     public:
       SandboxPrivateAnalysis(FunctionVector& privMethods) : privilegedMethods(privMethods) { }
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
