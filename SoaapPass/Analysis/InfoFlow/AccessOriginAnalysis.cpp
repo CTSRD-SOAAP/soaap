@@ -16,8 +16,8 @@ void AccessOriginAnalysis::initialise(ValueContextPairList& worklist, Module& M,
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         for (Function* callee : CallGraphUtils::getCallees(C, M)) {
           if (SandboxUtils::isSandboxEntryPoint(M, callee)) {
-            addToWorklist(C, PRIV_CONTEXT, worklist);
-            state[PRIV_CONTEXT][C] = ORIGIN_SANDBOX;
+            addToWorklist(C, ContextUtils::PRIV_CONTEXT, worklist);
+            state[ContextUtils::PRIV_CONTEXT][C] = ORIGIN_SANDBOX;
             untrustedSources.push_back(C);
           }
         }
@@ -32,7 +32,7 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (C->getCalledFunction() == NULL) {
-          if (state[PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
+          if (state[ContextUtils::PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
             outs() << " *** Untrusted function pointer call in " << F->getName() << "\n";
             if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
               DILocation loc(N);                      // DILocation is in DebugInfo.h
@@ -62,7 +62,7 @@ void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module&
       Function* Via = C->getParent()->getParent();
       DEBUG(outs() << MainFn->getName() << " -> " << Via->getName() << " -> " << Target->getName() << "\n");
       list<Instruction*> trace1 = PrettyPrinters::findPathToFunc(MainFn, Via, NULL, -1);
-      list<Instruction*> trace2 = PrettyPrinters::findPathToFunc(Via, Target, &state[PRIV_CONTEXT], ORIGIN_SANDBOX);
+      list<Instruction*> trace2 = PrettyPrinters::findPathToFunc(Via, Target, &state[ContextUtils::PRIV_CONTEXT], ORIGIN_SANDBOX);
       // check that we have successfully been able to find a full trace!
       if (!trace1.empty() && !trace2.empty()) {
         PrettyPrinters::ppTaintSource(C);

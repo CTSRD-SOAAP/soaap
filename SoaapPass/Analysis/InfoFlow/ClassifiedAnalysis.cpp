@@ -28,8 +28,8 @@ void ClassifiedAnalysis::initialise(ValueContextPairList& worklist, Module& M, S
         
           dbgs() << INDENT_1 << "Classification annotation " << annotationStrValCString << " found:\n";
         
-          state[NO_CONTEXT][annotatedVar] |= (1 << bitIdx);
-          addToWorklist(annotatedVar, NO_CONTEXT, worklist);
+          state[ContextUtils::NO_CONTEXT][annotatedVar] |= (1 << bitIdx);
+          addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
         }
       }
     }
@@ -53,8 +53,8 @@ void ClassifiedAnalysis::initialise(ValueContextPairList& worklist, Module& M, S
           if (annotationStrArrayCString.startswith(CLASSIFY)) {
             StringRef className = annotationStrArrayCString.substr(strlen(CLASSIFY)+1);
             ClassifiedUtils::assignBitIdxToClassName(className);
-            state[NO_CONTEXT][annotatedVar] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
-            addToWorklist(annotatedVar, NO_CONTEXT, worklist);
+            state[ContextUtils::NO_CONTEXT][annotatedVar] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
+            addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
           }
         }
       }

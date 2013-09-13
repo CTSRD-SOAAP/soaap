@@ -10,6 +10,10 @@ using namespace llvm;
 namespace soaap {
   class ContextUtils {
     public:
+      static Context* const NO_CONTEXT;
+      static Context* const PRIV_CONTEXT;
+      static Context* const SINGLE_CONTEXT;
+
       static bool IsContextInsensitiveAnalysis;
       static Context* calleeContext(Context* C, Function* callee, SandboxVector& sandboxes, Module& M);
       static ContextVector callerContexts(ReturnInst* RI, CallInst* CI, Context* C, SandboxVector& sandboxes, Module& M);

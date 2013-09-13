@@ -71,8 +71,8 @@ namespace soaap {
         for (typename DataflowFacts::iterator DI=F.begin(), DE=F.end(); DI != DE; DI++) {
           const Value* V = DI->first;
           FactType T = DI->second;
-          state[SINGLE_CONTEXT][V] = T;
-          addToWorklist(V, SINGLE_CONTEXT, worklist);
+          state[ContextUtils::SINGLE_CONTEXT][V] = T;
+          addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
         }
       }
     }
@@ -100,7 +100,7 @@ namespace soaap {
           }
         }
         else if (Instruction* I = dyn_cast<Instruction>(UI.getUse().getUser())) {
-          if (C == NO_CONTEXT) {
+          if (C == ContextUtils::NO_CONTEXT) {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), sandboxes, M);
             for (Context* C2 : C2s) {
@@ -145,7 +145,7 @@ namespace soaap {
     if (ContextUtils::IsContextInsensitiveAnalysis) {
       DEBUG(dbgs() << INDENT_1 << "Unmerging contexts\n");
       ContextVector Cs = ContextUtils::getAllContexts(sandboxes);
-      DataflowFacts F = state[SINGLE_CONTEXT];
+      DataflowFacts F = state[ContextUtils::SINGLE_CONTEXT];
       for (typename DataflowFacts::iterator I=F.begin(), E=F.end(); I != E; I++) {
         const Value* V = I->first;
         FactType T = I->second;

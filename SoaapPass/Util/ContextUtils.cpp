@@ -4,6 +4,9 @@
 using namespace soaap;
 
 bool ContextUtils::IsContextInsensitiveAnalysis = false;
+Context* const ContextUtils::NO_CONTEXT = new Context();
+Context* const ContextUtils::PRIV_CONTEXT = new Context();
+Context* const ContextUtils::SINGLE_CONTEXT = new Context();
 
 Context* ContextUtils::calleeContext(Context* C, Function* callee, SandboxVector& sandboxes, Module& M) {
   // callee context is the same sandbox, another sandbox or callgate (privileged)

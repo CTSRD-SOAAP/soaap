@@ -79,8 +79,8 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
             DEBUG(dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
-            state[NO_CONTEXT][annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
-            addToWorklist(annotatedVar, NO_CONTEXT, worklist);
+            state[ContextUtils::NO_CONTEXT][annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
+            addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
           }
         }
       }

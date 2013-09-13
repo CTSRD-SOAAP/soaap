@@ -18,9 +18,6 @@ namespace soaap {
     private:
       const ContextKind Kind;
   };
-  static Context* const NO_CONTEXT = new Context();
-  static Context* const PRIV_CONTEXT = new Context();
-  static Context* const SINGLE_CONTEXT = new Context();
 }
 
 #endif
