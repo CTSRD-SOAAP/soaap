@@ -42,7 +42,7 @@ namespace soaap {
       map<Context*, DataflowFacts> state;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
-      virtual FactType performMeet(FactType fromVal, FactType toVal);
+      virtual FactType performMeet(FactType fromVal, FactType toVal) = 0;
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
@@ -71,7 +71,7 @@ namespace soaap {
         for (typename DataflowFacts::iterator DI=F.begin(), DE=F.end(); DI != DE; DI++) {
           const Value* V = DI->first;
           FactType T = DI->second;
-          state[ContextUtils::SINGLE_CONTEXT][V] = T;
+          state[ContextUtils::SINGLE_CONTEXT][V] = T; // TODO: what if same V appears in multiple contexts?
           addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
         }
       }
@@ -179,10 +179,6 @@ namespace soaap {
     }
   }
 
-  template <typename FactType>
-  FactType InfoFlowAnalysis<FactType>::performMeet(FactType from, FactType to) {
-    return from | to;
-  }
 
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {

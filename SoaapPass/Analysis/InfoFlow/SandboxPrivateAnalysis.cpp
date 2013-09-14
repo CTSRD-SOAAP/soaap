@@ -262,3 +262,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
     }
   }
 }
+
+int SandboxPrivateAnalysis::performMeet(int from, int to) {
+  return from | to;
+}

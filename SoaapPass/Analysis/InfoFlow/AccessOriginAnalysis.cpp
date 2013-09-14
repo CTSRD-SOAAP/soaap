@@ -50,6 +50,11 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
   }
 }
 
+
+int AccessOriginAnalysis::performMeet(int from, int to) {
+  return from | to;
+}
+
 void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module& M) {
   if (Function* MainFn = M.getFunction("main")) {
     // Find privileged path to instruction I, via a function that calls a sandboxed callee

@@ -1,3 +1,4 @@
+#include "Analysis/InfoFlow/FPTargetsAnalysis.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/DebugUtils.h"
@@ -16,7 +17,8 @@ using namespace llvm;
 
 map<const CallInst*, FunctionVector> CallGraphUtils::callToCallees;
 map<const Function*, CallInstVector> CallGraphUtils::calleeToCalls;
-map<CallInst*, FunctionVector> CallGraphUtils::fpCallToCallees;
+FPTargetsAnalysis CallGraphUtils::fpTargetsAnalysis;
+bool CallGraphUtils::caching = false;
 
 void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
   if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
@@ -39,77 +41,15 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
 }
 
 void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
-  // find annotated function pointers and add edges from the calls of the fp to targets
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-  
-  map<Value*, FunctionVector> fpToTargets;
-  if (Function* F = M.getFunction("llvm.var.annotation")) {
-    for (User::use_iterator UI = F->use_begin(), UE = F->use_end(); UI != UE; UI++) {
-      User* user = UI.getUse().getUser();
-      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user)) {
-        Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-        StringRef annotationStrValStr = annotationStrValArray->getAsCString();
-        if (annotationStrValStr.startswith(SOAAP_FP)) {
-          FunctionVector callees;
-          string funcListCsv = annotationStrValStr.substr(strlen(SOAAP_FP)+1); //+1 because of _
-          DEBUG(dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
-          istringstream ss(funcListCsv);
-          string func;
-          while(getline(ss, func, ',')) {
-            // trim leading and trailing spaces
-            size_t start = func.find_first_not_of(" ");
-            size_t end = func.find_last_not_of(" ");
-            func = func.substr(start, end-start+1);
-            DEBUG(dbgs() << INDENT_2 << "Function: " << func << "\n");
-            if (Function* callee = M.getFunction(func)) {
-              DEBUG(dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
-              callees.push_back(callee);
-            }
-          }
-          fpToTargets[annotatedVar] = callees;
-        }
-      }
-    }
-  }
-
-  if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
-    for (User::use_iterator UI = F->use_begin(), UE = F->use_end(); UI != UE; UI++) {
-      User* user = UI.getUse().getUser();
-      if (isa<IntrinsicInst>(user)) {
-        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
-        Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-
-        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-        StringRef annotationStrValStr = annotationStrValArray->getAsCString();
-        
-        if (annotationStrValStr.startswith(SOAAP_FP)) {
-          FunctionVector callees;
-          string funcListCsv = annotationStrValStr.substr(strlen(SOAAP_FP)+1); //+1 because of _
-          DEBUG(dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
-          istringstream ss(funcListCsv);
-          string func;
-          while(getline(ss, func, ',')) {
-            // trim leading and trailing spaces
-            size_t start = func.find_first_not_of(" ");
-            size_t end = func.find_last_not_of(" ");
-            func = func.substr(start, end-start+1);
-            DEBUG(dbgs() << INDENT_2 << "Function: " << func << "\n");
-            if (Function* callee = M.getFunction(func)) {
-              DEBUG(dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
-              callees.push_back(callee);
-            }
-          }
-          fpToTargets[annotateCall] = callees;
-        }
-      }
-    }
-  }
+  // Find annotated function pointers and add edges from the calls of the fp to targets.
+  // Because annotated pointers can be assigned and passed around, we essentially perform
+  // an information flow analysis:
+  SandboxVector dummyVector;
+  fpTargetsAnalysis.doAnalysis(M, dummyVector);
 
   // for each fp-call, add annotated edges to the call graph
   DEBUG(dbgs() << INDENT_1 << "Finding all fp calls\n");
+  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
     CallGraphNode* callerNode = CG->getOrInsertFunction(F);
@@ -118,32 +58,31 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           if (C->getCalledFunction() == NULL) {
             Value* FP = C->getCalledValue();
-            if (LoadInst* L = dyn_cast<LoadInst>(FP)) {
-              FP = L->getPointerOperand()->stripPointerCasts();
-            }
             DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
             DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
             DEBUG(dbgs() << INDENT_3 << "FP: " << *FP << "\n");
-            if (fpToTargets.find(FP) != fpToTargets.end()) {
-              DEBUG(dbgs() << INDENT_3 << "Targets: ";);
-              for (Function* T : fpToTargets[FP]) {
-                DEBUG(dbgs() << " " << T->getName());
-                CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
-                callerNode->addCalledFunction(CallSite(C), calleeNode);
-              }
-              DEBUG(dbgs() << "\n");
-              fpCallToCallees[C] = fpToTargets[FP];
+            DEBUG(dbgs() << INDENT_3 << "Targets: ";);
+            for (Function* T : fpTargetsAnalysis.getTargets(FP)) {
+              DEBUG(dbgs() << " " << T->getName());
+              CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
+              callerNode->addCalledFunction(CallSite(C), calleeNode);
             }
+            DEBUG(dbgs() << "\n");
           }
         }
       }
     }
   }
+
+  // repopulate caches, because they would've been populated already for the FPTargetsAnalysis
+  // and now turn on caching so future calls to getCallees and getCallers read from the caches.
+  populateCallCalleeCaches(M);
+  caching = true;
 }
 
 FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
   DEBUG(dbgs() << INDENT_5 << "Getting callees for " << *C << "\n");
-  if (callToCallees.empty()) {
+  if (callToCallees.empty() || !caching) {
     populateCallCalleeCaches(M);
   }
   DEBUG(dbgs() << INDENT_5 << "Callees: ");
@@ -156,7 +95,7 @@ FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
 
 CallInstVector CallGraphUtils::getCallers(const Function* F, Module& M) {
   DEBUG(dbgs() << INDENT_5 << "Getting callers for " << F->getName() << "\n");
-  if (calleeToCalls.empty()) {
+  if (calleeToCalls.empty() || !caching) {
     populateCallCalleeCaches(M);
   }
   return calleeToCalls[F];
@@ -184,11 +123,9 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
               callees.push_back((Function*)callee);
             }
           }
-          if (fpCallToCallees.find(C) != fpCallToCallees.end()) {
-            for (Function* callee : fpCallToCallees[C]) {
-              DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
-              callees.push_back(callee);
-            }
+          for (Function* callee : fpTargetsAnalysis.getTargets(FP)) {
+            DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
+            callees.push_back(callee);
           }
         }
         callToCallees[C] = callees;

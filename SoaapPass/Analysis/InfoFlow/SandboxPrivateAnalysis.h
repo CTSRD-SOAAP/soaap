@@ -11,8 +11,11 @@ namespace soaap {
   class SandboxPrivateAnalysis : public InfoFlowAnalysis<int> {
     public:
       SandboxPrivateAnalysis(FunctionVector& privMethods) : privilegedMethods(privMethods) { }
+    
+    protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
+      virtual int performMeet(int from, int to);
 
     private:
       FunctionVector privilegedMethods;

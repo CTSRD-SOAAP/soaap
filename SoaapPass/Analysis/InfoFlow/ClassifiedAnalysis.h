@@ -9,9 +9,10 @@ using namespace llvm;
 namespace soaap {
 
   class ClassifiedAnalysis: public InfoFlowAnalysis<int> {
-    public:
+    protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
+      virtual int performMeet(int from, int to);
   };
 }
 
