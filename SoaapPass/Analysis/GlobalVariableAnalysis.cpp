@@ -11,6 +11,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <sstream>
+
 using namespace soaap;
 
 void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
@@ -37,7 +39,7 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               //if (gv->isDeclaration()) continue; // not concerned with externs
               if (!(varToPerms[gv] & VAR_READ_MASK)) {
                 if (find(alreadyReportedReads.begin(), alreadyReportedReads.end(), gv) == alreadyReportedReads.end()) {
-                  outs() << " *** Sandboxed method \"" << F->getName().str() << "\" [" << S->getName() << "] read global variable \"" << gv->getName().str() << "\" but is not allowed to. If the access is intended, the variable needs to be annotated with __soaap_read_var.\n";
+                  outs() << " *** Sandboxed method \"" << F->getName().str() << "\" [" << S->getName() << "] read global variable \"" << gv->getName().str() << "\" " << findGlobalDeclaration(M, gv) << "but is not allowed to. If the access is intended, the variable needs to be annotated with __soaap_read_var.\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -55,7 +57,7 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               // variable can be written to
               if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
                 if (find(alreadyReportedWrites.begin(), alreadyReportedWrites.end(), gv) == alreadyReportedWrites.end()) {
-                  outs() << " *** Sandboxed method \"" << F->getName().str() << "\" [" << S->getName() << "] wrote to global variable \"" << gv->getName().str() << "\" but is not allowed to\n";
+                  outs() << " *** Sandboxed method \"" << F->getName().str() << "\" [" << S->getName() << "] wrote to global variable \"" << gv->getName().str() << "\" " << findGlobalDeclaration(M, gv) << "but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
@@ -119,6 +121,23 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
     }
   }
   */
+}
+
+string GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
+  NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu");
+  ostringstream ss;
+  for (int i=0; i<NMD->getNumOperands(); i++) {
+    DICompileUnit CU(NMD->getOperand(i));
+    DIArray globals = CU.getGlobalVariables();
+    for (int j=0; j<globals.getNumElements(); j++) {
+      DIGlobalVariable GV(globals.getElement(j));
+      if (GV.getGlobal() == G) {
+        ss << "(" << GV.getFilename().str() << ":" << GV.getLineNumber() << ") ";
+        return ss.str();
+      }
+    }
+  }
+  return "";
 }
 
 // Check for writes that occur in the privileged parent after sandboxes have
@@ -258,7 +277,7 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
               DEBUG(dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
               DEBUG(dbgs() << "   readerSandboxNames: " << SandboxUtils::stringifySandboxNames(readerSandboxNames) << ", reachingCreationsEntry: " << SandboxUtils::stringifySandboxNames(reachingCreationsEntry[store]) << ", possInconsSandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << "\n");
               if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
-                outs() << " *** Write to shared variable \"" << gv->getName() << "\" outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
+                outs() << " *** Write to shared variable \"" << gv->getName() << "\" " << findGlobalDeclaration(M, gv) << "outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
                   outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
