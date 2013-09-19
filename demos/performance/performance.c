@@ -4,6 +4,7 @@
 void accept_connection();
 
 int main(int argc, char** argv) {
+  __soaap_create_persistent_sandbox("session");
   int i;
   for (i = 0; i < 1000; i++) {
     accept_connection();
@@ -11,7 +12,7 @@ int main(int argc, char** argv) {
 }
 
 __soaap_sandbox_persistent("session")
-__soaap_overhead(10)
+__soaap_overhead(2)
 void accept_connection() {
   static int id = 1;
   int i;
