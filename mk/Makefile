@@ -11,7 +11,7 @@ LLVM_BUILD_DIR=/home/kg365/pool/llvm
 	${LLVM_BUILD_DIR}/bin/llvm-dis -o ${.TARGET} ${.IMPSRC}
 
 .bc.soaap:
-	${LLVM_BUILD_DIR}/bin/opt -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap ${SOAAP_FLAGS} -o /dev/null ${.IMPSRC}
+	${LLVM_BUILD_DIR}/bin/opt -analyze -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap ${SOAAP_FLAGS} -o /dev/null ${.IMPSRC}
 
 .bc.soaap_cg:
 	${LLVM_BUILD_DIR}/bin/opt -load $(SOAAP_BUILD_DIR)/libcep.so -insert-call-edge-profiling -o ${.IMPSRC:R}.pbc ${.IMPSRC} 
