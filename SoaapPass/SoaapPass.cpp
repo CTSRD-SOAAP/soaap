@@ -37,6 +37,9 @@ static cl::opt<bool> ClContextInsens("soaap-context-insens",
 static cl::opt<bool> ClListSandboxedFuncs("soaap-list-sandboxed-funcs",
        cl::desc("List sandboxed functions"));
 
+static cl::opt<bool> ClListFPCalls("soaap-list-fp-calls",
+       cl::desc("List function-pointer calls"));
+
 namespace soaap {
 
   struct SoaapPass : public ModulePass {
@@ -68,6 +71,11 @@ namespace soaap {
       ProfileInfo& PI = getAnalysis<ProfileInfo>();
       LLVMAnalyses::setCallGraphAnalysis(&CG);
       LLVMAnalyses::setProfileInfoAnalysis(&PI);
+
+      if (ClListFPCalls) {
+        outs() << "* Listing function-pointer calls\n";
+        CallGraphUtils::listFPCalls(M);
+      }
 
       outs() << "* Adding dynamic/annotated call edges to callgraph (if available)\n";
       CallGraphUtils::loadDynamicCallGraphEdges(M);

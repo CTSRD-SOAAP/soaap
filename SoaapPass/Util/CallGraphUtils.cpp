@@ -40,6 +40,35 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
   }
 }
 
+void CallGraphUtils::listFPCalls(Module& M) {
+  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  unsigned long numFPcalls = 0;
+  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+    if (F->isDeclaration()) continue;
+    bool displayedFuncName = false;
+    CallGraphNode* callerNode = CG->getOrInsertFunction(F);
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      if (!isa<IntrinsicInst>(&*I)) {
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          if (C->getCalledFunction() == NULL) {
+            if (MDNode* N = C->getMetadata("dbg")) {
+              DILocation loc(N);
+              if (!displayedFuncName) {
+                // only display function on first function-pointer call
+                outs() << INDENT_1 << F->getName() << ":\n";
+                displayedFuncName = true;
+              }
+              outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
+            }
+            numFPcalls++;
+          }
+        }
+      }
+    }
+  }
+  outs() << numFPcalls << " function-pointer calls in total\n";
+}
+
 void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // Find annotated function pointers and add edges from the calls of the fp to targets.
   // Because annotated pointers can be assigned and passed around, we essentially perform
