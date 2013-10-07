@@ -9,6 +9,7 @@
 #include "llvm/Analysis/ProfileInfo.h"
 
 #include <sstream>
+#include <cxxabi.h>
 
 #include "soaap.h"
 
@@ -55,7 +56,13 @@ void CallGraphUtils::listFPCalls(Module& M) {
               DILocation loc(N);
               if (!displayedFuncName) {
                 // only display function on first function-pointer call
-                outs() << INDENT_1 << F->getName() << ":\n";
+                DEBUG(dbgs() << F->getName() << "\n");
+                string funcName = F->getName();
+                DEBUG(dbgs() << "got func name\n");
+                int status = -4;
+                char* demangled = abi::__cxa_demangle(funcName.c_str(), 0, 0, &status);
+                DEBUG(dbgs() << "demangled, status=" << status << "\n");
+                outs() << INDENT_1 << (status == 0 ? demangled : funcName) << ":\n";
                 displayedFuncName = true;
               }
               outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
