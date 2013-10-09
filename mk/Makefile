@@ -5,13 +5,13 @@ SOAAP_INCLUDE_PATH=/home/kg365/workspace/soaap/include
 LLVM_BUILD_DIR=/home/kg365/pool/llvm
 
 .c.bc:
-	${LLVM_BUILD_DIR}/bin/clang -c -g -I $(SOAAP_INCLUDE_PATH) -emit-llvm -o ${.TARGET} ${.IMPSRC}
+	${LLVM_BUILD_DIR}/bin/clang -c -gline-tables-only -I $(SOAAP_INCLUDE_PATH) -emit-llvm -o ${.TARGET} ${.IMPSRC}
 
 .bc.ll:
 	${LLVM_BUILD_DIR}/bin/llvm-dis -o ${.TARGET} ${.IMPSRC}
 
 .bc.soaap:
-	${LLVM_BUILD_DIR}/bin/opt -analyze -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap ${SOAAP_FLAGS} -o /dev/null ${.IMPSRC}
+	${LLVM_BUILD_DIR}/bin/opt -analyze -disable-verify -load $(SOAAP_BUILD_DIR)/libsoaap.so -soaap ${SOAAP_FLAGS} -o /dev/null ${.IMPSRC}
 
 .bc.soaap_cg:
 	${LLVM_BUILD_DIR}/bin/opt -load $(SOAAP_BUILD_DIR)/libcep.so -insert-call-edge-profiling -o ${.IMPSRC:R}.pbc ${.IMPSRC} 
