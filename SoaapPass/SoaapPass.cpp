@@ -16,6 +16,7 @@
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/ClassHierarchyUtils.h"
 #include "Util/ContextUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/SandboxUtils.h"
@@ -80,6 +81,10 @@ namespace soaap {
       outs() << "* Adding dynamic/annotated call edges to callgraph (if available)\n";
       CallGraphUtils::loadDynamicCallGraphEdges(M);
       CallGraphUtils::loadAnnotatedCallGraphEdges(M);
+
+      outs() << "* Finding class hierarchy (if there is one)\n";
+      ClassHierarchyUtils::findClassHierarchy(M);
+      //ClassHierarchyUtils::findAllCalleesForVirtualCalls(M);
 
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);

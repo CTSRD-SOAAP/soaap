@@ -1,5 +1,6 @@
 #include "Analysis/InfoFlow/FPTargetsAnalysis.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/DebugUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -152,7 +153,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             callees.push_back(callee);
           }
         }
-        else if (Value* FP = C->getCalledValue())  { // dynamic/annotated callees
+        else if (Value* FP = C->getCalledValue())  { // dynamic/annotated callees/c++ virtual funcs
           if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
             for (const Function* callee : PI->getDynamicCallees(C)) {
               DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
@@ -161,6 +162,10 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
           }
           for (Function* callee : fpTargetsAnalysis.getTargets(FP)) {
             DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
+            callees.push_back(callee);
+          }
+          for (Function* callee : ClassHierarchyUtils::findAllCalleesForVirtualCall(C, M)) {
+            DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }
         }
