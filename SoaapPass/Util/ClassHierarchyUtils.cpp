@@ -1,3 +1,4 @@
+#include "ClassDebugInfoPass.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/Analysis/ProfileInfo.h"
@@ -58,9 +59,25 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      if (MDNode* N = I->getMetadata("soaap_vtable_var")) {
+      GlobalVariable* cVTableVar;
+      bool instHasMetadata = false;
+      if (MDNode* N = I->getMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND)) {
+        cVTableVar = cast<GlobalVariable>(N->getOperand(0));
+        instHasMetadata = true;
+      }
+      else if (MDNode* N = I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
+        ConstantDataArray* classTypeIdConstant = cast<ConstantDataArray>(N->getOperand(0));
+        string classTypeIdStr = classTypeIdConstant->getAsString().str();
+        dbgs() << "classTypeIdStr: " << classTypeIdStr << "\n";
+        cVTableVar = M.getGlobalVariable(classTypeIdStr.replace(0, 4, "_ZTV"));
+        instHasMetadata = true;
+      }
+      if (instHasMetadata) {
+        if (cVTableVar == NULL) {
+          dbgs() << "ERROR: cVTableVar is NULL\n";
+        }
         CallInst* C = cast<CallInst>(&*I);
-        callToCalleesCache[C] = findAllCalleesForVirtualCall(C, N, M);
+        callToCalleesCache[C] = findAllCalleesForVirtualCall(C, cVTableVar, M);
       }
     }
   }
@@ -162,7 +179,7 @@ void ClassHierarchyUtils::ppClassHierarchyHelper(GlobalVariable* c, ClassHierarc
 }
 
 
-FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, MDNode* N, Module& M) {
+FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* cVTableVar, Module& M) {
   
   FunctionVector callees;
 
@@ -186,7 +203,6 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, MD
   // call void %10(%"class.box::A"* %6), !dbg !49
 
   dbgs() << "Call: " << *C << "\n";
-  GlobalVariable* cVTableVar = cast<GlobalVariable>(N->getOperand(0));
   if (LoadInst* calledVal = dyn_cast<LoadInst>(C->getCalledValue())) {
     if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(calledVal->getPointerOperand())) {
       if (!isa<ConstantInt>(gep->getOperand(1))) {

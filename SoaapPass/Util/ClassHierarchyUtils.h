@@ -26,7 +26,7 @@ namespace soaap {
       static bool cachingDone;
       static void processTypeInfo(GlobalVariable* TI);
       static void calculateTransitiveClosure();
-      static FunctionVector findAllCalleesForVirtualCall(CallInst* C, MDNode* N, Module& M);
+      static FunctionVector findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* cVTableVar, Module& M);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);
       static void ppClassHierarchyHelper(GlobalVariable* c, ClassHierarchy& classHierarchy, int nesting);
   };

@@ -20,6 +20,7 @@ include_directories(${LLVM_SOURCE_DIR}/runtime/libprofile)
 include_directories(${LLVM_BINARY_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/SoaapPass)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ClassDebugInfoPass)
 
 add_subdirectory(SoaapPass)
 add_subdirectory(CallEdgeProfiling)
