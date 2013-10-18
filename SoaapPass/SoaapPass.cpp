@@ -41,6 +41,9 @@ static cl::opt<bool> ClListSandboxedFuncs("soaap-list-sandboxed-funcs",
 static cl::opt<bool> ClListFPCalls("soaap-list-fp-calls",
        cl::desc("List function-pointer calls"));
 
+static cl::opt<bool> ClDumpVirtualCallees("soaap-dump-virtual-callees",
+       cl::desc("Dump C++ virtual callees (derived from debugging information)"));
+
 namespace soaap {
 
   struct SoaapPass : public ModulePass {
@@ -60,7 +63,6 @@ namespace soaap {
     }
 
     virtual bool runOnModule(Module& M) {
-
       outs() << "* Running " << getPassName();
       if (ClContextInsens) {
         outs() << " in context-insensitive mode";
@@ -78,13 +80,12 @@ namespace soaap {
         CallGraphUtils::listFPCalls(M);
       }
 
+      outs() << "* Finding class hierarchy (if there is one)\n";
+      ClassHierarchyUtils::findClassHierarchy(M);
+
       outs() << "* Adding dynamic/annotated call edges to callgraph (if available)\n";
       CallGraphUtils::loadDynamicCallGraphEdges(M);
       CallGraphUtils::loadAnnotatedCallGraphEdges(M);
-
-      outs() << "* Finding class hierarchy (if there is one)\n";
-      ClassHierarchyUtils::findClassHierarchy(M);
-      //ClassHierarchyUtils::findAllCalleesForVirtualCalls(M);
 
       outs() << "* Processing command-line options\n"; 
       processCmdLineArgs(M);

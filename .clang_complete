@@ -1,7 +1,0 @@
--ISoaapPass
--Iinclude
--ICallEdgeProfiling
--IDOTDynCG
--I/home/kg365/workspace/llvm/include
--I/usr/include
--I/usr/include/c++/4.2

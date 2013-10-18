@@ -1,7 +1,8 @@
 #include "Util/ClassHierarchyUtils.h"
 #include "llvm/DebugInfo.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/Analysis/ProfileInfo.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/InstIterator.h"
@@ -17,43 +18,91 @@ using namespace soaap;
 using namespace llvm;
 using namespace std;
 
-StringVector ClassHierarchyUtils::classes;
-map<string,StringVector> ClassHierarchyUtils::classToSubclasses;
-map<string,StringVector> ClassHierarchyUtils::classToDescendents;
+GlobalVariableVector ClassHierarchyUtils::classes;
+ClassHierarchy ClassHierarchyUtils::classToSubclasses;
+ClassHierarchy ClassHierarchyUtils::classToDescendents;
+map<CallInst*,FunctionVector> ClassHierarchyUtils::callToCalleesCache;
+map<GlobalVariable*,GlobalVariable*> ClassHierarchyUtils::typeInfoToVTable;
+map<GlobalVariable*,GlobalVariable*> ClassHierarchyUtils::vTableToTypeInfo;
+bool ClassHierarchyUtils::cachingDone = false;
 
 void ClassHierarchyUtils::findClassHierarchy(Module& M) {
-  NamedMDNode* NMD = M.getNamedMetadata("llvm.dbg.cu");
-  //ostringstream ss;
-  for (int i=0; i<NMD->getNumOperands(); i++) {
-    DICompileUnit CU(NMD->getOperand(i));
-    DIArray types = CU.getRetainedTypes();
-    for (int j=0; j<types.getNumElements(); j++) {
-      DICompositeType clazz(types.getElement(j));
-      if (clazz.getTag() == dwarf::DW_TAG_class_type) {
-        string clazzName = clazz.getIdentifier()->getString().str();
-        classes.push_back(clazzName);
-        DEBUG(dbgs() << "Class: " << clazzName << "\n");
-        DIArray members = clazz.getTypeArray();
-        for (int k=0; k<members.getNumElements(); k++) {
-          DIDescriptor member(members.getElement(k));
-          if (member.getTag() == dwarf::DW_TAG_inheritance) {
-            DIDerivedType inheritance(member);
-            DICompositeType base(inheritance.getTypeDerivedFrom());
-            string baseName = base.getIdentifier()->getString().str();
-            DEBUG(dbgs() << "    Base: " << baseName << "\n");
-            classToSubclasses[baseName].push_back(clazzName);
-          }
-        }
+  // extract call hierarchy using std::type_info structures rather
+  // than debug info. The former works even for when there are anonymous
+  // namespaces. type_info structs can be obtained from vtable globals.
+  // (for more info, see http://mentorembedded.github.io/cxx-abi/abi.html)
+  for (Module::global_iterator I=M.global_begin(), E=M.global_end(); I != E; I++) {
+    GlobalVariable* G = &*I;
+    if (G->getName().startswith("_ZTVN")) {
+      if (G->hasInitializer()) {
+        ConstantArray* Ginit = cast<ConstantArray>(G->getInitializer());
+        // Ginit[1] is the type_info global for this vtable's type
+        GlobalVariable* TI = cast<GlobalVariable>(Ginit->getOperand(1)->stripPointerCasts());
+        //TI->dump();
+        typeInfoToVTable[TI] = G;
+        vTableToTypeInfo[G] = TI;
+        processTypeInfo(TI); // process TI recursively (it contains refs to super-class TIs)
       }
     }
   }
-
-  DEBUG(ppClassHierarchy(classToSubclasses));
+  
+  ppClassHierarchy(classToSubclasses);
 
   // calculate transitive closure of hierarchy
   calculateTransitiveClosure();
 
-  DEBUG(ppClassHierarchy(classToDescendents));
+  ppClassHierarchy(classToDescendents);
+}
+
+void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
+  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+    if (F->isDeclaration()) continue;
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      if (MDNode* N = I->getMetadata("soaap_vtable_var")) {
+        CallInst* C = cast<CallInst>(&*I);
+        callToCalleesCache[C] = findAllCalleesForVirtualCall(C, N, M);
+      }
+    }
+  }
+  cachingDone = true;
+}
+
+FunctionVector ClassHierarchyUtils::getCalleesForVirtualCall(CallInst* C, Module& M) {
+  if (!cachingDone) {
+    cacheAllCalleesForVirtualCalls(M);
+  }
+  return callToCalleesCache[C];
+}
+
+void ClassHierarchyUtils::processTypeInfo(GlobalVariable* TI) {
+  if (find(classes.begin(), classes.end(), TI) == classes.end()) {
+    classes.push_back(TI);
+
+    // extract direct base classes from type_info
+    ConstantStruct* TIinit = cast<ConstantStruct>(TI->getInitializer());
+
+    int TInumOperands = TIinit->getNumOperands();
+    if (TInumOperands > 2) {
+      // we have >= 1 base class(es).
+      if (TInumOperands == 3) {
+        // abi::__si_class_type_info
+        GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(2)->stripPointerCasts());
+        classToSubclasses[baseTI].push_back(TI);
+        //dbgs() << "  " << *baseTI << "\n";
+        processTypeInfo(baseTI);
+      }
+      else {
+        // abi::__vmi_class_type_info
+        // (skip over first two additional fields, which are "flags" and "base_count")
+        for (int i=4; i<TInumOperands; i+=2) {
+          GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(i)->stripPointerCasts());
+          classToSubclasses[baseTI].push_back(TI);
+          //dbgs() << "  " << *baseTI << "\n";
+          processTypeInfo(baseTI);
+        }
+      }
+    }
+  }
 }
 
 void ClassHierarchyUtils::calculateTransitiveClosure() {
@@ -64,11 +113,11 @@ void ClassHierarchyUtils::calculateTransitiveClosure() {
   bool change = false;
   do {
     change = false;
-    for (map<string,StringVector>::iterator I=classToDescendents.begin(); I != classToDescendents.end(); I++) {
-      string base = I->first;
-      StringVector descendents = I->second;
-      for (string c : descendents) {
-        for (string cSub : classToSubclasses[c]) {
+    for (ClassHierarchy::iterator I=classToDescendents.begin(); I != classToDescendents.end(); I++) {
+      GlobalVariable* base = I->first;
+      GlobalVariableVector descendents = I->second;
+      for (GlobalVariable* c : descendents) {
+        for (GlobalVariable* cSub : classToSubclasses[c]) {
           if (find(descendents.begin(), descendents.end(), cSub) == descendents.end()) {
             descendents.push_back(cSub);
             change = true;
@@ -80,22 +129,22 @@ void ClassHierarchyUtils::calculateTransitiveClosure() {
   } while (change);
 }
 
-void ClassHierarchyUtils::ppClassHierarchy(map<string,StringVector>& classHierarchy) {
+void ClassHierarchyUtils::ppClassHierarchy(ClassHierarchy& classHierarchy) {
   // first find all classes that do not have subclasses
-  StringVector baseClasses = classes;
-  for (map<string,StringVector>::iterator I=classHierarchy.begin(); I != classHierarchy.end(); I++) {
-    StringVector subclasses = I->second;
-    for (string sc : subclasses) {
+  GlobalVariableVector baseClasses = classes;
+  for (ClassHierarchy::iterator I=classHierarchy.begin(); I != classHierarchy.end(); I++) {
+    GlobalVariableVector subclasses = I->second;
+    for (GlobalVariable* sc : subclasses) {
       baseClasses.erase(remove(baseClasses.begin(), baseClasses.end(), sc), baseClasses.end());
     }
   }
 
-  for (string bc : baseClasses) {
+  for (GlobalVariable* bc : baseClasses) {
     ppClassHierarchyHelper(bc, classHierarchy, 0);
   }
 }
 
-void ClassHierarchyUtils::ppClassHierarchyHelper(string c, map<string,StringVector>& classHierarchy, int nesting) {
+void ClassHierarchyUtils::ppClassHierarchyHelper(GlobalVariable* c, ClassHierarchy& classHierarchy, int nesting) {
   for (int i=0; i<nesting-1; i++) {
     dbgs() << "    ";
   }
@@ -103,40 +152,26 @@ void ClassHierarchyUtils::ppClassHierarchyHelper(string c, map<string,StringVect
     dbgs() << " -> ";
   }
   int status = -4;
-  string cCopy = c;
+  string cName = c->getName();
 
-  char* demangled = abi::__cxa_demangle(cCopy.replace(0, 4, "_Z").c_str(), 0, 0, &status);
-  dbgs() << (status == 0 ? demangled : c) << "\n";
-  for (string sc : classHierarchy[c]) {
+  char* demangled = abi::__cxa_demangle(cName.replace(0, 4, "_Z").c_str(), 0, 0, &status);
+  dbgs() << (status == 0 ? demangled : cName) << "\n";
+  for (GlobalVariable* sc : classHierarchy[c]) {
     ppClassHierarchyHelper(sc, classHierarchy, nesting+1);
   }
 }
 
-void ClassHierarchyUtils::findAllCalleesForVirtualCalls(Module& M) {
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      if (!isa<IntrinsicInst>(&*I)) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (C->getCalledFunction() == NULL) {
-            DEBUG(dbgs() << "Potential candidate: " << *C << "\n");
-            findAllCalleesForVirtualCall(C, M);
-          }
-        }
-      }
-    }
-  }
-}
 
-FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Module& M) {
+FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, MDNode* N, Module& M) {
   
   FunctionVector callees;
 
-  //TODO: determine whether this is a virtual function call or a normal c-style
-  // function pointer call
-
-  // if this is a virtual call, then we need to find the callee
-  // Firstly, find the static type and the vtable index for the function being called
+  // We know this is a virtual call, as it has already been annotated with debugging metadata
+  // in a previous pass (mdnode N). 
+  //
+  // Metadata node N contains the vtable global variable for C's static class type.
+  // We still need to obtain the vtable idx and use the class hierarchy to also obtain
+  // descendent vtables and thus descendent implementations of C's callees.
   //
   // Relevant bit of code for a vtable lookup, will look like this:
   //
@@ -149,61 +184,57 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Mo
   // %9 = getelementptr inbounds void (%"class.box::A"*)** %8, i64 0, !dbg !49
   // %10 = load void (%"class.box::A"*)** %9, !dbg !49
   // call void %10(%"class.box::A"* %6), !dbg !49
-  //
-  
-  // We check to see if this is a c++ virtual call by looking for the above pattern.
-  // We first check for the vtable lookup and then whether the receiver type is a 
-  // c++ class. Finally, we check to see if the vtable global exists. If these 3
-  // steps can be carried out then we conclude that this is a virtual call.
 
-  // vtable check:
-  LoadInst* callee = cast<LoadInst>(C->getCalledValue());
-  if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(callee->getPointerOperand())) {
-    int vtableIdx = cast<ConstantInt>(gep->getOperand(1))->getSExtValue();
-    DEBUG(dbgs() << "receiverVar vtable idx: " << vtableIdx << "\n");
-  
-    // now check receiver type:
-    // First arg will be the receiver 
-    if (LoadInst* receiver = cast<LoadInst>(C->getArgOperand(0)->stripPointerCasts())) {
-      Value* receiverVar = receiver->getPointerOperand();
-      DEBUG(dbgs() << "receiverVar: " << *receiverVar << "\n");
-
-      // To get the static type of the receiver var, look for the call to llvm.dbg.declare()
-      // (While not difficult to do, llvm already provides a helper function to do this):
-      DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(receiverVar);
-      DEBUG(dbgs() << "receiverVar dbgDecl: " << *dbgDecl << "\n");
-
-      DIVariable varDbg(dbgDecl->getVariable());
-      DIDerivedType varPtrTypeDbg(varDbg.getType());
-      DICompositeType varClassTypeDbg(varPtrTypeDbg.getTypeDerivedFrom());
-
-      if (MDString* varClazzId = varClassTypeDbg.getIdentifier()) {
-        string varClazzName = varClazzId->getString().str();
-        DEBUG(dbgs() << "receiverVar class name: " << varClazzName << "\n");
-
-        // Obtain the callees, starting from the receiver's static class type
-        if (find(classes.begin(), classes.end(), varClazzName) != classes.end()) {
-          StringVector descendents = classToDescendents[varClazzName];
-          descendents.push_back(varClazzName); // add varClazzName itself
-          for (string clazz : descendents) {
-            string vtableName = convertTypeIdToVTableId(clazz);
-            if (GlobalVariable* vtableVar = M.getGlobalVariable(vtableName)) {
-              ConstantArray* vtable = cast<ConstantArray>(vtableVar->getInitializer());
-              Function* vfunc = cast<Function>(vtable->getOperand(vtableIdx+2)->stripPointerCasts());
-              DEBUG(dbgs() << "receiverVar class: " << clazz << "\n");
-              DEBUG(dbgs() << "receiverVar vtable func: " << vfunc->getName() << "\n");
-              callees.push_back(vfunc);
+  dbgs() << "Call: " << *C << "\n";
+  GlobalVariable* cVTableVar = cast<GlobalVariable>(N->getOperand(0));
+  if (LoadInst* calledVal = dyn_cast<LoadInst>(C->getCalledValue())) {
+    if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(calledVal->getPointerOperand())) {
+      if (!isa<ConstantInt>(gep->getOperand(1))) {
+        dbgs() << "vtable idx is NOT a ConstantInt\n";
+        C->dump();
+        gep->getOperand(1)->dump();
+      }
+      if (ConstantInt* cVTableIdxVal = dyn_cast<ConstantInt>(gep->getOperand(1))) {
+        int cVTableIdx = cVTableIdxVal->getSExtValue();
+        
+        // find all implementations in reciever's class (corresponding to the static type)
+        // as well as all descendent classes. Note: callees will be at same idx in all vtables.
+        GlobalVariable* cClazzTI = vTableToTypeInfo[cVTableVar];
+        GlobalVariableVector descendents = classToDescendents[cClazzTI];
+        descendents.push_back(cClazzTI);
+        for (GlobalVariable* clazzTI : descendents) {
+          dbgs() << "Looking for function at index " << cVTableIdx << " in " << clazzTI->getName() << "\n";
+          GlobalVariable* clazzVTableVar = typeInfoToVTable[clazzTI];
+          ConstantArray* clazzVTable = cast<ConstantArray>(clazzVTableVar->getInitializer());
+          Value* clazzVTableElem = clazzVTable->getOperand(cVTableIdx+2)->stripPointerCasts();
+          if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
+            dbgs() << "  vtable entry is func: " << callee->getName() << "\n";
+            if (find(callees.begin(), callees.end(), callee) == callees.end()) {
+              callees.push_back(callee);
             }
+          }
+          else {
+            dbgs() << "  vtable entry " << (cVTableIdx+2) << " is not a Function\n";
+            clazzVTableElem->dump();
           }
         }
       }
     }
   }
 
+  // debugging
+  bool dbg = false;
+  DEBUG(dbg = true);
+  if (dbg) {
+    dbgs() << "Callees: [";
+    int i = 0;
+    for (Function* F : callees) {
+      dbgs() << F->getName();
+      if (i < callees.size()-1)
+        dbgs() << ", ";
+      i++;
+    }
+    dbgs() << "]\n";
+  }
   return callees;
-}
-
-string ClassHierarchyUtils::convertTypeIdToVTableId(string typeId) {
-  // replace _ZTS with _ZTV
-  return typeId.replace(0, 4, "_ZTV");
 }

@@ -164,7 +164,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }
-          for (Function* callee : ClassHierarchyUtils::findAllCalleesForVirtualCall(C, M)) {
+          for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
             DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }

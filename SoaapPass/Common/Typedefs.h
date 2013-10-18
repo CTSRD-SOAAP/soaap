@@ -2,6 +2,7 @@
 #define SOAAP_TYPEDEFS_H
 
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
@@ -24,6 +25,7 @@ namespace soaap {
   typedef SmallVector<Context*,8> ContextVector;
   typedef vector<BasicBlock*> BasicBlockVector;  // use <vector> as can be large
   typedef list<Instruction*> InstTrace;
+  typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
 }
 
 #endif
