@@ -120,8 +120,9 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                               ss << "E"; // end of non-local qualified name
                             }
                           }
-                          ss << "EE"; // end of template args and mangled identifier
+                          ss << "E"; // end of template args and mangled identifier
                         }
+                        ss << "E";
                         vtableGlobalName = ss.str();
                         dbgs() << "Looking for vtable global " << vtableGlobalName << "\n";
                         if (GlobalVariable* vtableGlobal = M.getGlobalVariable(vtableGlobalName, true)) {
