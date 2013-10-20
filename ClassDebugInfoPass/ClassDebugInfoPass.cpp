@@ -83,29 +83,45 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                         // to know what they are in order to construct the vtable global name
                         // correctly.
 
-                        SmallVector<string,2> enclosingNameSpaces;
-                        DIScope ns = varClassTypeDbg.getContext();
-                        while (ns.isNameSpace()) {
-                          DINameSpace nsDbg(ns);
-                          string nsName = nsDbg.getName();
-                          if (nsName != "") {
-                            enclosingNameSpaces.insert(enclosingNameSpaces.begin(), nsName);
-                          }
-                          else {
-                            // break?
-                          }
-                          ns = nsDbg.getContext();
+                        SmallVector<string,2> scopes = getEnclosingScopes(varClassTypeDbg);
+                        scopes.push_back("_GLOBAL__N_1"); // add the anonymous scope
+                        string className = varClass.getName(); 
+                        int templateBracket = className.find("<");
+                        if (templateBracket != string::npos) {
+                          className = className.erase(templateBracket);
                         }
-
-                        // construct mangled name for vtable
+                        scopes.push_back(className); // add the class name
+                        
+                        map<string,int> prefixToId;
+                        int id = -1;
                         stringstream ss;
                         ss << "_ZTVN";
-                        for (string s : enclosingNameSpaces) {
-                          ss << s.length() << s;
+                        ss << mangleScopes(scopes, prefixToId, id);
+
+                        // construct mangled name for vtable. Note we have to cater for
+                        // compression whereby encoded prefixes that occur again are 
+                        // replaced with S<seq-id>_ whereby seq-id is the prefix number
+                        // starting from 0. S_ is a special case for the very first 
+                        // substitution.
+                        // class name may have template params in it
+                        if (templateBracket != string::npos) { // encode template args
+                          ss << "I"; // start of template args
+                          DIArray templateParams = varClass.getTemplateParams();
+                          for (int i=0; i<templateParams.getNumElements(); i++) {
+                            DITemplateTypeParameter ttype(templateParams.getElement(i));
+                            DICompositeType ctype(ttype.getType());
+                            SmallVector<string,2> templateEnclosingScopes = getEnclosingScopes(ctype);
+                            templateEnclosingScopes.push_back(ctype.getName());
+                            if (templateEnclosingScopes.size() > 1) {
+                              ss << "N"; // start of non-local qualified name
+                            }
+                            ss << mangleScopes(templateEnclosingScopes, prefixToId, id);
+                            if (templateEnclosingScopes.size() > 1) {
+                              ss << "E"; // end of non-local qualified name
+                            }
+                          }
+                          ss << "EE"; // end of template args and mangled identifier
                         }
-                        ss << "12_GLOBAL__N_1";
-                        string className = varClass.getName();
-                        ss << className.length() << className << "E";
                         vtableGlobalName = ss.str();
                         dbgs() << "Looking for vtable global " << vtableGlobalName << "\n";
                         if (GlobalVariable* vtableGlobal = M.getGlobalVariable(vtableGlobalName, true)) {
@@ -129,6 +145,54 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
     }
   }
   return true;
+}
+
+SmallVector<string,2> ClassDebugInfoPass::getEnclosingScopes(DIType& type) {
+  SmallVector<string,2> enclosingScopes;
+  DIScope scope = type.getContext();
+  while (scope.isNameSpace() || scope.getTag() == dwarf::DW_TAG_class_type) {
+    string name;
+    if (scope.isNameSpace()) {
+      DINameSpace ns(scope);
+      name = ns.getName();
+    }
+    else {
+      DICompositeType clazz(scope);
+      name = clazz.getName();
+    }
+    if (name != "") {
+      enclosingScopes.insert(enclosingScopes.begin(), name);
+    }
+    else {
+      // break?
+    }
+    scope = scope.getContext();
+  }
+  return enclosingScopes;
+}
+
+string ClassDebugInfoPass::mangleScopes(SmallVector<string,2>& scopes, map<string,int>& prefixToId, int& nextPrefixId) {
+  string mangled = "";
+  string prefix = "";
+  for (string s : scopes) {
+    stringstream ss;
+    if (prefixToId.find(s) == prefixToId.end()) {
+      prefix += s;
+      prefixToId[prefix] = nextPrefixId++;
+      ss << s.length() << s;
+    }
+    else {
+      int prefixId = prefixToId[s];
+      ss << "S"; 
+      if (prefixId > -1) {
+        ss << prefixId;
+      }
+      ss << "_";
+      prefix = ""; // reset prefix
+    }
+    mangled += ss.str();
+  }
+  return mangled;
 }
 
 char ClassDebugInfoPass::ID = 0;
