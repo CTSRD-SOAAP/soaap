@@ -84,7 +84,6 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                         // correctly.
 
                         SmallVector<string,2> scopes = getEnclosingScopes(varClassTypeDbg);
-                        scopes.push_back("_GLOBAL__N_1"); // add the anonymous scope
                         string className = varClass.getName(); 
                         int templateBracket = className.find("<");
                         if (templateBracket != string::npos) {
@@ -120,9 +119,9 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                               ss << "E"; // end of non-local qualified name
                             }
                           }
-                          ss << "E"; // end of template args and mangled identifier
+                          ss << "E"; // end of template args
                         }
-                        ss << "E";
+                        ss << "E"; // end of mangled name
                         vtableGlobalName = ss.str();
                         dbgs() << "Looking for vtable global " << vtableGlobalName << "\n";
                         if (GlobalVariable* vtableGlobal = M.getGlobalVariable(vtableGlobalName, true)) {
@@ -156,17 +155,15 @@ SmallVector<string,2> ClassDebugInfoPass::getEnclosingScopes(DIType& type) {
     if (scope.isNameSpace()) {
       DINameSpace ns(scope);
       name = ns.getName();
+      if (name == "") { // anonymous namespace
+        name = "_GLOBAL__N_1";
+      }
     }
     else {
       DICompositeType clazz(scope);
       name = clazz.getName();
     }
-    if (name != "") {
-      enclosingScopes.insert(enclosingScopes.begin(), name);
-    }
-    else {
-      // break?
-    }
+    enclosingScopes.insert(enclosingScopes.begin(), name);
     scope = scope.getContext();
   }
   return enclosingScopes;

@@ -56,32 +56,34 @@ void ClassHierarchyUtils::findClassHierarchy(Module& M) {
 }
 
 void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      GlobalVariable* cVTableVar;
-      bool instHasMetadata = false;
-      if (MDNode* N = I->getMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND)) {
-        cVTableVar = cast<GlobalVariable>(N->getOperand(0));
-        instHasMetadata = true;
-      }
-      else if (MDNode* N = I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
-        ConstantDataArray* classTypeIdConstant = cast<ConstantDataArray>(N->getOperand(0));
-        string classTypeIdStr = classTypeIdConstant->getAsString().str();
-        dbgs() << "classTypeIdStr: " << classTypeIdStr << "\n";
-        cVTableVar = M.getGlobalVariable(classTypeIdStr.replace(0, 4, "_ZTV"));
-        instHasMetadata = true;
-      }
-      if (instHasMetadata) {
-        if (cVTableVar == NULL) {
-          dbgs() << "ERROR: cVTableVar is NULL\n";
+  if (!cachingDone) {
+    for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+      if (F->isDeclaration()) continue;
+      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+        GlobalVariable* cVTableVar;
+        bool instHasMetadata = false;
+        if (MDNode* N = I->getMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND)) {
+          cVTableVar = cast<GlobalVariable>(N->getOperand(0));
+          instHasMetadata = true;
         }
-        CallInst* C = cast<CallInst>(&*I);
-        callToCalleesCache[C] = findAllCalleesForVirtualCall(C, cVTableVar, M);
+        else if (MDNode* N = I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
+          ConstantDataArray* classTypeIdConstant = cast<ConstantDataArray>(N->getOperand(0));
+          string classTypeIdStr = classTypeIdConstant->getAsString().str();
+          dbgs() << "classTypeIdStr: " << classTypeIdStr << "\n";
+          cVTableVar = M.getGlobalVariable(classTypeIdStr.replace(0, 4, "_ZTV"));
+          instHasMetadata = true;
+        }
+        if (instHasMetadata) {
+          if (cVTableVar == NULL) {
+            dbgs() << "ERROR: cVTableVar is NULL\n";
+          }
+          CallInst* C = cast<CallInst>(&*I);
+          callToCalleesCache[C] = findAllCalleesForVirtualCall(C, cVTableVar, M);
+        }
       }
     }
+    cachingDone = true;
   }
-  cachingDone = true;
 }
 
 FunctionVector ClassHierarchyUtils::getCalleesForVirtualCall(CallInst* C, Module& M) {
