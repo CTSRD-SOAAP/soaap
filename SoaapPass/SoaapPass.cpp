@@ -41,6 +41,9 @@ static cl::opt<bool> ClListSandboxedFuncs("soaap-list-sandboxed-funcs",
 static cl::opt<bool> ClListFPCalls("soaap-list-fp-calls",
        cl::desc("List function-pointer calls"));
 
+static cl::opt<bool> ClListAllFuncs("soaap-list-all-funcs",
+       cl::desc("List all functions"));
+
 static cl::opt<bool> ClDumpVirtualCallees("soaap-dump-virtual-callees",
        cl::desc("Dump C++ virtual callees (derived from debugging information)"));
 
@@ -78,6 +81,10 @@ namespace soaap {
       if (ClListFPCalls) {
         outs() << "* Listing function-pointer calls\n";
         CallGraphUtils::listFPCalls(M);
+      }
+      if (ClListAllFuncs) {
+        CallGraphUtils::listAllFuncs(M);
+        return true;
       }
 
       outs() << "* Finding class hierarchy (if there is one)\n";

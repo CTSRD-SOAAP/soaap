@@ -77,6 +77,13 @@ void CallGraphUtils::listFPCalls(Module& M) {
   outs() << numFPcalls << " function-pointer calls in total\n";
 }
 
+void CallGraphUtils::listAllFuncs(Module& M) {
+  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+    if (F->isDeclaration()) continue;
+    outs() << F->getName() << "\n";
+  }
+}
+
 void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // Find annotated function pointers and add edges from the calls of the fp to targets.
   // Because annotated pointers can be assigned and passed around, we essentially perform
