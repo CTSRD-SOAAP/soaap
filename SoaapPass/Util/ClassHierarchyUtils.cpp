@@ -1,5 +1,6 @@
 #include "ClassDebugInfoPass.h"
 #include "Util/ClassHierarchyUtils.h"
+#include "Util/DebugUtils.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/Analysis/ProfileInfo.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -10,9 +11,11 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/Local.h"
 
+#include <iostream>
+#include <fstream>
 #include <sstream>
 #include <cxxabi.h>
-
+#include <stdlib.h>
 #include "soaap.h"
 
 using namespace soaap;
@@ -255,4 +258,100 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
     dbgs() << "]\n";
   }
   return callees;
+}
+
+void ClassHierarchyUtils::dumpVirtualCalleeInformation(Module& M, string filename) {
+  ofstream file(filename.c_str(), ios::out);
+  int numFuncs = 0;
+  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+    if (F->isDeclaration()) continue;
+    numFuncs++;
+  }
+  file << numFuncs << "\n"; // output number of implemented functions
+  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+    if (F->isDeclaration()) continue;
+    file << F->getName().str() << "\n";
+    int numVCalls = 0;
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      if (I->getMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND) || I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
+        numVCalls++;
+      }
+    }
+    file << numVCalls << "\n";  // number of soaap-annotated function calls
+    if (numVCalls > 0) {
+      int callIdx = 0;
+      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          if (I->getMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND) || I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
+            file << callIdx << "\n"; // callee index
+            FunctionVector callees = callToCalleesCache[C];
+            file << callees.size() << "\n"; // number of callees
+            for (Function* callee : callees) {
+              file << callee->getName().str() << "\n";
+            }
+          }
+          callIdx++;
+        }
+      }
+    }
+  }
+}
+
+void ClassHierarchyUtils::readVirtualCalleeInformation(Module& M, string filename) {
+  string line;
+  ifstream ifile(filename.c_str(), ios::in);
+  if (ifile.is_open()) {
+    getline(ifile, line); // num of funcs
+    int numFuncs = atoi(line.c_str());
+    dbgs() << "num funcs: " << numFuncs << "\n";
+    for (int i=0; i<numFuncs; i++) {
+      getline(ifile, line); // name of func
+      string funcName = line;
+      dbgs() << INDENT_1 << "Func name: " << funcName << "\n";
+      if (Function* F = M.getFunction(funcName)) {
+        getline(ifile, line); // num of calls
+        int numVCalls = atoi(line.c_str());
+        if (numVCalls > 0) {
+          // first cache all callinst's in F
+          map<int,CallInst*> callsMap;
+          int callIdx = 0;
+          for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+            if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+              callsMap[callIdx++] = C;
+            }
+          }
+          // now read in callee information for specific callinst's 
+          // as specified by indexes
+          for (int j=0; j<numVCalls; j++) {
+            getline(ifile, line); // call idx
+            int vcallIdx = atoi(line.c_str());
+            dbgs() << INDENT_2 << "CallIdx: " << vcallIdx << "\n";
+            getline(ifile, line); // num of callees
+            int numCallees = atoi(line.c_str());
+            dbgs() << INDENT_2 << "Number of callees: " << numCallees << "\n";
+            if (numCallees > 0) {
+              // read in callees for this call
+              FunctionVector callees;
+              for (int k=0; k<numCallees; k++) {
+                getline(ifile, line); // name of callee
+                string calleeName = line;
+                dbgs() << INDENT_3 << "Callee: " << calleeName << "\n";
+                if (Function* callee = M.getFunction(calleeName)) {
+                  callees.push_back(callee);
+                }
+                else {
+                  dbgs() << "Callee " << calleeName << " does not exist\n";
+                }
+              }
+              CallInst* C = callsMap[vcallIdx];
+              callToCalleesCache[C] = callees;
+            }
+          }
+        }
+      }
+      else {
+        dbgs() << "Could not find function :" << F->getName() << "\n";
+      }
+    }
+  }
 }

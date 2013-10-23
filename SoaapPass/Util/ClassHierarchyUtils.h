@@ -13,8 +13,8 @@ namespace soaap {
       static void findClassHierarchy(Module& M);
       static void cacheAllCalleesForVirtualCalls(Module& M);
       static FunctionVector getCalleesForVirtualCall(CallInst* C, Module& M);
-      static void dumpVirtualCallees(Module& M);
-      static void readVirtualCallees(Module& M);
+      static void dumpVirtualCalleeInformation(Module& M, string filename = "callees.out");
+      static void readVirtualCalleeInformation(Module& M, string filename = "callees.out");
     
     private:
       static GlobalVariableVector classes;

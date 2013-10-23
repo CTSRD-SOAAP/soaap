@@ -24,7 +24,7 @@
 using namespace llvm;
 using namespace std;
 
-static cl::list<std::string> ClVulnerableVendors("soaap-vulnerable-vendors",
+static cl::list<string> ClVulnerableVendors("soaap-vulnerable-vendors",
        cl::desc("Comma-separated list of vendors whose code should "
                 "be treated as vulnerable"),
        cl::value_desc("list of vendors"), cl::CommaSeparated);
@@ -44,8 +44,11 @@ static cl::opt<bool> ClListFPCalls("soaap-list-fp-calls",
 static cl::opt<bool> ClListAllFuncs("soaap-list-all-funcs",
        cl::desc("List all functions"));
 
-static cl::opt<bool> ClDumpVirtualCallees("soaap-dump-virtual-callees",
-       cl::desc("Dump C++ virtual callees (derived from debugging information)"));
+static cl::opt<string> ClDumpVirtualCallees("soaap-dump-virtual-callees",
+       cl::desc("Dump C++ virtual callees (derived from debugging information) to file"), cl::value_desc("filename"));
+
+static cl::opt<string> ClReadVirtualCallees("soaap-read-virtual-callees",
+       cl::desc("Read C++ virtual callees from file"), cl::value_desc("filename"));
 
 namespace soaap {
 
@@ -89,6 +92,16 @@ namespace soaap {
 
       outs() << "* Finding class hierarchy (if there is one)\n";
       ClassHierarchyUtils::findClassHierarchy(M);
+      ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(M);
+
+      if (ClDumpVirtualCallees != "") {
+        ClassHierarchyUtils::dumpVirtualCalleeInformation(M, ClDumpVirtualCallees);
+        return true;
+      }
+      else if (ClReadVirtualCallees != "") {
+        ClassHierarchyUtils::readVirtualCalleeInformation(M, ClReadVirtualCallees);
+        return true;
+      }
 
       outs() << "* Adding dynamic/annotated call edges to callgraph (if available)\n";
       CallGraphUtils::loadDynamicCallGraphEdges(M);
