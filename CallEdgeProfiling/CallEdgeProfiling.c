@@ -52,7 +52,7 @@ int soaap_start_call_edge_profiling(int argc, const char **argv,
                               unsigned* arrayStart, unsigned numElements) {
   DPRINTF("profiling started by %d", getpid());
   DPRINTF("numElements: %d", numElements);
-  DPRINTF("size of array: %d", (numElements+1)*sizeof(unsigned));
+  DPRINTF("size of array: %zd", (numElements+1)*sizeof(unsigned));
 
   int Ret = save_arguments(argc, argv);
   NumElements = numElements;
