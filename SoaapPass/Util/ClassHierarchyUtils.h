@@ -19,14 +19,17 @@ namespace soaap {
     private:
       static GlobalVariableVector classes;
       static ClassHierarchy classToSubclasses;
-      static ClassHierarchy classToDescendents;
+      //static ClassHierarchy classToDescendents;
       static map<GlobalVariable*,GlobalVariable*> typeInfoToVTable;
       static map<GlobalVariable*,GlobalVariable*> vTableToTypeInfo;
       static map<CallInst*,FunctionVector> callToCalleesCache;
+      static map<GlobalVariable*,map<int,int> > vTableToSecondaryVTableMaps;
+      static map<GlobalVariable*,map<GlobalVariable*,int> > classToBaseOffset;
       static bool cachingDone;
       static void processTypeInfo(GlobalVariable* TI);
-      static void calculateTransitiveClosure();
+      //static void calculateTransitiveClosure();
       static FunctionVector findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* cVTableVar, Module& M);
+      static void findAllCalleesInSubClasses(GlobalVariable* TI, int vtableIdx, FunctionVector& callees);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);
       static void ppClassHierarchyHelper(GlobalVariable* c, ClassHierarchy& classHierarchy, int nesting);
   };

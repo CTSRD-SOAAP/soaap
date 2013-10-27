@@ -24,12 +24,14 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
   outs() << "* Running " << getPassName() << "\n";
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
+    DEBUG(dbgs() << "Processing " << F->getName() << "\n");
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (!isa<IntrinsicInst>(&*I)) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           if (!isa<IntrinsicInst>(C) && C->getCalledFunction() == NULL && !C->isInlineAsm()) {
             if (Value* calledVal = C->getCalledValue()) {
               if (GlobalAlias* alias = dyn_cast<GlobalAlias>(calledVal)) {
+                DEBUG(dbgs() << "Global Alias\n");
                 if (alias->resolveAliasedGlobal(false) == NULL) {
                   calledVal->dump();
                   dbgs() << "ERROR: called value is an alias, but the aliasing chain contains a cycle!\n";
@@ -37,8 +39,12 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
               }
               else {
                 // obtain the vtable global var for the static type and insert reference to
-                // it as metadata
-                if (LoadInst* receiver = dyn_cast<LoadInst>(C->getArgOperand(0)->stripPointerCasts())) {
+                // it as metadata.
+                Value* receiverPtr = C->getArgOperand(0)->stripPointerCasts();
+                if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(receiverPtr)) {
+                  receiverPtr = gep->getPointerOperand()->stripPointerCasts();
+                }
+                if (LoadInst* receiver = dyn_cast<LoadInst>(receiverPtr)) {
                   Value* receiverVar = receiver->getPointerOperand();
                   DEBUG(dbgs() << "receiverVar: " << *receiverVar << "\n");
 

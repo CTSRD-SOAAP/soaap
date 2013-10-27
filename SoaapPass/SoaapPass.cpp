@@ -92,13 +92,15 @@ namespace soaap {
 
       outs() << "* Finding class hierarchy (if there is one)\n";
       ClassHierarchyUtils::findClassHierarchy(M);
-      ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(M);
 
       if (ClDumpVirtualCallees != "") {
+        outs() << "* Dumping virtual callee information to file\n";
+        ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(M);
         ClassHierarchyUtils::dumpVirtualCalleeInformation(M, ClDumpVirtualCallees);
         return true;
       }
       else if (ClReadVirtualCallees != "") {
+        outs() << "* Reading virtual callee information from file\n";
         ClassHierarchyUtils::readVirtualCalleeInformation(M, ClReadVirtualCallees);
         return true;
       }

@@ -24,10 +24,12 @@ using namespace std;
 
 GlobalVariableVector ClassHierarchyUtils::classes;
 ClassHierarchy ClassHierarchyUtils::classToSubclasses;
-ClassHierarchy ClassHierarchyUtils::classToDescendents;
+//ClassHierarchy ClassHierarchyUtils::classToDescendents;
 map<CallInst*,FunctionVector> ClassHierarchyUtils::callToCalleesCache;
 map<GlobalVariable*,GlobalVariable*> ClassHierarchyUtils::typeInfoToVTable;
 map<GlobalVariable*,GlobalVariable*> ClassHierarchyUtils::vTableToTypeInfo;
+map<GlobalVariable*,map<int,int> > ClassHierarchyUtils::vTableToSecondaryVTableMaps;
+map<GlobalVariable*,map<GlobalVariable*,int> > ClassHierarchyUtils::classToBaseOffset;
 bool ClassHierarchyUtils::cachingDone = false;
 
 void ClassHierarchyUtils::findClassHierarchy(Module& M) {
@@ -37,25 +39,59 @@ void ClassHierarchyUtils::findClassHierarchy(Module& M) {
   // (for more info, see http://mentorembedded.github.io/cxx-abi/abi.html)
   for (Module::global_iterator I=M.global_begin(), E=M.global_end(); I != E; I++) {
     GlobalVariable* G = &*I;
-    if (G->getName().startswith("_ZTVN")) {
+    if (G->getName().startswith("_ZTV")) {
       if (G->hasInitializer()) {
+        DEBUG(G->dump());
         ConstantArray* Ginit = cast<ConstantArray>(G->getInitializer());
         // Ginit[1] is the type_info global for this vtable's type
-        GlobalVariable* TI = cast<GlobalVariable>(Ginit->getOperand(1)->stripPointerCasts());
-        //TI->dump();
-        typeInfoToVTable[TI] = G;
-        vTableToTypeInfo[G] = TI;
-        processTypeInfo(TI); // process TI recursively (it contains refs to super-class TIs)
+        bool typeInfoFound = false;
+        bool primaryVTable = true;
+        for (int i=0; i<Ginit->getNumOperands(); i++) {
+          // typeinfo will be the first global variable in the array.
+          // It's not always at a fixed index so we have to search for it...
+          if (GlobalVariable* TI = dyn_cast<GlobalVariable>(Ginit->getOperand(i)->stripPointerCasts())) {
+            //TI->dump();
+            typeInfoToVTable[TI] = G;
+            vTableToTypeInfo[G] = TI;
+            processTypeInfo(TI); // process TI recursively (it contains refs to super-class TIs)
+            typeInfoFound = true;
+            if (primaryVTable) {
+              primaryVTable = false;
+              vTableToSecondaryVTableMaps[G][0] = i+1;              
+            }
+            else {
+              // offset_to_top is at the previous index 
+              ConstantExpr* offsetValCast = cast<ConstantExpr>(Ginit->getOperand(i-1)->stripPointerCasts());
+              ConstantInt* offsetVal = cast<ConstantInt>(offsetValCast->getOperand(0)); 
+              int offsetToTop = offsetVal->getSExtValue();
+              if (offsetToTop > 0) {
+                dbgs() << "ERROR: offsetToTop is positive!\n";
+                G->dump();
+              }
+              else {
+                offsetToTop *= -1;
+              }
+              
+              DEBUG(dbgs() << "offsetToTop: " << offsetToTop << "\n");
+              vTableToSecondaryVTableMaps[G][offsetToTop] = i+1;
+            }
+          }
+        }
+
+        if (!typeInfoFound) {
+          dbgs() << "ERROR: vtable initializer is not a global variable...\n";
+          dbgs() << *G << " = " << *Ginit << "\n";
+        }
       }
     }
   }
   
-  ppClassHierarchy(classToSubclasses);
+  DEBUG(ppClassHierarchy(classToSubclasses));
 
   // calculate transitive closure of hierarchy
-  calculateTransitiveClosure();
+  //calculateTransitiveClosure();
 
-  ppClassHierarchy(classToDescendents);
+  //DEBUG(ppClassHierarchy(classToDescendents));
 }
 
 void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
@@ -72,7 +108,7 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
         else if (MDNode* N = I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
           ConstantDataArray* classTypeIdConstant = cast<ConstantDataArray>(N->getOperand(0));
           string classTypeIdStr = classTypeIdConstant->getAsString().str();
-          dbgs() << "classTypeIdStr: " << classTypeIdStr << "\n";
+          DEBUG(dbgs() << "classTypeIdStr: " << classTypeIdStr << "\n");
           cVTableVar = M.getGlobalVariable(classTypeIdStr.replace(0, 4, "_ZTV"));
           instHasMetadata = true;
         }
@@ -101,32 +137,46 @@ void ClassHierarchyUtils::processTypeInfo(GlobalVariable* TI) {
     classes.push_back(TI);
 
     // extract direct base classes from type_info
-    ConstantStruct* TIinit = cast<ConstantStruct>(TI->getInitializer());
+    if (TI->hasInitializer()) {
+      ConstantStruct* TIinit = cast<ConstantStruct>(TI->getInitializer());
 
-    int TInumOperands = TIinit->getNumOperands();
-    if (TInumOperands > 2) {
-      // we have >= 1 base class(es).
-      if (TInumOperands == 3) {
-        // abi::__si_class_type_info
-        GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(2)->stripPointerCasts());
-        classToSubclasses[baseTI].push_back(TI);
-        //dbgs() << "  " << *baseTI << "\n";
-        processTypeInfo(baseTI);
-      }
-      else {
-        // abi::__vmi_class_type_info
-        // (skip over first two additional fields, which are "flags" and "base_count")
-        for (int i=4; i<TInumOperands; i+=2) {
-          GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(i)->stripPointerCasts());
+      int TInumOperands = TIinit->getNumOperands();
+      if (TInumOperands > 2) {
+        // we have >= 1 base class(es).
+        if (TInumOperands == 3) {
+          // abi::__si_class_type_info
+          GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(2)->stripPointerCasts());
           classToSubclasses[baseTI].push_back(TI);
           //dbgs() << "  " << *baseTI << "\n";
+          classToBaseOffset[TI][baseTI] = 0;
           processTypeInfo(baseTI);
+          
+        }
+        else {
+          // abi::__vmi_class_type_info
+          // (skip over first two additional fields, which are "flags" and "base_count")
+          for (int i=4; i<TInumOperands; i+=2) {
+            GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(i)->stripPointerCasts());
+            classToSubclasses[baseTI].push_back(TI);
+            int offset_flags = cast<ConstantInt>(TIinit->getOperand(i+1))->getSExtValue();
+            DEBUG(dbgs() << TI->getName() << " -> " << baseTI->getName() << "\n");
+            DEBUG(dbgs() << "  offset_flags = " << offset_flags << "\n");
+            int offset = offset_flags >> 8;
+            DEBUG(dbgs() << "  offset = " << offset << "\n");
+            classToBaseOffset[TI][baseTI] = offset;
+            //dbgs() << "  " << *baseTI << "\n";
+            processTypeInfo(baseTI);
+          }
         }
       }
+    }
+    else {
+      dbgs() << "ERROR: TI " << TI->getName() << " does not have initializer\n";
     }
   }
 }
 
+/*
 void ClassHierarchyUtils::calculateTransitiveClosure() {
   // Easiest approach is probably a fixed-point computation.
   // Initial approximation is the subclass relation.
@@ -150,6 +200,7 @@ void ClassHierarchyUtils::calculateTransitiveClosure() {
     }
   } while (change);
 }
+*/
 
 void ClassHierarchyUtils::ppClassHierarchy(ClassHierarchy& classHierarchy) {
   // first find all classes that do not have subclasses
@@ -207,7 +258,7 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
   // %10 = load void (%"class.box::A"*)** %9, !dbg !49
   // call void %10(%"class.box::A"* %6), !dbg !49
 
-  dbgs() << "Call: " << *C << "\n";
+  DEBUG(dbgs() << "Call: " << *C << "\n");
   if (LoadInst* calledVal = dyn_cast<LoadInst>(C->getCalledValue())) {
     if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(calledVal->getPointerOperand())) {
       if (!isa<ConstantInt>(gep->getOperand(1))) {
@@ -217,17 +268,81 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
       }
       if (ConstantInt* cVTableIdxVal = dyn_cast<ConstantInt>(gep->getOperand(1))) {
         int cVTableIdx = cVTableIdxVal->getSExtValue();
+        DEBUG(dbgs() << "relative cVTableIdx: " << cVTableIdx << "\n");
         
-        // find all implementations in reciever's class (corresponding to the static type)
-        // as well as all descendent classes. Note: callees will be at same idx in all vtables.
+        // If the function being called is defined in a base class, then this 
+        // might be a vtable call into a secondary vtable (i.e. the vtable of
+        // a base class/sub-object, unless it is a primary base) then the 
+        // compiler will have adjusted the address of "this" to point to the 
+        // subobject's vtable pointer in the object and the vtable index will
+        // be relative to that. We check to see if that adjustment did occur 
+        // and if so then use that as the static type. This is what the 
+        // code looks like for when calling a virtual function via a subobject:
+
+        // %9 = load %"class.box::D"** %d, align 8, !dbg !76
+        // %10 = bitcast %"class.box::D"* %9 to i8*, !dbg !76
+        // %add.ptr = getelementptr inbounds i8* %10, i64 16, !dbg !76
+        // %11 = bitcast i8* %add.ptr to %"class.box::B"*, !dbg !76
+        // %12 = bitcast %"class.box::B"* %11 to void (%"class.box::B"*)***, !dbg !76
+        // %vtable4 = load void (%"class.box::B"*)*** %12, !dbg !76
+        // %vfn5 = getelementptr inbounds void (%"class.box::B"*)** %vtable4, i64 0, !dbg !76
+        // %13 = load void (%"class.box::B"*)** %vfn5, !dbg !76
+        // call void %13(%"class.box::B"* %11), !dbg !76
+        int vtableOffset = vTableToSecondaryVTableMaps[cVTableVar][0];
+        if (LoadInst* cVTable = dyn_cast<LoadInst>(gep->getPointerOperand()->stripPointerCasts())) {
+          if (GetElementPtrInst* gep2 = dyn_cast<GetElementPtrInst>(cVTable->getPointerOperand()->stripPointerCasts())) {
+            if (ConstantInt* subObjOffsetVal = dyn_cast<ConstantInt>(gep2->getOperand(1))) {
+              int subObjOffset = subObjOffsetVal->getSExtValue();
+              DEBUG(dbgs() << "subObjOffset: " << subObjOffset << "\n");
+              vtableOffset = vTableToSecondaryVTableMaps[cVTableVar][subObjOffset];
+            }
+          }
+        }
+
+        DEBUG(dbgs() << "vtableOffset: " << vtableOffset << "\n");
+
+        int absVTableIdx = vtableOffset+cVTableIdx;
+        DEBUG(dbgs() << "absolute cVTableIdx: " << absVTableIdx << "\n");
+
+        // find all implementations in reciever's class (corresponding to the
+        // static type) as well as all descendent classes. Note: callees will
+        // be at same idx in all vtables
         GlobalVariable* cClazzTI = vTableToTypeInfo[cVTableVar];
+        
+        //FunctionVector descendentCallees = findImplementationsInDerivedClasses
+        /*
+        Value* clazzVTableElem = clazzVTable->getOperand(cVTableIdx+vtableOffset)->stripPointerCasts();
+        if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
+          dbgs() << "  vtable entry is func: " << callee->getName() << "\n";
+          if (find(callees.begin(), callees.end(), callee) == callees.end()) {
+            callees.push_back(callee);
+          }
+        }
+        else {
+          dbgs() << "  vtable entry " << (cVTableIdx+vtableOffset) << " is not a Function\n";
+          clazzVTableElem->dump();
+        }
+        */
+
+        findAllCalleesInSubClasses(cClazzTI, absVTableIdx, callees);
+        
+        /*
         GlobalVariableVector descendents = classToDescendents[cClazzTI];
         descendents.push_back(cClazzTI);
         for (GlobalVariable* clazzTI : descendents) {
-          dbgs() << "Looking for function at index " << cVTableIdx << " in " << clazzTI->getName() << "\n";
+          if (clazzTI == NULL) {
+            dbgs() << "ERROR: clazzTI is NULL!\n";
+            dbgs() << "cVTableVar = " << cVTableVar->getName() << "\n";
+            dbgs() << "descendents = [";
+            for (GlobalVariable* clazzIT2 : descendents) {
+              dbgs() << (clazzIT2 == NULL ? "null" : clazzIT2->getName()) << ", ";
+            }
+            dbgs() << "]\n";
+          }
+          DEBUG(dbgs() << "Looking for function at index " << cVTableIdx << " in " << clazzTI->getName() << "\n");
           GlobalVariable* clazzVTableVar = typeInfoToVTable[clazzTI];
           ConstantArray* clazzVTable = cast<ConstantArray>(clazzVTableVar->getInitializer());
-          Value* clazzVTableElem = clazzVTable->getOperand(cVTableIdx+2)->stripPointerCasts();
+          Value* clazzVTableElem = clazzVTable->getOperand(cVTableIdx+vtableOffset)->stripPointerCasts();
           if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
             dbgs() << "  vtable entry is func: " << callee->getName() << "\n";
             if (find(callees.begin(), callees.end(), callee) == callees.end()) {
@@ -235,10 +350,11 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
             }
           }
           else {
-            dbgs() << "  vtable entry " << (cVTableIdx+2) << " is not a Function\n";
+            dbgs() << "  vtable entry " << (cVTableIdx+vtableOffset) << " is not a Function\n";
             clazzVTableElem->dump();
           }
         }
+        */
       }
     }
   }
@@ -258,6 +374,28 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
     dbgs() << "]\n";
   }
   return callees;
+}
+
+void ClassHierarchyUtils::findAllCalleesInSubClasses(GlobalVariable* TI, int vtableIdx, FunctionVector& callees) {
+  DEBUG(dbgs() << "Looking for func at vtable idx " << vtableIdx << " in " << TI->getName() << "\n");
+  GlobalVariable* vTableVar = typeInfoToVTable[TI];
+  ConstantArray* clazzVTable = cast<ConstantArray>(vTableVar->getInitializer());
+  Value* clazzVTableElem = clazzVTable->getOperand(vtableIdx)->stripPointerCasts();
+  if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
+    DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
+    if (find(callees.begin(), callees.end(), callee) == callees.end()) {
+      callees.push_back(callee);
+    }
+  }
+  else {
+    dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n";
+    clazzVTableElem->dump();
+  }
+  for (GlobalVariable* subTI : classToSubclasses[TI]) {
+    int subOffset = classToBaseOffset[subTI][TI];
+    DEBUG(dbgs() << "adjusting index from " << vtableIdx << " to " << (subOffset+vtableIdx) << "\n");
+    findAllCalleesInSubClasses(subTI, subOffset+vtableIdx, callees);
+  }
 }
 
 void ClassHierarchyUtils::dumpVirtualCalleeInformation(Module& M, string filename) {
@@ -353,5 +491,6 @@ void ClassHierarchyUtils::readVirtualCalleeInformation(Module& M, string filenam
         dbgs() << "Could not find function :" << F->getName() << "\n";
       }
     }
+    cachingDone = true;
   }
 }
