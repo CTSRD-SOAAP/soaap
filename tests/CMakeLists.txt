@@ -33,6 +33,7 @@ add_custom_target(test
 		--param=build_dir=${CMAKE_BINARY_DIR}
 		--param=source_dir=${CMAKE_SOURCE_DIR}
 		--param=output_dir=${CMAKE_BINARY_DIR}
+		--param=extra_cflags=${CMAKE_C_FLAGS}
 		${LIT_EXTRA}
 	COMMENT "Running test suite")
 
