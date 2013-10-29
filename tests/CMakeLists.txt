@@ -27,13 +27,20 @@ else ()
   message(STATUS "Will not export test results XUnit XML")
 endif ()
 
+
+#
+# Have we set platform-specific CFLAGS for tests?
+#
+if (DEFINED TEST_C_FLAGS)
+	set(LIT_EXTRA ${LIT_EXTRA} --param=extra_cflags=${TEST_C_FLAGS})
+endif ()
+
 add_custom_target(test
 	COMMAND
 		${LIT} ${LIT_OPTIONS} ${CMAKE_CURRENT_SOURCE_DIR}
 		--param=build_dir=${CMAKE_BINARY_DIR}
 		--param=source_dir=${CMAKE_SOURCE_DIR}
 		--param=output_dir=${CMAKE_BINARY_DIR}
-		--param=extra_cflags=${CMAKE_C_FLAGS}
 		${LIT_EXTRA}
 	COMMENT "Running test suite")
 
