@@ -1,8 +1,10 @@
 #include "Instrument/PerformanceEmulationInstrumenter.h"
-#include "soaap_perf.h"
 
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
+
+#define IN_SOAAP_INSTRUMENTER
+#include "soaap_perf.h"
 
 using namespace soaap;
 

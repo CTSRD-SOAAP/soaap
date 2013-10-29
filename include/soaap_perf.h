@@ -1,10 +1,12 @@
 #ifndef _SOAAP_PERF_H_
 #define _SOAAP_PERF_H_
 
-#include <unistd.h>
-
 #define DATA_IN "DATA_IN"
 #define DATA_OUT "DATA_OUT"
+
+#ifndef IN_SOAAP_INSTRUMENTER
+
+#include <unistd.h>
 
 #define __soaap_data_in __attribute__((annotate(DATA_IN)))
 #define __soaap_data_out  __attribute__((annotate(DATA_OUT)))
@@ -387,5 +389,7 @@ soaap_perf_total_toc_thres(struct timespec *start_ts, struct timespec *sbox_ts,
 #endif
 
 }
+
+#endif  /* IN_SOAAP_INSTRUMENTER */
 
 #endif  /* _SOAAP_PERF_H_ */
