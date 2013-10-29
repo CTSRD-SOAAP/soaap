@@ -1,7 +1,7 @@
 #!/bin/sh
 
 OPT="`which opt`"
-if [ "${OPT}" == "" ]; then
+if [ "${OPT}" = "" ]; then
 	if [ "${LLVM_BINARY_DIR}" == "" ]; then
 		echo "'opt' not on PATH and LLVM_BINARY_DIR not set"
 		exit 1
@@ -11,7 +11,7 @@ if [ "${OPT}" == "" ]; then
 fi
 
 OS="`uname -s`"
-if [ "${OS}" == "Darwin" ]; then
+if [ "${OS}" = "Darwin" ]; then
 	LIBSUFFIX=dylib
 else
 	LIBSUFFIX=so
