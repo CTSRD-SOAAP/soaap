@@ -1,3 +1,12 @@
+/*
+ * RUN: clang %cflags -emit-llvm -S %s -o %t.main.ll
+ * RUN: clang %cflags -emit-llvm -S Inputs/a.c -o %t.a.ll
+ * RUN: clang %cflags -emit-llvm -S Inputs/b.c -o %t.b.ll
+ * RUN: llvm-link -O4 %t.main.ll %t.a.ll %t.b.ll -o %t.ll
+ * RUN: opt -load libsoaap.so -soaap -o %t.soaap.ll %t.ll | FileCheck %s
+ *
+ * CHECK: Running Soaap Pass
+ */
 #include <stdio.h>
 
 extern int x;
