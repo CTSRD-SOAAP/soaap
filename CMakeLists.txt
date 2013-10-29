@@ -4,6 +4,7 @@ set(CMAKE_C_COMPILER ${LLVM_BINARY_DIR}/bin/clang)
 set(CMAKE_CXX_COMPILER ${LLVM_BINARY_DIR}/bin/clang++)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -Wno-c++11-extensions")
+set(LIT ${LLVM_BINARY_DIR}/bin/llvm-lit)
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR})
 
