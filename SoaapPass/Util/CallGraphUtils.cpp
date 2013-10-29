@@ -1,4 +1,4 @@
-#include "Analysis/InfoFlow/FPTargetsAnalysis.h"
+#include "Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"
@@ -19,7 +19,7 @@ using namespace llvm;
 
 map<const CallInst*, FunctionVector> CallGraphUtils::callToCallees;
 map<const Function*, CallInstVector> CallGraphUtils::calleeToCalls;
-FPTargetsAnalysis CallGraphUtils::fpTargetsAnalysis;
+FPAnnotatedTargetsAnalysis CallGraphUtils::fpAnnotatedTargetsAnalysis;
 bool CallGraphUtils::caching = false;
 
 void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
@@ -89,7 +89,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // Because annotated pointers can be assigned and passed around, we essentially perform
   // an information flow analysis:
   SandboxVector dummyVector;
-  fpTargetsAnalysis.doAnalysis(M, dummyVector);
+  fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
 
   // for each fp-call, add annotated edges to the call graph
   DEBUG(dbgs() << INDENT_1 << "Finding all fp calls\n");
@@ -106,7 +106,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
             DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
             DEBUG(dbgs() << INDENT_3 << "FP: " << *FP << "\n");
             DEBUG(dbgs() << INDENT_3 << "Targets: ";);
-            for (Function* T : fpTargetsAnalysis.getTargets(FP)) {
+            for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
               DEBUG(dbgs() << " " << T->getName());
               CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
               callerNode->addCalledFunction(CallSite(C), calleeNode);
@@ -118,7 +118,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
     }
   }
 
-  // repopulate caches, because they would've been populated already for the FPTargetsAnalysis
+  // repopulate caches, because they would've been populated already for the FPAnnotatedTargetsAnalysis
   // and now turn on caching so future calls to getCallees and getCallers read from the caches.
   populateCallCalleeCaches(M);
   caching = true;
@@ -167,7 +167,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
               callees.push_back((Function*)callee);
             }
           }
-          for (Function* callee : fpTargetsAnalysis.getTargets(FP)) {
+          for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
             DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }

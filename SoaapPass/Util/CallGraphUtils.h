@@ -7,7 +7,7 @@
 using namespace llvm;
 
 namespace soaap {
-  class FPTargetsAnalysis;
+  class FPAnnotatedTargetsAnalysis;
   class CallGraphUtils {
     public:
       static void loadDynamicCallGraphEdges(Module& M);
@@ -20,7 +20,7 @@ namespace soaap {
     private:
       static map<const CallInst*, FunctionVector> callToCallees;
       static map<const Function*, CallInstVector> calleeToCalls;
-      static FPTargetsAnalysis fpTargetsAnalysis;
+      static FPAnnotatedTargetsAnalysis fpAnnotatedTargetsAnalysis;
       static bool caching;
       static void populateCallCalleeCaches(Module& M);
   };

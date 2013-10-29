@@ -12,11 +12,9 @@ namespace soaap {
       virtual FunctionVector getTargets(Value* FP);
 
     protected:
-      virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
+      virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual FunctionVector performMeet(FunctionVector from, FunctionVector to);
-    
-    private:
       bool prevIsContextInsensitiveAnalysis; // to cache prev value of 
                                            // ContextUtils::IsContextInsensitiveAnalysis
   };
