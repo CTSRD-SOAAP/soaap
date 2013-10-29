@@ -1,6 +1,8 @@
 #ifndef _SOAAP_PERF_H_
 #define _SOAAP_PERF_H_
 
+#include <unistd.h>
+
 #define DATA_IN "DATA_IN"
 #define DATA_OUT "DATA_OUT"
 
@@ -38,6 +40,10 @@
 
 #define MAGIC 0xd3ad
 #define OP_SENDBACK 0x01
+
+#ifndef PAGE_SIZE
+#define PAGE_SIZE _SC_PAGE_SIZE
+#endif
 
 struct ctrl_msg {
     uint16_t magic;
