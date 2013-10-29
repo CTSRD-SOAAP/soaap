@@ -1,4 +1,7 @@
+#include "SoaapPass.h"
 #include "Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.h"
+#include "Analysis/InfoFlow/FPInferredTargetsAnalysis.h"
+#include "Common/CmdLineOpts.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"
@@ -20,6 +23,7 @@ using namespace llvm;
 map<const CallInst*, FunctionVector> CallGraphUtils::callToCallees;
 map<const Function*, CallInstVector> CallGraphUtils::calleeToCalls;
 FPAnnotatedTargetsAnalysis CallGraphUtils::fpAnnotatedTargetsAnalysis;
+FPInferredTargetsAnalysis CallGraphUtils::fpInferredTargetsAnalysis;
 bool CallGraphUtils::caching = false;
 
 void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
@@ -52,7 +56,7 @@ void CallGraphUtils::listFPCalls(Module& M) {
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (!isa<IntrinsicInst>(&*I)) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (C->getCalledFunction() == NULL) {
+          if (isIndirectCall(C)) {
             if (MDNode* N = C->getMetadata("dbg")) {
               DILocation loc(N);
               if (!displayedFuncName) {
@@ -77,6 +81,41 @@ void CallGraphUtils::listFPCalls(Module& M) {
   outs() << numFPcalls << " function-pointer calls in total\n";
 }
 
+void CallGraphUtils::listFPTargets(Module& M) {
+  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  unsigned long numFPcalls = 0;
+  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+    if (F->isDeclaration()) continue;
+    CallGraphNode* callerNode = CG->getOrInsertFunction(F);
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      if (!isa<IntrinsicInst>(&*I)) {
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          if (isIndirectCall(C)) {
+            //C->getCalledValue()->stripPointerCasts()->dump();
+            if (MDNode* N = C->getMetadata("dbg")) {
+              DILocation loc(N);
+                // only display function on first function-pointer call
+              string funcName = F->getName();
+              outs() << INDENT_1 << "Function \"" << funcName << "\"\n";
+              outs() << INDENT_2 << "Call at " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
+              outs() << INDENT_3 << "Targets:\n";
+              for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(C->getCalledValue()->stripPointerCasts())) {
+                outs() << INDENT_4 << T->getName() << " (annotated)\n";
+              }
+              for (Function* T : fpInferredTargetsAnalysis.getTargets(C->getCalledValue()->stripPointerCasts())) {
+                outs() << INDENT_4 << T->getName() << " (inferred)\n";
+              }
+              outs() << "\n";
+            }
+            numFPcalls++;
+          }
+        }
+      }
+    }
+  }
+  outs() << numFPcalls << " function-pointer calls in total\n";
+}
+
 void CallGraphUtils::listAllFuncs(Module& M) {
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
@@ -90,6 +129,9 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // an information flow analysis:
   SandboxVector dummyVector;
   fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
+  if (CmdLineOpts::InferFPTargets) {
+    fpInferredTargetsAnalysis.doAnalysis(M, dummyVector);
+  }
 
   // for each fp-call, add annotated edges to the call graph
   DEBUG(dbgs() << INDENT_1 << "Finding all fp calls\n");
@@ -100,7 +142,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (!isa<IntrinsicInst>(&*I)) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (C->getCalledFunction() == NULL) {
+          if (isIndirectCall(C)) {
             Value* FP = C->getCalledValue();
             DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
             DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
@@ -185,3 +227,17 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   }
   DEBUG(dbgs() << "-----------------------------------------------------------------\n");
 }
+
+bool CallGraphUtils::isIndirectCall(CallInst* C) {
+  Value* V = C->getCalledValue();
+  return V != NULL && !isa<Function>(V->stripPointerCasts());
+}
+
+Function* CallGraphUtils::getDirectCallee(CallInst* C) {
+  Function* calledFunc = C->getCalledFunction();
+  if (calledFunc == NULL) {
+    calledFunc = dyn_cast<Function>(C->getCalledValue()->stripPointerCasts());
+  }
+  return calledFunc;
+}
+

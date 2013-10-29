@@ -1,10 +1,11 @@
 #include "llvm/Pass.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/PassManager.h"
-#include "llvm/Support/CommandLine.h"
 
 #include "soaap.h"
 
+#include "SoaapPass.h"
+#include "Common/CmdLineOpts.h"
 #include "Common/Typedefs.h"
 #include "Common/Sandbox.h"
 #include "Analysis/GlobalVariableAnalysis.h"
@@ -21,201 +22,166 @@
 #include "Util/LLVMAnalyses.h"
 #include "Util/SandboxUtils.h"
 
+using namespace soaap;
 using namespace llvm;
 using namespace std;
 
-static cl::list<string> ClVulnerableVendors("soaap-vulnerable-vendors",
-       cl::desc("Comma-separated list of vendors whose code should "
-                "be treated as vulnerable"),
-       cl::value_desc("list of vendors"), cl::CommaSeparated);
+void SoaapPass::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.setPreservesCFG();
+  AU.addRequired<CallGraph>();
+  AU.addRequired<ProfileInfo>();
+}
 
-static cl::opt<bool> ClEmPerf("soaap-emulate-performance",
-       cl::desc("Emulate sandboxing performance"));
+bool SoaapPass::runOnModule(Module& M) {
+  outs() << "* Running " << getPassName();
+  if (CmdLineOpts::ContextInsens) {
+    outs() << " in context-insensitive mode";
+    ContextUtils::setIsContextInsensitiveAnalysis(true);
+  }
+  outs() << "\n";
 
-static cl::opt<bool> ClContextInsens("soaap-context-insens",
-       cl::desc("Don't use context-sensitive analysis"));
+  CallGraph& CG = getAnalysis<CallGraph>();
+  ProfileInfo& PI = getAnalysis<ProfileInfo>();
+  LLVMAnalyses::setCallGraphAnalysis(&CG);
+  LLVMAnalyses::setProfileInfoAnalysis(&PI);
 
-static cl::opt<bool> ClListSandboxedFuncs("soaap-list-sandboxed-funcs",
-       cl::desc("List sandboxed functions"));
-
-static cl::opt<bool> ClListFPCalls("soaap-list-fp-calls",
-       cl::desc("List function-pointer calls"));
-
-static cl::opt<bool> ClListAllFuncs("soaap-list-all-funcs",
-       cl::desc("List all functions"));
-
-static cl::opt<string> ClDumpVirtualCallees("soaap-dump-virtual-callees",
-       cl::desc("Dump C++ virtual callees (derived from debugging information) to file"), cl::value_desc("filename"));
-
-static cl::opt<string> ClReadVirtualCallees("soaap-read-virtual-callees",
-       cl::desc("Read C++ virtual callees from file"), cl::value_desc("filename"));
-
-namespace soaap {
-
-  struct SoaapPass : public ModulePass {
-
-    static char ID;
-
-    SandboxVector sandboxes;
-    FunctionVector privilegedMethods;
-    StringVector vulnerableVendors;
-
-    SoaapPass() : ModulePass(ID) { }
-
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-      AU.setPreservesCFG();
-      AU.addRequired<CallGraph>();
-      AU.addRequired<ProfileInfo>();
-    }
-
-    virtual bool runOnModule(Module& M) {
-      outs() << "* Running " << getPassName();
-      if (ClContextInsens) {
-        outs() << " in context-insensitive mode";
-        ContextUtils::setIsContextInsensitiveAnalysis(true);
-      }
-      outs() << "\n";
- 
-      CallGraph& CG = getAnalysis<CallGraph>();
-      ProfileInfo& PI = getAnalysis<ProfileInfo>();
-      LLVMAnalyses::setCallGraphAnalysis(&CG);
-      LLVMAnalyses::setProfileInfoAnalysis(&PI);
-
-      if (ClListFPCalls) {
-        outs() << "* Listing function-pointer calls\n";
-        CallGraphUtils::listFPCalls(M);
-      }
-      if (ClListAllFuncs) {
-        CallGraphUtils::listAllFuncs(M);
-        return true;
-      }
-
-      outs() << "* Finding class hierarchy (if there is one)\n";
-      ClassHierarchyUtils::findClassHierarchy(M);
-
-      if (ClDumpVirtualCallees != "") {
-        outs() << "* Dumping virtual callee information to file\n";
-        ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(M);
-        ClassHierarchyUtils::dumpVirtualCalleeInformation(M, ClDumpVirtualCallees);
-        return true;
-      }
-      else if (ClReadVirtualCallees != "") {
-        outs() << "* Reading virtual callee information from file\n";
-        ClassHierarchyUtils::readVirtualCalleeInformation(M, ClReadVirtualCallees);
-        return true;
-      }
-
-      outs() << "* Adding dynamic/annotated call edges to callgraph (if available)\n";
-      CallGraphUtils::loadDynamicCallGraphEdges(M);
-      CallGraphUtils::loadAnnotatedCallGraphEdges(M);
-
-      outs() << "* Processing command-line options\n"; 
-      processCmdLineArgs(M);
-
-      outs() << "* Finding sandboxes\n";
-      findSandboxes(M);
-
-      if (ClListSandboxedFuncs) {
-        outs() << "* Listing sandboxed functions\n";
-        SandboxUtils::outputSandboxedFunctions(sandboxes);
-      }
-
-      if (ClEmPerf) {
-        instrumentPerfEmul(M);
-      }
-      else {
-        // do the checks statically
-        outs() << "* Calculating privileged methods\n";
-        calculatePrivilegedMethods(M);
-        
-        outs() << "* Checking global variable accesses\n";
-        checkGlobalVariables(M);
-
-        outs() << "* Checking file descriptor accesses\n";
-        checkFileDescriptors(M);
-
-        outs() << "* Checking propagation of data from sandboxes to privileged components\n";
-        checkOriginOfAccesses(M);
-        
-        outs() << "* Checking propagation of classified data\n";
-        checkPropagationOfClassifiedData(M);
-
-        outs() << "* Checking propagation of sandbox-private data\n";
-        checkPropagationOfSandboxPrivateData(M);
-
-        outs() << "* Checking rights leaked by past vulnerable code\n";
-        checkLeakedRights(M);
-
-        outs() << "* Checking for calls to privileged functions from sandboxes\n";
-        checkPrivilegedCalls(M);
-      }
-
-      return false;
-    }
-
-    void processCmdLineArgs(Module& M) {
-      // process ClVulnerableVendors
-      for (StringRef vendor : ClVulnerableVendors) {
-        DEBUG(dbgs() << "Vulnerable vendor: " << vendor << "\n");
-        vulnerableVendors.push_back(vendor);
-      }
-    }
-
-    void checkPrivilegedCalls(Module& M) {
-      PrivilegedCallAnalysis analysis;
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void checkLeakedRights(Module& M) {
-      VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors);
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void checkOriginOfAccesses(Module& M) {
-      AccessOriginAnalysis analysis(privilegedMethods);
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void findSandboxes(Module& M) {
-      sandboxes = SandboxUtils::findSandboxes(M);
-    }
-
-    void checkPropagationOfSandboxPrivateData(Module& M) {
-      SandboxPrivateAnalysis analysis(privilegedMethods);
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void checkPropagationOfClassifiedData(Module& M) {
-      ClassifiedAnalysis analysis;
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void checkFileDescriptors(Module& M) {
-      CapabilityAnalysis analysis;
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void calculatePrivilegedMethods(Module& M) {
-      privilegedMethods = SandboxUtils::getPrivilegedMethods(M);
-    }
-
-    void checkGlobalVariables(Module& M) {
-      GlobalVariableAnalysis analysis(privilegedMethods);
-      analysis.doAnalysis(M, sandboxes);
-    }
-
-    void instrumentPerfEmul(Module& M) {
-      PerformanceEmulationInstrumenter instrumenter;
-      instrumenter.instrument(M, sandboxes);
-    }
-  };
-
-  char SoaapPass::ID = 0;
-  static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
-
-  void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-    PM.add(new SoaapPass);
+  if (CmdLineOpts::ListFPCalls) {
+    outs() << "* Listing function-pointer calls\n";
+    CallGraphUtils::listFPCalls(M);
+  }
+  if (CmdLineOpts::ListAllFuncs) {
+    CallGraphUtils::listAllFuncs(M);
+    return true;
   }
 
-  RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
+  outs() << "* Finding class hierarchy (if there is one)\n";
+  ClassHierarchyUtils::findClassHierarchy(M);
+
+  if (CmdLineOpts::DumpVirtualCallees != "") {
+    outs() << "* Dumping virtual callee information to file\n";
+    ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(M);
+    ClassHierarchyUtils::dumpVirtualCalleeInformation(M, CmdLineOpts::DumpVirtualCallees);
+    return true;
+  }
+  else if (CmdLineOpts::ReadVirtualCallees != "") {
+    outs() << "* Reading virtual callee information from file\n";
+    ClassHierarchyUtils::readVirtualCalleeInformation(M, CmdLineOpts::ReadVirtualCallees);
+    return true;
+  }
+
+  outs() << "* Adding dynamic/annotated/inferred call edges to callgraph (if available)\n";
+  CallGraphUtils::loadDynamicCallGraphEdges(M);
+  CallGraphUtils::loadAnnotatedCallGraphEdges(M);
+
+  if (CmdLineOpts::ListFPTargets) {
+    CallGraphUtils::listFPTargets(M);
+  }
+
+  outs() << "* Processing command-line options\n"; 
+  processCmdLineArgs(M);
+
+  outs() << "* Finding sandboxes\n";
+  findSandboxes(M);
+
+  if (CmdLineOpts::ListSandboxedFuncs) {
+    outs() << "* Listing sandboxed functions\n";
+    SandboxUtils::outputSandboxedFunctions(sandboxes);
+  }
+
+  if (CmdLineOpts::EmPerf) {
+    instrumentPerfEmul(M);
+  }
+  else {
+    // do the checks statically
+    outs() << "* Calculating privileged methods\n";
+    calculatePrivilegedMethods(M);
+    
+    outs() << "* Checking global variable accesses\n";
+    checkGlobalVariables(M);
+
+    outs() << "* Checking file descriptor accesses\n";
+    checkFileDescriptors(M);
+
+    outs() << "* Checking propagation of data from sandboxes to privileged components\n";
+    checkOriginOfAccesses(M);
+    
+    outs() << "* Checking propagation of classified data\n";
+    checkPropagationOfClassifiedData(M);
+
+    outs() << "* Checking propagation of sandbox-private data\n";
+    checkPropagationOfSandboxPrivateData(M);
+
+    outs() << "* Checking rights leaked by past vulnerable code\n";
+    checkLeakedRights(M);
+
+    outs() << "* Checking for calls to privileged functions from sandboxes\n";
+    checkPrivilegedCalls(M);
+  }
+
+  return false;
 }
+
+void SoaapPass::processCmdLineArgs(Module& M) {
+  // process ClVulnerableVendors
+  for (StringRef vendor : CmdLineOpts::VulnerableVendors) {
+    DEBUG(dbgs() << "Vulnerable vendor: " << vendor << "\n");
+    vulnerableVendors.push_back(vendor);
+  }
+}
+
+void SoaapPass::checkPrivilegedCalls(Module& M) {
+  PrivilegedCallAnalysis analysis;
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::checkLeakedRights(Module& M) {
+  VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors);
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::checkOriginOfAccesses(Module& M) {
+  AccessOriginAnalysis analysis(privilegedMethods);
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::findSandboxes(Module& M) {
+  sandboxes = SandboxUtils::findSandboxes(M);
+}
+
+void SoaapPass::checkPropagationOfSandboxPrivateData(Module& M) {
+  SandboxPrivateAnalysis analysis(privilegedMethods);
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::checkPropagationOfClassifiedData(Module& M) {
+  ClassifiedAnalysis analysis;
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::checkFileDescriptors(Module& M) {
+  CapabilityAnalysis analysis;
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::calculatePrivilegedMethods(Module& M) {
+  privilegedMethods = SandboxUtils::getPrivilegedMethods(M);
+}
+
+void SoaapPass::checkGlobalVariables(Module& M) {
+  GlobalVariableAnalysis analysis(privilegedMethods);
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void SoaapPass::instrumentPerfEmul(Module& M) {
+  PerformanceEmulationInstrumenter instrumenter;
+  instrumenter.instrument(M, sandboxes);
+}
+
+char SoaapPass::ID = 0;
+static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
+
+static void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
+  PM.add(new SoaapPass);
+}
+
+RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);

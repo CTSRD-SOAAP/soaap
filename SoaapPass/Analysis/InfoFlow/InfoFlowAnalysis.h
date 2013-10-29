@@ -11,6 +11,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Analysis/ProfileInfo.h"
 #include "llvm/Analysis/CallGraph.h"
 
@@ -113,6 +115,12 @@ namespace soaap {
               if (V == SI->getPointerOperand()) // to avoid infinite looping
                 continue;
               V2 = SI->getPointerOperand();
+            }
+            else if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(I)) {
+              if (II->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
+                DEBUG(II->dump());
+                V2 = II;
+              }
             }
             else if (CallInst* CI = dyn_cast<CallInst>(I)) {
               // propagate to the callee(s)

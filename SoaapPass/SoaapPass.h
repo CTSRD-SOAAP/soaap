@@ -1,0 +1,57 @@
+#ifndef SOAAP_SOAAPPASS_H
+#define SOAAP_SOAAPPASS_H
+
+#include "llvm/Pass.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/PassManager.h"
+#include "llvm/Support/CommandLine.h"
+
+#include "soaap.h"
+
+#include "Common/Typedefs.h"
+#include "Common/Sandbox.h"
+#include "Analysis/GlobalVariableAnalysis.h"
+#include "Analysis/VulnerabilityAnalysis.h"
+#include "Analysis/PrivilegedCallAnalysis.h"
+#include "Analysis/InfoFlow/AccessOriginAnalysis.h"
+#include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
+#include "Analysis/InfoFlow/ClassifiedAnalysis.h"
+#include "Analysis/InfoFlow/CapabilityAnalysis.h"
+#include "Instrument/PerformanceEmulationInstrumenter.h"
+#include "Util/CallGraphUtils.h"
+#include "Util/ClassHierarchyUtils.h"
+#include "Util/ContextUtils.h"
+#include "Util/LLVMAnalyses.h"
+#include "Util/SandboxUtils.h"
+
+using namespace llvm;
+using namespace std;
+
+namespace soaap {
+  struct SoaapPass : public ModulePass {
+    public:
+      static char ID;
+      SoaapPass() : ModulePass(ID) { }
+      virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+      virtual bool runOnModule(Module& M);
+
+    private:
+      SandboxVector sandboxes;
+      FunctionVector privilegedMethods;
+      StringVector vulnerableVendors;
+      void processCmdLineArgs(Module& M);
+      void checkPrivilegedCalls(Module& M);
+      void checkLeakedRights(Module& M);
+      void checkOriginOfAccesses(Module& M);
+      void findSandboxes(Module& M);
+      void checkPropagationOfSandboxPrivateData(Module& M);
+      void checkPropagationOfClassifiedData(Module& M);
+      void checkFileDescriptors(Module& M);
+      void calculatePrivilegedMethods(Module& M);
+      void checkGlobalVariables(Module& M);
+      void instrumentPerfEmul(Module& M);
+  };
+
+}
+
+#endif
