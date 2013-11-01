@@ -13,7 +13,7 @@ void g(int);
 int read(int,char*,int);
 
 int main(int argc, char** argv) {
-  f();  
+  f();
   return 0;
 }
 
@@ -34,7 +34,7 @@ void f() {
 __soaap_sandbox_persistent("a sandbox named 'g'")
 void g(int __soaap_fd_read ifd) {
   char buf[10];
-  if (ifd == -1) 
+  if (ifd == -1)
     // CHECK-NOT: Insufficient privileges for "read()" in sandboxed method "g"
     read(ifd, buf, 10);
 }
