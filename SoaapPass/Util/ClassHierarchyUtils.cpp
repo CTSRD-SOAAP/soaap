@@ -1,4 +1,5 @@
 #include "ClassDebugInfoPass.h"
+#include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/DebugUtils.h"
 #include "llvm/DebugInfo.h"
@@ -295,6 +296,7 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
     }
     dbgs() << "]\n";
   }
+
   return callees;
 }
 
@@ -320,6 +322,8 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
       Value* clazzVTableElem = clazzVTable->getOperand(subObjVTableOffset+vtableIdx)->stripPointerCasts();
       if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
         DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
+        // if this is a thunk then we extract the actual function from within
+        callee = extractFunctionFromThunk(callee);
         if (find(callees.begin(), callees.end(), callee) == callees.end()) {
           callees.push_back(callee);
         }
@@ -344,6 +348,23 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
     DEBUG(dbgs() << "adjusting subObjOffset from " << subObjOffset << " to " << (subSubObjOffset) << "\n");
     findAllCalleesInSubClasses(C, subTI, vtableIdx, subSubObjOffset, callees);
   }
+}
+
+Function* ClassHierarchyUtils::extractFunctionFromThunk(Function* F) {
+  if (F->getName().startswith("_ZTh")) {
+    // F is a thunk
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      // the first non-intrinsic call will be to the actual function
+      if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+        if (!isa<IntrinsicInst>(C)) {
+          Function* callee = CallGraphUtils::getDirectCallee(C);
+          dbgs() << "Replacing thunk " << F->getName() << " with " << callee->getName() << "\n";
+          return callee;
+        }
+      }
+    }
+  }
+  return F;
 }
 
 //

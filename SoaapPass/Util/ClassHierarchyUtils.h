@@ -28,6 +28,7 @@ namespace soaap {
       static void processTypeInfo(GlobalVariable* TI);
       static FunctionVector findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* cVTableVar, Module& M);
       static void findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees);
+      static Function* extractFunctionFromThunk(Function* F);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);
       static void ppClassHierarchyHelper(GlobalVariable* c, ClassHierarchy& classHierarchy, int nesting);
   };
