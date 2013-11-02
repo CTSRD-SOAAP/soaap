@@ -284,7 +284,7 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
         findAllCalleesInSubClasses(C, cClazzTI, cVTableIdx, subObjOffset, callees);
       }
       else {
-        dbgs() << "vtable idx is NOT a ConstantInt\n";
+        DEBUG(dbgs() << "vtable idx is NOT a ConstantInt\n");
         DEBUG(C->dump());
         DEBUG(gep->getOperand(1)->dump());
       }

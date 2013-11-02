@@ -94,7 +94,7 @@ void CallGraphUtils::listFPTargets(Module& M) {
             //C->getCalledValue()->stripPointerCasts()->dump();
             if (MDNode* N = C->getMetadata("dbg")) {
               DILocation loc(N);
-                // only display function on first function-pointer call
+              // only display function on first function-pointer call
               string funcName = F->getName();
               outs() << INDENT_1 << "Function \"" << funcName << "\"\n";
               outs() << INDENT_2 << "Call at " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
