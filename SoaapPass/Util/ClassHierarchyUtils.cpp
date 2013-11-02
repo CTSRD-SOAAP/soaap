@@ -111,7 +111,7 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
         if (instHasMetadata) {
           if (cVTableVar == NULL) {
             dbgs() << "ERROR: cVTableVar is NULL\n";
-            //I->dump();
+            I->dump();
             I->setMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND, NULL);
             I->setMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND, NULL);
             continue;
@@ -235,11 +235,6 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
   DEBUG(dbgs() << "Call: " << *C << "\n");
   if (LoadInst* calledVal = dyn_cast<LoadInst>(C->getCalledValue())) {
     if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(calledVal->getPointerOperand())) {
-      if (!isa<ConstantInt>(gep->getOperand(1))) {
-        dbgs() << "vtable idx is NOT a ConstantInt\n";
-        C->dump();
-        gep->getOperand(1)->dump();
-      }
       if (ConstantInt* cVTableIdxVal = dyn_cast<ConstantInt>(gep->getOperand(1))) {
         int cVTableIdx = cVTableIdxVal->getSExtValue();
         DEBUG(dbgs() << "relative cVTableIdx: " << cVTableIdx << "\n");
@@ -278,6 +273,11 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
         // be at same idx in all vtables
         GlobalVariable* cClazzTI = vTableToTypeInfo[cVTableVar];
         findAllCalleesInSubClasses(C, cClazzTI, cVTableIdx, subObjOffset, callees);
+      }
+      else {
+        dbgs() << "vtable idx is NOT a ConstantInt\n";
+        DEBUG(C->dump());
+        DEBUG(gep->getOperand(1)->dump());
       }
     }
   }
@@ -330,16 +330,17 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
       }
       else {
         dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n";
+        C->dump();
         clazzVTableElem->dump();
       }
     }
     else {
-      dbgs() << "ERROR: index exceeds size of vtable " << vTableVar->getName() << "\n";
+      DEBUG(dbgs() << "ERROR: index exceeds size of vtable " << vTableVar->getName() << "\n");
       skip = true;
     }
   }
   else {
-    dbgs() << "ERROR: subObjectOffset " << subObjOffset << " does not exist in vtable " << vTableVar->getName() << "\n";
+    DEBUG(dbgs() << "ERROR: subObjectOffset " << subObjOffset << " does not exist in vtable " << vTableVar->getName() << "\n");
     skip = true;
   }
   for (GlobalVariable* subTI : classToSubclasses[TI]) {
@@ -358,7 +359,7 @@ Function* ClassHierarchyUtils::extractFunctionFromThunk(Function* F) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (!isa<IntrinsicInst>(C)) {
           Function* callee = CallGraphUtils::getDirectCallee(C);
-          dbgs() << "Replacing thunk " << F->getName() << " with " << callee->getName() << "\n";
+          DEBUG(dbgs() << "Replacing thunk " << F->getName() << " with " << callee->getName() << "\n");
           return callee;
         }
       }
