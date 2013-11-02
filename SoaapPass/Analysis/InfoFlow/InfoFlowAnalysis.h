@@ -87,7 +87,7 @@ namespace soaap {
       worklist.pop_front();
 
       DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: "; V->dump(););
-      DEBUG(dbgs() << INDENT_2 << "Finding uses\n");
+      DEBUG(dbgs() << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n");
       for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
         User* U = dyn_cast<User>(UI.getUse().getUser());
         DEBUG(dbgs() << INDENT_3 << "Use: "; U->dump(););
@@ -138,6 +138,7 @@ namespace soaap {
             else {
               V2 = I;
             }
+            V2 = V2->stripPointerCasts();
             if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
               DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V2->dump(););

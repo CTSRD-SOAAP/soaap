@@ -128,10 +128,11 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // Because annotated pointers can be assigned and passed around, we essentially perform
   // an information flow analysis:
   SandboxVector dummyVector;
-  fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
+  //fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
   if (CmdLineOpts::InferFPTargets) {
     fpInferredTargetsAnalysis.doAnalysis(M, dummyVector);
   }
+  fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
 
   // for each fp-call, add annotated edges to the call graph
   DEBUG(dbgs() << INDENT_1 << "Finding all fp calls\n");
@@ -147,7 +148,14 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
             DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
             DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
             DEBUG(dbgs() << INDENT_3 << "FP: " << *FP << "\n");
-            DEBUG(dbgs() << INDENT_3 << "Targets: ";);
+            DEBUG(dbgs() << INDENT_3 << "Inferred Targets: ";);
+            for (Function* T : fpInferredTargetsAnalysis.getTargets(FP)) {
+              DEBUG(dbgs() << " " << T->getName());
+              CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
+              callerNode->addCalledFunction(CallSite(C), calleeNode);
+            }
+            DEBUG(dbgs() << "\n");
+            DEBUG(dbgs() << INDENT_3 << "Annotated Targets: ";);
             for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
               DEBUG(dbgs() << " " << T->getName());
               CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
@@ -209,8 +217,12 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
               callees.push_back((Function*)callee);
             }
           }
+          for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
+            DEBUG(dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
+            callees.push_back(callee);
+          }
           for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-            DEBUG(dbgs() << INDENT_3 << "Adding fp-callee " << callee->getName() << "\n");
+            DEBUG(dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }
           for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
