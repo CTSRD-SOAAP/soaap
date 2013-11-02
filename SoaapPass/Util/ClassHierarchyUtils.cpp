@@ -87,11 +87,6 @@ void ClassHierarchyUtils::findClassHierarchy(Module& M) {
   }
   
   DEBUG(ppClassHierarchy(classToSubclasses));
-
-  // calculate transitive closure of hierarchy
-  //calculateTransitiveClosure();
-
-  //DEBUG(ppClassHierarchy(classToDescendents));
 }
 
 void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
@@ -267,8 +262,8 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
         // %13 = load void (%"class.box::B"*)** %vfn5, !dbg !76
         // call void %13(%"class.box::B"* %11), !dbg !76
         int subObjOffset = 0;
-        if (LoadInst* cVTable = dyn_cast<LoadInst>(gep->getPointerOperand()->stripPointerCasts())) {
-          if (GetElementPtrInst* gep2 = dyn_cast<GetElementPtrInst>(cVTable->getPointerOperand()->stripPointerCasts())) {
+        if (LoadInst* cVTableLoad = dyn_cast<LoadInst>(gep->getPointerOperand()->stripPointerCasts())) {
+          if (GetElementPtrInst* gep2 = dyn_cast<GetElementPtrInst>(cVTableLoad->getPointerOperand()->stripPointerCasts())) {
             if (ConstantInt* subObjOffsetVal = dyn_cast<ConstantInt>(gep2->getOperand(1))) {
               subObjOffset = subObjOffsetVal->getSExtValue();
               DEBUG(dbgs() << "subObjOffset: " << subObjOffset << "\n");
@@ -281,7 +276,7 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
         // static type) as well as all descendent classes. Note: callees will
         // be at same idx in all vtables
         GlobalVariable* cClazzTI = vTableToTypeInfo[cVTableVar];
-        findAllCalleesInSubClasses(cClazzTI, cVTableIdx, subObjOffset, callees);
+        findAllCalleesInSubClasses(C, cClazzTI, cVTableIdx, subObjOffset, callees);
       }
     }
   }
@@ -303,29 +298,51 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
   return callees;
 }
 
-void ClassHierarchyUtils::findAllCalleesInSubClasses(GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees) {
-  dbgs() << "Looking for func at vtable idx " << vtableIdx << " in " << TI->getName() << " (subObjOffset=" << subObjOffset << ")\n";
+void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees) {
+  DEBUG(dbgs() << "Looking for func at vtable idx " << vtableIdx << " in " << TI->getName() << " (subObjOffset=" << subObjOffset << ")\n");
   GlobalVariable* vTableVar = typeInfoToVTable[TI];
   ConstantArray* clazzVTable = cast<ConstantArray>(vTableVar->getInitializer());
-  int subObjVTableOffset = vTableToSecondaryVTableMaps[vTableVar][subObjOffset];
-  dbgs() << "    Absolute vtable index: " << (subObjVTableOffset+vtableIdx) << "\n";
-  Value* clazzVTableElem = clazzVTable->getOperand(subObjVTableOffset+vtableIdx)->stripPointerCasts();
-  if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
-    DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
-    if (find(callees.begin(), callees.end(), callee) == callees.end()) {
-      callees.push_back(callee);
+
+  // It's possible that TI is a superclass that doesn't contain the function. This
+  // will be due to a downcast... the receiver object was initially of the superclass type
+  // and then it was downcasted before the vtable func is called. So we skip this class and 
+  // move to the subclass. There are two ways to discover if a downcast did occur:
+  //   1) the subObjOffset doesn't appear in clazzVTable
+  //   2) the vtable doesn't contain a function at the vtable idx relative to the start of 
+  //      the subobject's vtable (because it is added by a descendent class)
+  // We cannot reliably detect downcasts however as the function may have been introduced 
+  // in-between TI and the casted-to type and so we may infer more callees.
+  bool skip = false;
+  if (vTableToSecondaryVTableMaps[vTableVar].find(subObjOffset) != vTableToSecondaryVTableMaps[vTableVar].end()) {
+    int subObjVTableOffset = vTableToSecondaryVTableMaps[vTableVar][subObjOffset];
+    DEBUG(dbgs() << "    Absolute vtable index: " << (subObjVTableOffset+vtableIdx) << "\n");
+    if ((subObjVTableOffset+vtableIdx) < clazzVTable->getNumOperands()) {
+      Value* clazzVTableElem = clazzVTable->getOperand(subObjVTableOffset+vtableIdx)->stripPointerCasts();
+      if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
+        DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
+        if (find(callees.begin(), callees.end(), callee) == callees.end()) {
+          callees.push_back(callee);
+        }
+      }
+      else {
+        dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n";
+        clazzVTableElem->dump();
+      }
+    }
+    else {
+      dbgs() << "ERROR: index exceeds size of vtable " << vTableVar->getName() << "\n";
+      skip = true;
     }
   }
   else {
-    dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n";
-    clazzVTableElem->dump();
+    dbgs() << "ERROR: subObjectOffset " << subObjOffset << " does not exist in vtable " << vTableVar->getName() << "\n";
+    skip = true;
   }
   for (GlobalVariable* subTI : classToSubclasses[TI]) {
-    int subSubObjOffset = classToBaseOffset[subTI][TI] + subObjOffset;
-    int subSubObjVTableOffset = vTableToSecondaryVTableMaps[vTableVar][subSubObjOffset];
+    int subSubObjOffset = skip ? subObjOffset : (classToBaseOffset[subTI][TI] + subObjOffset);
 
     DEBUG(dbgs() << "adjusting subObjOffset from " << subObjOffset << " to " << (subSubObjOffset) << "\n");
-    findAllCalleesInSubClasses(subTI, vtableIdx, subSubObjOffset, callees);
+    findAllCalleesInSubClasses(C, subTI, vtableIdx, subSubObjOffset, callees);
   }
 }
 
