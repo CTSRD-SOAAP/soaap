@@ -110,8 +110,17 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
         }
         if (instHasMetadata) {
           if (cVTableVar == NULL) {
-            dbgs() << "ERROR: cVTableVar is NULL\n";
-            I->dump();
+            // So far the reason for this has been because the mangled name we infer 
+            // during the ClassDebugInfoPass is incorrect. This is probably because 
+            // the code performs a static_cast to a type that is not a subtype of 
+            // the variable's static type (such as in a template class). For chromium, this 
+            // tends to occur in WebKit's  WFT::RefCounted class that performs the following
+            // call that leads to T's destructor being invoked:
+            //
+            //  delete static_cast<T*>(this)
+            // 
+            DEBUG(dbgs() << "ERROR: cVTableVar is NULL\n");
+            DEBUG(I->dump());
             I->setMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND, NULL);
             I->setMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND, NULL);
             continue;
@@ -171,7 +180,7 @@ void ClassHierarchyUtils::processTypeInfo(GlobalVariable* TI) {
       }
     }
     else {
-      dbgs() << "ERROR: TI " << TI->getName() << " does not have initializer\n";
+      DEBUG(dbgs() << "ERROR: TI " << TI->getName() << " does not have initializer\n");
     }
   }
 }
