@@ -338,9 +338,14 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
         }
       }
       else {
-        dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n";
-        C->dump();
-        clazzVTableElem->dump();
+        // The vtable entry may no be a function if we're looking for a function
+        // in the vtable of a class that was statically casted to (using static_cast).
+        // In such a case we recursively search subclasses (as we don't know which
+        // subclass it is) and thus in one such subclass, the vtable entry might be 
+        // a TI pointer and not a function pointer.
+        DEBUG(dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n");
+        DEBUG(C->dump());
+        DEBUG(clazzVTableElem->dump());
       }
     }
     else {
