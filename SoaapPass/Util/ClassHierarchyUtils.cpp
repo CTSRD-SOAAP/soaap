@@ -477,7 +477,7 @@ void ClassHierarchyUtils::readVirtualCalleeInformation(Module& M, string filenam
         }
       }
       else {
-        dbgs() << "Could not find function :" << F->getName() << "\n";
+        dbgs() << "Could not find function: " << funcName << "\n";
       }
     }
     cachingDone = true;
