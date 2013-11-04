@@ -39,16 +39,8 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
               }
               else {
                 // obtain the vtable global var for the static type and insert reference to
-                // it as metadataa.
-                Value* receiverPtr;
-                if (C->paramHasAttr(0, Attribute::StructRet)) {
-                  // skip the sret arg
-                  receiverPtr = C->getArgOperand(1)->stripPointerCasts();
-                }
-                else {
-                  receiverPtr = C->getArgOperand(0)->stripPointerCasts();
-                }
-                
+                // it as metadataa. skip the sret arg
+                Value* receiverPtr = C->getArgOperand(C->paramHasAttr(0, Attribute::StructRet) ? 1 : 0)->stripPointerCasts();
                 if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(receiverPtr)) {
                   receiverPtr = gep->getPointerOperand()->stripPointerCasts();
                 }
