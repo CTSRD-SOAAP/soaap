@@ -331,10 +331,12 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
       Value* clazzVTableElem = clazzVTable->getOperand(subObjVTableOffset+vtableIdx)->stripPointerCasts();
       if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
         DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
-        // if this is a thunk then we extract the actual function from within
-        callee = extractFunctionFromThunk(callee);
-        if (find(callees.begin(), callees.end(), callee) == callees.end()) {
-          callees.push_back(callee);
+        if (callee->getName().str() != "__cxa_pure_virtual") { // skip pure virtual functions
+          // if this is a thunk then we extract the actual function from within
+          callee = extractFunctionFromThunk(callee);
+          if (find(callees.begin(), callees.end(), callee) == callees.end()) {
+            callees.push_back(callee);
+          }
         }
       }
       else {
