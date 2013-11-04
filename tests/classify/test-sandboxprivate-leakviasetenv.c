@@ -26,9 +26,6 @@ void dostuff() {
   /*
    * CHECK: Sandboxed method "dostuff" executing in sandboxes: [box]
    * CHECK: may leak private data through env var "PUBLIC"
-   *
-   * TODO: The above CHECK fails, but it succeeds if we leave off the last
-   *       quotation mark (i.e. "PUBLIC rather than "PUBLIC"). Why!?
    */
   setenv("PUBLIC", password, 1);
 }

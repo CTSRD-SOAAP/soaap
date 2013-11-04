@@ -196,8 +196,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through env var ";
                   if (GlobalVariable* envVarGlobal = dyn_cast<GlobalVariable>(call->getArgOperand(0)->stripPointerCasts())) {
                     ConstantDataArray* envVarArray = dyn_cast<ConstantDataArray>(envVarGlobal->getInitializer());
-                    StringRef envVarName = envVarArray->getAsString();
-                    outs() << "\"" << envVarName << "\"";
+                    string envVarName = envVarArray->getAsString();
+                    outs() << "\"" << envVarName.c_str() << "\"";
                   }
                   outs() << "\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
