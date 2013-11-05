@@ -37,7 +37,7 @@ endif ()
 
 add_custom_target(test
 	COMMAND
-		PATH=${LLVM_BINARY_DIR}:$ENV{PATH} ${LIT}
+		PATH=${LLVM_BINARY_DIR}/bin:$ENV{PATH} ${LIT}
 		${LIT_OPTIONS} ${CMAKE_CURRENT_SOURCE_DIR}
 		--param=build_dir=${CMAKE_BINARY_DIR}
 		--param=source_dir=${CMAKE_SOURCE_DIR}
