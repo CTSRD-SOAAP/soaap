@@ -9,14 +9,14 @@
 void dostuff();
 void privfunc(int p1);
 
-__soaap_callgates(privfunc);
+__soaap_callgates("box", privfunc);
 
 int main() {
   dostuff();
   return 0;
 }
 
-__soaap_sandbox_persistent_named("box")
+__soaap_sandbox_persistent("box")
 void dostuff() {
   int key __soaap_sandbox_private("box");
   privfunc(key);
