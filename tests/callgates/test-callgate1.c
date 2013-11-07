@@ -18,7 +18,7 @@ int main() {
 
 __soaap_sandbox_persistent("box")
 void dostuff() {
-  int key __soaap_sandbox_private("box");
+  int key __soaap_private("box");
   privfunc(key);
 }
 
