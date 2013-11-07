@@ -13,7 +13,7 @@ int read(int,char*,int);
 void g(int i) {
   //printf("i: %d\n", i);
   char buf[10];
-  // CHECK: Insufficient privileges for "read()" in sandboxed method "g"
+  // CHECK-NOT: Insufficient privileges for "read()" in sandboxed method "g"
   read(i,buf,10);
 }
 
