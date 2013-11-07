@@ -6,10 +6,12 @@
 #include "Util/SandboxUtils.h"
 #include "soaap.h"
 
+#include "llvm/DebugInfo.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 using namespace soaap;
 
@@ -257,25 +259,30 @@ void Sandbox::findCapabilities() {
              * Find out the enclosing function and record which
              * param was annotated. We have to do this because
              * llvm creates a local var for the param by appending
-             * .addrN to the end of the param name and associates
-             * the annotation with the newly created local var
-             * i.e. see ifd and ifd.addr1 above
+             * and associates the annotation with the newly created
+             * local var i.e. see ifd and ifd.addr1 above
              */
-            Argument* annotatedArg = NULL;
-            for (Argument &arg : entryPoint->getArgumentList()) {
-              if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
-                annotatedArg = &arg;
-              }
-            }
+            if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
+              DIVariable varDbg(dbgDecl->getVariable());
+              string annotatedVarName = varDbg.getName().str();
 
-            if (annotatedArg != NULL) {
-              if (annotationStrValCString == FD_READ) {
-                caps[annotatedArg] |= FD_READ_MASK;
+              // find the annotated parameter
+              Argument* annotatedArg = NULL;
+              for (Argument& arg : entryPoint->getArgumentList()) {
+                if (arg.getName().str() == annotatedVarName) {
+                  annotatedArg = &arg;
+                }
               }
-              else if (annotationStrValCString == FD_WRITE) {
-                caps[annotatedArg] |= FD_WRITE_MASK;
+
+              if (annotatedArg != NULL) {
+                if (annotationStrValCString == FD_READ) {
+                  caps[annotatedArg] |= FD_READ_MASK;
+                }
+                else if (annotationStrValCString == FD_WRITE) {
+                  caps[annotatedArg] |= FD_WRITE_MASK;
+                }
+                DEBUG(dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
               }
-              DEBUG(dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
             }
           }
         }
