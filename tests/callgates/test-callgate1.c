@@ -9,7 +9,7 @@
 void dostuff();
 void privfunc(int p1);
 
-__soaap_callgates("box", privfunc);
+__soaap_callgates(box, privfunc);
 
 int main() {
   dostuff();
