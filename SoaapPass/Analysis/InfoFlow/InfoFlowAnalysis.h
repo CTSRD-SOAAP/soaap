@@ -50,6 +50,7 @@ namespace soaap {
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
       virtual void addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist);
+      virtual FactType bottomValue() = 0;
   };
 
   template <class FactType>
@@ -136,6 +137,15 @@ namespace soaap {
                 DEBUG(dbgs() << INDENT_4 << "Return instruction; propagating to callers\n");
                 propagateToCallers(RI, RetVal, C, worklist, sandboxes, M);
               }
+              continue;
+            }
+            else if (I->isBinaryOp()) {
+              // The resulting value is a combination of its operands and we do not combine
+              // dataflow facts in this way. So we do not propagate the dataflow-value of V
+              // but actually set it to 0 (or initialValue())
+              dbgs() << "Propagating 0 to " << *I << "\n";
+              state[C][I] = bottomValue();
+              addToWorklist(I, C, worklist);
               continue;
             }
             else {
