@@ -20,17 +20,27 @@ int main() {
   return 0;
 }
 
-__soaap_sandbox_persistent("network")
-void dostuff() {
-
-  // CHECK-NOT: Sandboxed method "dostuff" [network] read global variable "sensitive" ({{.*}}) but is not allowed to
-  int y = sensitive;
-  printf("secret y is: %d\n", y);
-}
-
 __soaap_sandbox_persistent("box2")
 void domorestuff() {
-  // CHECK: Sandboxed method "domorestuff" [box2] read global variable "sensitive" ({{.*}}) but is not allowed to
   int z = sensitive;
+  /*
+   * CHECK: *** Sandboxed method "domorestuff" read data
+   * CHECK:     value belonging to sandboxes: [network]
+   * CHECK:     but it executes in sandboxes: [box2]
+   */
   printf("secret is: %d\n", z);
+  /*
+   * CHECK-NOT: *** Sandboxed method "domorestuff" executing in sandboxes: [box2]
+   * CHECK-NOT:     may leak private data through the extern function printf
+   */
+}
+
+__soaap_sandbox_persistent("network")
+void dostuff() {
+  int y = sensitive;
+  printf("secret y is: %d\n", y);
+  /*
+   * CHECK: *** Sandboxed method "dostuff" executing in sandboxes: [network]
+   * CHECK:     may leak private data through the extern function printf
+   */
 }
