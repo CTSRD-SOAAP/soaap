@@ -22,6 +22,7 @@ namespace soaap {
 
     private:
       SmallVector<string,2> getEnclosingScopes(DIType& type);
+      void nullOperand(MDNode* container, int operandIdx);
       string mangleScopes(SmallVector<string,2>& scopes, map<string,int>& prefixToId, int& nextPrefixId);
   };
 }

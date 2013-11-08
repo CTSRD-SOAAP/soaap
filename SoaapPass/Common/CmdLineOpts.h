@@ -19,8 +19,6 @@ namespace soaap {
       static bool InferFPTargets;
       static bool ListFPTargets;
       static bool ListAllFuncs;
-      static string DumpVirtualCallees;
-      static string ReadVirtualCallees;
   };
 }
 

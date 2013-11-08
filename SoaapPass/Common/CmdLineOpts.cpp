@@ -44,15 +44,3 @@ bool CmdLineOpts::ListAllFuncs;
 static cl::opt<bool, true> ClListAllFuncs("soaap-list-all-funcs",
        cl::desc("List all functions"),
        cl::location(CmdLineOpts::ListAllFuncs));
-
-string CmdLineOpts::DumpVirtualCallees;
-static cl::opt<string, true> ClDumpVirtualCallees("soaap-dump-virtual-callees",
-       cl::desc("Dump C++ virtual callees (derived from debugging information) to file"),
-       cl::value_desc("filename"),
-       cl::location(CmdLineOpts::DumpVirtualCallees));
-
-string CmdLineOpts::ReadVirtualCallees;
-static cl::opt<string, true> ClReadVirtualCallees("soaap-read-virtual-callees",
-       cl::desc("Read C++ virtual callees from file"),
-       cl::value_desc("filename"),
-       cl::location(CmdLineOpts::ReadVirtualCallees));

@@ -57,18 +57,6 @@ bool SoaapPass::runOnModule(Module& M) {
   outs() << "* Finding class hierarchy (if there is one)\n";
   ClassHierarchyUtils::findClassHierarchy(M);
 
-  if (CmdLineOpts::DumpVirtualCallees != "") {
-    outs() << "* Dumping virtual callee information to file\n";
-    ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(M);
-    ClassHierarchyUtils::dumpVirtualCalleeInformation(M, CmdLineOpts::DumpVirtualCallees);
-    return true;
-  }
-  else if (CmdLineOpts::ReadVirtualCallees != "") {
-    outs() << "* Reading virtual callee information from file\n";
-    ClassHierarchyUtils::readVirtualCalleeInformation(M, CmdLineOpts::ReadVirtualCallees);
-    return true;
-  }
-
   outs() << "* Adding dynamic/annotated/inferred call edges to callgraph (if available)\n";
   CallGraphUtils::loadDynamicCallGraphEdges(M);
   CallGraphUtils::loadAnnotatedCallGraphEdges(M);

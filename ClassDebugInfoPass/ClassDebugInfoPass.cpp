@@ -22,6 +22,7 @@ using namespace soaap;
 
 bool ClassDebugInfoPass::runOnModule(Module& M) {
   outs() << "* Running " << getPassName() << "\n";
+  
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
     DEBUG(dbgs() << "Processing " << F->getName() << "\n");
@@ -150,7 +151,50 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
       }
     }
   }
+
+  // Remove type-related debug info
+  Function *Declare = M.getFunction("llvm.dbg.declare");
+  if (Declare) {
+    while (!Declare->use_empty()) {
+      CallInst* CI = cast<CallInst>(Declare->use_back());
+      CI->eraseFromParent();
+    }
+    Declare->eraseFromParent();
+  }
+
+  if (NamedMDNode* CUs = M.getNamedMetadata("llvm.dbg.cu")) {
+    for (int i=0; i<CUs->getNumOperands(); i++) {
+      MDNode* CU = CUs->getOperand(i);
+      nullOperand(CU, 7);
+      nullOperand(CU, 8);
+      DICompileUnit CUD(CU);
+      DIArray globals = CUD.getGlobalVariables();
+      for (int j=0; j<globals.getNumElements(); j++) {
+        if (MDNode* GV = globals.getElement(j)) {
+          nullOperand(GV, 2);
+          nullOperand(GV, 8);
+          nullOperand(GV, 12);
+        }
+      }
+      DIArray subprograms = CUD.getSubprograms();
+      for (int j=0; j<subprograms.getNumElements(); j++) {
+        if (MDNode* SP = subprograms.getElement(j)) {
+          nullOperand(SP, 2);
+          nullOperand(SP, 7);
+          nullOperand(SP, 16);
+          nullOperand(SP, 17);
+        }
+      }
+    }
+  }
+
   return true;
+}
+
+void ClassDebugInfoPass::nullOperand(MDNode* container, int operandIdx) {
+  if (operandIdx < container->getNumOperands()) {
+    container->replaceOperandWith(operandIdx, NULL);
+  }
 }
 
 SmallVector<string,2> ClassDebugInfoPass::getEnclosingScopes(DIType& type) {
