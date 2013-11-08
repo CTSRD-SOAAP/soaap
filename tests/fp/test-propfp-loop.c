@@ -25,5 +25,6 @@ void f(int __soaap_fd_read ifd) {
 }
 
 int main(int argc, char** argv) {
+  __soaap_create_persistent_sandbox("foo");
   f(1);
 }
