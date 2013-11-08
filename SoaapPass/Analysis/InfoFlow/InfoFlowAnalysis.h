@@ -142,7 +142,7 @@ namespace soaap {
             else if (I->isBinaryOp()) {
               // The resulting value is a combination of its operands and we do not combine
               // dataflow facts in this way. So we do not propagate the dataflow-value of V
-              // but actually set it to 0 (or initialValue())
+              // but actually set it to the bottom value.
               dbgs() << "Propagating 0 to " << *I << "\n";
               state[C][I] = bottomValue();
               addToWorklist(I, C, worklist);
