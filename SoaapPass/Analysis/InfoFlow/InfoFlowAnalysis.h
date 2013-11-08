@@ -143,7 +143,7 @@ namespace soaap {
               // The resulting value is a combination of its operands and we do not combine
               // dataflow facts in this way. So we do not propagate the dataflow-value of V
               // but actually set it to the bottom value.
-              dbgs() << "Propagating 0 to " << *I << "\n";
+              DEBUG(dbgs() << INDENT_4 << "Binary operator, propagating bottom to " << *I << "\n");
               state[C][I] = bottomValue();
               addToWorklist(I, C, worklist);
               continue;
