@@ -106,6 +106,9 @@ namespace soaap {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), sandboxes, M);
             for (Context* C2 : C2s) {
+              DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
+              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V->dump(););
+              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C2) << ")\n");
               propagateToValue(V, V, C, C2, M); 
               addToWorklist(V, C2, worklist);
             }
@@ -138,7 +141,6 @@ namespace soaap {
             else {
               V2 = I;
             }
-            V2 = V2->stripPointerCasts();
             if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
               DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V2->dump(););

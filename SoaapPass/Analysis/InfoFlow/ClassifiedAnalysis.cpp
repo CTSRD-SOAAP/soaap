@@ -88,6 +88,19 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
               outs() << "\n";
             }
           }
+          else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+            Value* v = store->getValueOperand();
+            DEBUG(dbgs() << INDENT_3 << "Value dump: "; v->dump(););
+            DEBUG(dbgs() << INDENT_3 << "Value classes: " << state[S][v] << ", " << ClassifiedUtils::stringifyClassNames(state[S][v]) << "\n");
+            if (!(state[S][v] == 0 || (state[S][v] & clearances) == state[S][v])) {
+              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[S][v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
+              if (MDNode *N = I.getMetadata("dbg")) {
+                DILocation loc(N);
+                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+              }
+              outs() << "\n";
+            }
+          }
         }
       }
     }
