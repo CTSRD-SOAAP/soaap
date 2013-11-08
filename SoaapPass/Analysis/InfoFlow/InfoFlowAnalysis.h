@@ -149,7 +149,7 @@ namespace soaap {
               continue;
             }
             else {
-              V2 = I;
+              V2 = I; // this covers PHINode instructions
             }
             if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
               DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
