@@ -8,7 +8,7 @@
 
 int b();
 
-__soaap_callgates(b);
+__soaap_callgates(sandbox2, b);
 
 int b() {
   return 1;
