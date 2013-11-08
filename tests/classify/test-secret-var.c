@@ -22,9 +22,9 @@ __soaap_sandbox_persistent("foo")
 //__soaap_clearance("secret")
 void dostuff() {
   /*
-   * CHECK: *** Sandboxed method "dostuff" [foo]
-   * CHECK:     read global variable "sensitive"
-   * CHECK:     but is not allowed to.
+   * CHECK: *** Sandboxed method "dostuff" read
+   * CHECK:     data value of class: [secret] but
+   * CHECK:     only has clearances for: []
    */
   int y = sensitive;
   printf("secret y is: %d\n", y);
