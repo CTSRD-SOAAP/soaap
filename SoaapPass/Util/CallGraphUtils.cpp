@@ -198,6 +198,7 @@ CallInstVector CallGraphUtils::getCallers(const Function* F, Module& M) {
 void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   DEBUG(dbgs() << "-----------------------------------------------------------------\n");
   DEBUG(dbgs() << INDENT_1 << "Populating call -> callees and callee -> calls cache\n");
+  DEBUG(long numVirtCallees = 0);
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     DEBUG(dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
@@ -227,6 +228,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
           }
           for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
             DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
+            DEBUG(numVirtCallees++);
             callees.push_back(callee);
           }
         }
@@ -237,6 +239,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
       }
     }
   }
+  DEBUG(dbgs() << "Added " << numVirtCallees << " virtual callees\n");
   DEBUG(dbgs() << "-----------------------------------------------------------------\n");
 }
 
