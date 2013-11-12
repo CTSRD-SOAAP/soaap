@@ -25,3 +25,7 @@ add_llvm_loadable_module(libsoaap
 add_llvm_loadable_module(libclassdebuginfo
   Passes/ClassDebugInfoPass.cpp
 )
+
+add_llvm_loadable_module(libdotdyncg
+  Passes/DOTDynCG.cpp
+)
