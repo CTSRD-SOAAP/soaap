@@ -42,13 +42,14 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                 // obtain the vtable global var for the static type and insert reference to
                 // it as metadataa. skip the sret arg
                 Value* receiverVar = C->getArgOperand(C->paramHasAttr(0, Attribute::StructRet) ? 1 : 0)->stripPointerCasts();
-                // find the alloca inst
+                // Find the alloca inst. There might be multiple levels of indirection
+                // due to field lookups.
                 while (!isa<AllocaInst>(receiverVar)) {
                   if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(receiverVar)) {
                     receiverVar = gep->getPointerOperand()->stripPointerCasts();
                   }
                   else if (LoadInst* load = dyn_cast<LoadInst>(receiverVar)) {
-                    receiverVar = load->getPointerOperand();
+                    receiverVar = load->getPointerOperand()->stripPointerCasts();
                   }
                 }
                 
