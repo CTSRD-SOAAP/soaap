@@ -1,7 +1,7 @@
-#include "SoaapPass.h"
 #include "Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.h"
 #include "Analysis/InfoFlow/FPInferredTargetsAnalysis.h"
 #include "Common/CmdLineOpts.h"
+#include "Passes/SoaapPass.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"
@@ -198,20 +198,23 @@ CallInstVector CallGraphUtils::getCallers(const Function* F, Module& M) {
 void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   DEBUG(dbgs() << "-----------------------------------------------------------------\n");
   DEBUG(dbgs() << INDENT_1 << "Populating call -> callees and callee -> calls cache\n");
-  DEBUG(long numVirtCallees = 0);
+  map<int,int> calleeCountToFrequencies;
+  long numIndCalls = 0;
+  long numIndCallees = 0;
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     DEBUG(dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
     for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         FunctionVector callees;
-        if (Function* callee = C->getCalledFunction()) {
+        if (Function* callee = getDirectCallee(C)) {
           if (!callee->isIntrinsic()) {
             DEBUG(dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }
         }
-        else if (Value* FP = C->getCalledValue())  { // dynamic/annotated callees/c++ virtual funcs
+        else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // dynamic/annotated callees/c++ virtual funcs
+          numIndCalls++;
           if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
             for (const Function* callee : PI->getDynamicCallees(C)) {
               DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
@@ -228,9 +231,11 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
           }
           for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
             DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
-            DEBUG(numVirtCallees++);
             callees.push_back(callee);
           }
+          numIndCallees += callees.size();
+          calleeCountToFrequencies[callees.size()]++;
+          dbgs() << *C << ": " << callees.size() << "\n";
         }
         callToCallees[C] = callees;
         for (Function* callee : callees) {
@@ -239,8 +244,14 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
       }
     }
   }
-  DEBUG(dbgs() << "Added " << numVirtCallees << " virtual callees\n");
   DEBUG(dbgs() << "-----------------------------------------------------------------\n");
+  dbgs() << "Outputting callee-count frequencies... (" << numIndCalls << " calls, " << numIndCallees << " callees)\n";
+  long numIndCalls2 = 0;
+  for (map<int,int>::iterator I=calleeCountToFrequencies.begin(), E=calleeCountToFrequencies.end(); I!=E; I++) {
+    dbgs() << INDENT_1 << I->first << ": " << I->second << "\n";
+    numIndCalls2 += I->second;
+  }
+  dbgs() << "(Recounted number of indirect calls: " << numIndCalls2 << ")\n";
 }
 
 bool CallGraphUtils::isIndirectCall(CallInst* C) {

@@ -1,5 +1,5 @@
 add_llvm_loadable_module(libsoaap
-  SoaapPass.cpp
+  Passes/SoaapPass.cpp
   Common/CmdLineOpts.cpp
   Common/Sandbox.cpp
   Analysis/GlobalVariableAnalysis.cpp
@@ -20,4 +20,8 @@ add_llvm_loadable_module(libsoaap
   Util/PrettyPrinters.cpp
   Util/SandboxUtils.cpp
   Util/ClassifiedUtils.cpp
+)
+
+add_llvm_loadable_module(libclassdebuginfo
+  Passes/ClassDebugInfoPass.cpp
 )

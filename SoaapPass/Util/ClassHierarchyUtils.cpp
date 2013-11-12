@@ -1,4 +1,4 @@
-#include "ClassDebugInfoPass.h"
+#include "Passes/ClassDebugInfoPass.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/DebugUtils.h"
