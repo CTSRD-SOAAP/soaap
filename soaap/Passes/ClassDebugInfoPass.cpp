@@ -46,6 +46,7 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                 Value* receiverVar = C->getArgOperand(C->paramHasAttr(0, Attribute::StructRet) ? 1 : 0)->stripPointerCasts();
                 // Find the alloca inst. There might be multiple levels of indirection
                 // due to field lookups.
+                bool skip = false;
                 while (!isa<AllocaInst>(receiverVar)) {
                   if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(receiverVar)) {
                     receiverVar = gep->getPointerOperand()->stripPointerCasts();
@@ -53,6 +54,14 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
                   else if (LoadInst* load = dyn_cast<LoadInst>(receiverVar)) {
                     receiverVar = load->getPointerOperand()->stripPointerCasts();
                   }
+                  else if (CallInst* call = dyn_cast<CallInst>(receiverVar)) {
+                    skip = true;
+                    break;
+                  }
+                }
+
+                if (skip) {
+                  continue;
                 }
                 
                 DEBUG(dbgs() << "receiverVar: " << *receiverVar << "\n");
