@@ -1,3 +1,4 @@
+# main soaap pass
 add_llvm_loadable_module(libsoaap
   Passes/SoaapPass.cpp
   Common/CmdLineOpts.cpp
@@ -22,10 +23,18 @@ add_llvm_loadable_module(libsoaap
   Util/ClassifiedUtils.cpp
 )
 
+# pass to insert vtable debug info
 add_llvm_loadable_module(libclassdebuginfo
   Passes/ClassDebugInfoPass.cpp
 )
 
+# pass to output dynamic callgraph to DOT
 add_llvm_loadable_module(libdotdyncg
   Passes/DOTDynCG.cpp
 )
+
+# pass to instrument dynamic call edge profiling
+add_llvm_loadable_module(libcep CallEdgeProfiling.cpp CallEdgeProfiling.c)
+link_directories(${LLVM_BINARY_DIR}/lib)
+add_library(cep_rt SHARED Passes/CallEdgeProfiling.c)
+target_link_libraries(cep_rt profile_rt)
