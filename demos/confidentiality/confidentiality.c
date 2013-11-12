@@ -4,7 +4,7 @@ void accept_connection();
 extern void compute_session_key(char*, char*, i);
 void foo();
 
-__soaap_classify("secret") int server_key;
+/*__soaap_classify("secret")*/ int server_key;
 
 __soaap_private("something_else") char* key;
 

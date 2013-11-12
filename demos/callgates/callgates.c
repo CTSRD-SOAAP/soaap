@@ -4,7 +4,7 @@
 void remote_auth_user(int sock);
 int check_login(char* user, char* pwd);
 
-//__soaap_callgates(authenticate, check_login);
+__soaap_callgates(authenticate, check_login);
 
 int main(int argc, char** argv) {
   remote_auth_user(argc);
