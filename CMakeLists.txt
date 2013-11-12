@@ -30,6 +30,4 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/SoaapPass)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ClassDebugInfoPass)
 
 add_subdirectory(SoaapPass)
-add_subdirectory(CallEdgeProfiling)
-add_subdirectory(DOTDynCG)
 add_subdirectory(tests)
