@@ -1,4 +1,6 @@
-#include "ClassDebugInfoPass.h"
+#include "Passes/ClassDebugInfoPass.h"
+
+#include "Util/CallGraphUtils.h"
 
 #include "llvm/DebugInfo.h"
 #include "llvm/PassManager.h"
@@ -29,7 +31,7 @@ bool ClassDebugInfoPass::runOnModule(Module& M) {
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (!isa<IntrinsicInst>(&*I)) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (C->getCalledFunction() == NULL && !C->isInlineAsm()) {
+          if (CallGraphUtils::getDirectCallee(C) == NULL && !C->isInlineAsm()) {
             if (Value* calledVal = C->getCalledValue()) {
               if (GlobalAlias* alias = dyn_cast<GlobalAlias>(calledVal)) {
                 DEBUG(dbgs() << "Global Alias\n");

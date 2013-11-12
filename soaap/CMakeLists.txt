@@ -25,7 +25,13 @@ add_llvm_loadable_module(libsoaap
 
 # pass to insert vtable debug info
 add_llvm_loadable_module(libclassdebuginfo
+  Common/CmdLineOpts.cpp
   Passes/ClassDebugInfoPass.cpp
+  Util/CallGraphUtils.cpp
+  Util/ContextUtils.cpp
+  Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.cpp
+  Analysis/InfoFlow/FPInferredTargetsAnalysis.cpp
+  Analysis/InfoFlow/FPTargetsAnalysis.cpp
 )
 
 # pass to output dynamic callgraph to DOT
