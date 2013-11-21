@@ -23,8 +23,9 @@ namespace soaap {
       static map<GlobalVariable*,map<int,int> > vTableToSecondaryVTableMaps;
       static map<GlobalVariable*,map<GlobalVariable*,int> > classToBaseOffset;
       static bool cachingDone;
+      static int findSubObjOffset(GlobalVariable* definingClazzTI, GlobalVariable* staticClazzTI);
       static void processTypeInfo(GlobalVariable* TI);
-      static FunctionVector findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* cVTableVar, Module& M);
+      static FunctionVector findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingVTableVar, GlobalVariable* staticVTableVar, Module& M);
       static void findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees);
       static Function* extractFunctionFromThunk(Function* F);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);

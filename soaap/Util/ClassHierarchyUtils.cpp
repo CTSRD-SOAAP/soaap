@@ -95,21 +95,24 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
       if (F->isDeclaration()) continue;
       for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-        GlobalVariable* cVTableVar;
-        bool instHasMetadata = false;
-        if (MDNode* N = I->getMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND)) {
-          cVTableVar = cast<GlobalVariable>(N->getOperand(0));
-          instHasMetadata = true;
+        GlobalVariable* definingTypeVTableVar = NULL;
+        GlobalVariable* staticTypeVTableVar = NULL;
+        if (MDNode* N = I->getMetadata("soaap_defining_vtable_var")) {
+          definingTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+          staticTypeVTableVar = cast<GlobalVariable>(I->getMetadata("soaap_static_vtable_var")->getOperand(0));
         }
-        else if (MDNode* N = I->getMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND)) {
-          ConstantDataArray* classTypeIdConstant = cast<ConstantDataArray>(N->getOperand(0));
-          string classTypeIdStr = classTypeIdConstant->getAsString().str();
-          DEBUG(dbgs() << "classTypeIdStr: " << classTypeIdStr << "\n");
-          cVTableVar = M.getGlobalVariable(classTypeIdStr.replace(0, 4, "_ZTV"));
-          instHasMetadata = true;
+        else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
+          ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
+          string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
+          DEBUG(dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n");
+          definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr);
+          ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(I->getMetadata("soaap_static_vtable_name")->getOperand(0));
+          string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
+          DEBUG(dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n");
+          staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr);
         }
-        if (instHasMetadata) {
-          if (cVTableVar == NULL) {
+        if (definingTypeVTableVar != NULL) {
+          /*if (definingVTableVar == NULL) {
             // So far the reason for this has been because the mangled name we infer 
             // during the ClassDebugInfoPass is incorrect. This is probably because 
             // the code performs a static_cast to a type that is not a subtype of 
@@ -124,9 +127,10 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
             I->setMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND, NULL);
             I->setMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND, NULL);
             continue;
-          }
+          }*/
+          DEBUG(dbgs() << "Found definingVTableVar: " << *definingTypeVTableVar << "\n");
           CallInst* C = cast<CallInst>(&*I);
-          callToCalleesCache[C] = findAllCalleesForVirtualCall(C, cVTableVar, M);
+          callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
         }
       }
     }
@@ -218,7 +222,7 @@ void ClassHierarchyUtils::ppClassHierarchyHelper(GlobalVariable* c, ClassHierarc
 }
 
 
-FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* cVTableVar, Module& M) {
+FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeVTableVar, GlobalVariable* staticTypeVTableVar, Module& M) {
   
   FunctionVector callees;
 
@@ -248,43 +252,17 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
         int cVTableIdx = cVTableIdxVal->getSExtValue();
         DEBUG(dbgs() << "relative cVTableIdx: " << cVTableIdx << "\n");
         
-        // If the function being called is defined in a base class, then this 
-        // might be a vtable call into a secondary vtable (i.e. the vtable of
-        // a base class/sub-object, unless it is a primary base) then the 
-        // compiler will have adjusted the address of "this" to point to the 
-        // subobject's vtable pointer in the object and the vtable index will
-        // be relative to that. We check to see if that adjustment did occur 
-        // and if so then use that as the static type. This is what the 
-        // code looks like for when calling a virtual function via a subobject:
-
-        // %9 = load %"class.box::D"** %d, align 8, !dbg !76
-        // %10 = bitcast %"class.box::D"* %9 to i8*, !dbg !76
-        // %add.ptr = getelementptr inbounds i8* %10, i64 16, !dbg !76
-        // %11 = bitcast i8* %add.ptr to %"class.box::B"*, !dbg !76
-        // %12 = bitcast %"class.box::B"* %11 to void (%"class.box::B"*)***, !dbg !76
-        // %vtable4 = load void (%"class.box::B"*)*** %12, !dbg !76
-        // %vfn5 = getelementptr inbounds void (%"class.box::B"*)** %vtable4, i64 0, !dbg !76
-        // %13 = load void (%"class.box::B"*)** %vfn5, !dbg !76
-        // call void %13(%"class.box::B"* %11), !dbg !76
-        int subObjOffset = 0;
-        if (LoadInst* cVTableLoad = dyn_cast<LoadInst>(gep->getPointerOperand()->stripPointerCasts())) {
-          if (GetElementPtrInst* gep2 = dyn_cast<GetElementPtrInst>(cVTableLoad->getPointerOperand()->stripPointerCasts())) {
-            if (ConstantInt* subObjOffsetVal = dyn_cast<ConstantInt>(gep2->getOperand(1))) {
-              subObjOffset = subObjOffsetVal->getSExtValue();
-              DEBUG(dbgs() << "subObjOffset: " << subObjOffset << "\n");
-              //vtableOffset = vTableToSecondaryVTableMaps[cVTableVar][subObjOffset]; // starting idx of secondary vtable
-            }
-          }
-        }
-
         // find all implementations in reciever's class (corresponding to the
         // static type) as well as all descendent classes. Note: callees will
         // be at same idx in all vtables
-        GlobalVariable* cClazzTI = vTableToTypeInfo[cVTableVar];
-        findAllCalleesInSubClasses(C, cClazzTI, cVTableIdx, subObjOffset, callees);
+        GlobalVariable* definingClazzTI = vTableToTypeInfo[definingTypeVTableVar];
+        GlobalVariable* staticClazzTI = vTableToTypeInfo[staticTypeVTableVar];
+        int subObjOffset = findSubObjOffset(definingClazzTI, staticClazzTI);
+        DEBUG(dbgs() << *definingClazzTI << " is at offset " << subObjOffset << " in " << *staticClazzTI << "\n");
+        findAllCalleesInSubClasses(C, staticClazzTI, cVTableIdx, subObjOffset, callees);
       }
       else {
-        DEBUG(dbgs() << "vtable idx is NOT a ConstantInt\n");
+        dbgs() << "vtable idx is NOT a ConstantInt\n";
         DEBUG(C->dump());
         DEBUG(gep->getOperand(1)->dump());
       }
@@ -307,6 +285,23 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
   }
 
   return callees;
+}
+
+int ClassHierarchyUtils::findSubObjOffset(GlobalVariable* definingClazzTI, GlobalVariable* staticClazzTI) {
+  if (definingClazzTI == staticClazzTI) {
+    return 0;
+  }
+  else {
+    for (GlobalVariable* subTI : classToSubclasses[definingClazzTI]) {
+      // When moving to a subclass, adjust subObjOffset by adding TI's offset in subTI.
+      // (relative ordering of subobjects are always maintained).
+      int subObjOffset = findSubObjOffset(subTI, staticClazzTI);
+      if (subObjOffset != -1) {
+        return subObjOffset + classToBaseOffset[subTI][definingClazzTI];
+      }
+    }
+    return -1;
+  }
 }
 
 void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees) {
@@ -340,7 +335,7 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
         }
       }
       else {
-        // The vtable entry may no be a function if we're looking for a function
+        // The vtable entry may not be a function if we're looking for a function
         // in the vtable of a class that was statically casted to (using static_cast).
         // In such a case we recursively search subclasses (as we don't know which
         // subclass it is) and thus in one such subclass, the vtable entry might be 
@@ -360,6 +355,8 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
     skip = true;
   }
   for (GlobalVariable* subTI : classToSubclasses[TI]) {
+    // When moving to a subclass, adjust subobjoffset by adding TI's offset in subTI.
+    // (relative ordering of subsubobjects within a subobject are always maintained).
     int subSubObjOffset = skip ? subObjOffset : (classToBaseOffset[subTI][TI] + subObjOffset);
 
     DEBUG(dbgs() << "adjusting subObjOffset from " << subObjOffset << " to " << (subSubObjOffset) << "\n");
