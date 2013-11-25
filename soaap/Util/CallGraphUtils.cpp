@@ -201,6 +201,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   map<int,int> calleeCountToFrequencies;
   long numIndCalls = 0;
   long numIndCallees = 0;
+  long numVCalls = 0;
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     DEBUG(dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
@@ -215,6 +216,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
         }
         else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // dynamic/annotated callees/c++ virtual funcs
           numIndCalls++;
+          bool isVCall = C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL;
           if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
             for (const Function* callee : PI->getDynamicCallees(C)) {
               DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
@@ -234,8 +236,16 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             callees.push_back(callee);
           }
           numIndCallees += callees.size();
-          calleeCountToFrequencies[callees.size()]++;
-          dbgs() << *C << ": " << callees.size() << "\n";
+          if (isVCall) {
+            calleeCountToFrequencies[callees.size()]++;
+            numVCalls++;
+            /*if (callees.size() == 529) {
+              for (Function* callee : callees) {
+                dbgs() << " " << callee->getName() << "\n";
+              }
+              C->dump();
+            }*/
+          }
         }
         callToCallees[C] = callees;
         for (Function* callee : callees) {
@@ -245,13 +255,13 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
     }
   }
   DEBUG(dbgs() << "-----------------------------------------------------------------\n");
-  dbgs() << "Outputting callee-count frequencies... (" << numIndCalls << " calls, " << numIndCallees << " callees)\n";
+  DEBUG(dbgs() << "Outputting callee-count frequencies... (" << numIndCalls << " ind calls, " << numVCalls << " v calls, " <<  numIndCallees << " callees)\n");
   long numIndCalls2 = 0;
   for (map<int,int>::iterator I=calleeCountToFrequencies.begin(), E=calleeCountToFrequencies.end(); I!=E; I++) {
-    dbgs() << INDENT_1 << I->first << ": " << I->second << "\n";
+    DEBUG(dbgs() << INDENT_1 << I->first << ": " << I->second << "\n");
     numIndCalls2 += I->second;
   }
-  dbgs() << "(Recounted number of indirect calls: " << numIndCalls2 << ")\n";
+  DEBUG(dbgs() << "(Recounted number of indirect calls: " << numIndCalls2 << ")\n");
 }
 
 bool CallGraphUtils::isIndirectCall(CallInst* C) {

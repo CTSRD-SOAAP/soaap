@@ -1,4 +1,3 @@
-#include "Passes/ClassDebugInfoPass.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/DebugUtils.h"
@@ -97,41 +96,42 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
       for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
         GlobalVariable* definingTypeVTableVar = NULL;
         GlobalVariable* staticTypeVTableVar = NULL;
+        bool hasMetadata = false;
         if (MDNode* N = I->getMetadata("soaap_defining_vtable_var")) {
           definingTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
-          staticTypeVTableVar = cast<GlobalVariable>(I->getMetadata("soaap_static_vtable_var")->getOperand(0));
+          hasMetadata = true;
         }
         else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
           ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
           string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
-          DEBUG(dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n");
+          //dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n";
           definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr);
-          ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(I->getMetadata("soaap_static_vtable_name")->getOperand(0));
+          hasMetadata = true;
+        }
+        if (MDNode* N = I->getMetadata("soaap_static_vtable_var")) {
+          staticTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+          hasMetadata = true;
+        }
+        else if (MDNode* N = I->getMetadata("soaap_static_vtable_name")) {
+          ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
           string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
-          DEBUG(dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n");
+          //dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n";
           staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr);
+          hasMetadata = true;
         }
         if (definingTypeVTableVar != NULL) {
-          /*if (definingVTableVar == NULL) {
-            // So far the reason for this has been because the mangled name we infer 
-            // during the ClassDebugInfoPass is incorrect. This is probably because 
-            // the code performs a static_cast to a type that is not a subtype of 
-            // the variable's static type (such as in a template class). For chromium, this 
-            // tends to occur in WebKit's  WFT::RefCounted class that performs the following
-            // call that leads to T's destructor being invoked:
-            //
-            //  delete static_cast<T*>(this)
-            // 
-            DEBUG(dbgs() << "ERROR: cVTableVar is NULL\n");
-            DEBUG(I->dump());
-            I->setMetadata(SOAAP_VTABLE_VAR_MDNODE_KIND, NULL);
-            I->setMetadata(SOAAP_VTABLE_NAME_MDNODE_KIND, NULL);
-            continue;
-          }*/
           DEBUG(dbgs() << "Found definingVTableVar: " << *definingTypeVTableVar << "\n");
+          if (staticTypeVTableVar == NULL) {
+            // This could be the case if no instance of the static type is ever created
+            staticTypeVTableVar = definingTypeVTableVar;
+          }
           CallInst* C = cast<CallInst>(&*I);
           callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
         }
+        /*else if (hasMetadata) {
+          dbgs() << "Defining VTable is NULL!\n";
+          I->dump();
+        }*/
       }
     }
     cachingDone = true;
@@ -251,12 +251,22 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
       if (ConstantInt* cVTableIdxVal = dyn_cast<ConstantInt>(gep->getOperand(1))) {
         int cVTableIdx = cVTableIdxVal->getSExtValue();
         DEBUG(dbgs() << "relative cVTableIdx: " << cVTableIdx << "\n");
-        
+ 
         // find all implementations in reciever's class (corresponding to the
         // static type) as well as all descendent classes. Note: callees will
         // be at same idx in all vtables
         GlobalVariable* definingClazzTI = vTableToTypeInfo[definingTypeVTableVar];
         GlobalVariable* staticClazzTI = vTableToTypeInfo[staticTypeVTableVar];
+
+        if (definingClazzTI == NULL) {
+          dbgs() << "definingClazzTI is null, vtable: " << definingTypeVTableVar->getName() << "\n";
+          C->dump();
+        }
+        if (staticClazzTI == NULL) {
+          C->dump();
+          dbgs() << "staticClazzTI is null, vtable: " << staticTypeVTableVar->getName() << "\n";
+        }
+
         int subObjOffset = findSubObjOffset(definingClazzTI, staticClazzTI);
         DEBUG(dbgs() << *definingClazzTI << " is at offset " << subObjOffset << " in " << *staticClazzTI << "\n");
         findAllCalleesInSubClasses(C, staticClazzTI, cVTableIdx, subObjOffset, callees);
@@ -306,53 +316,54 @@ int ClassHierarchyUtils::findSubObjOffset(GlobalVariable* definingClazzTI, Globa
 
 void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees) {
   DEBUG(dbgs() << "Looking for func at vtable idx " << vtableIdx << " in " << TI->getName() << " (subObjOffset=" << subObjOffset << ")\n");
-  GlobalVariable* vTableVar = typeInfoToVTable[TI];
-  ConstantArray* clazzVTable = cast<ConstantArray>(vTableVar->getInitializer());
-
-  // It's possible that TI is a superclass that doesn't contain the function. This
-  // will be due to a downcast... the receiver object was initially of the superclass type
-  // and then it was downcasted before the vtable func is called. So we skip this class and 
-  // move to the subclass. There are two ways to discover if a downcast did occur:
-  //   1) the subObjOffset doesn't appear in clazzVTable
-  //   2) the vtable doesn't contain a function at the vtable idx relative to the start of 
-  //      the subobject's vtable (because it is added by a descendent class)
-  // We cannot reliably detect downcasts however as the function may have been introduced 
-  // in-between TI and the casted-to type and so we may infer more callees.
   bool skip = false;
-  if (vTableToSecondaryVTableMaps[vTableVar].find(subObjOffset) != vTableToSecondaryVTableMaps[vTableVar].end()) {
-    int subObjVTableOffset = vTableToSecondaryVTableMaps[vTableVar][subObjOffset];
-    DEBUG(dbgs() << "    Absolute vtable index: " << (subObjVTableOffset+vtableIdx) << "\n");
-    if ((subObjVTableOffset+vtableIdx) < clazzVTable->getNumOperands()) {
-      Value* clazzVTableElem = clazzVTable->getOperand(subObjVTableOffset+vtableIdx)->stripPointerCasts();
-      if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
-        DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
-        if (callee->getName().str() != "__cxa_pure_virtual") { // skip pure virtual functions
-          // if this is a thunk then we extract the actual function from within
-          callee = extractFunctionFromThunk(callee);
-          if (find(callees.begin(), callees.end(), callee) == callees.end()) {
-            callees.push_back(callee);
+  if (GlobalVariable* vTableVar = typeInfoToVTable[TI]) { // Maybe NULL if TI doesn't have a vtable def
+    ConstantArray* clazzVTable = cast<ConstantArray>(vTableVar->getInitializer());
+
+    // It's possible that TI is a superclass that doesn't contain the function. This
+    // will be due to a downcast... the receiver object was initially of the superclass type
+    // and then it was downcasted before the vtable func is called. So we skip this class and 
+    // move to the subclass. There are two ways to discover if a downcast did occur:
+    //   1) the subObjOffset doesn't appear in clazzVTable
+    //   2) the vtable doesn't contain a function at the vtable idx relative to the start of 
+    //      the subobject's vtable (because it is added by a descendent class)
+    // We cannot reliably detect downcasts however as the function may have been introduced 
+    // in-between TI and the casted-to type and so we may infer more callees.
+    if (vTableToSecondaryVTableMaps[vTableVar].find(subObjOffset) != vTableToSecondaryVTableMaps[vTableVar].end()) {
+      int subObjVTableOffset = vTableToSecondaryVTableMaps[vTableVar][subObjOffset];
+      DEBUG(dbgs() << "    Absolute vtable index: " << (subObjVTableOffset+vtableIdx) << "\n");
+      if ((subObjVTableOffset+vtableIdx) < clazzVTable->getNumOperands()) {
+        Value* clazzVTableElem = clazzVTable->getOperand(subObjVTableOffset+vtableIdx)->stripPointerCasts();
+        if (Function* callee = dyn_cast<Function>(clazzVTableElem)) {
+          DEBUG(dbgs() << "  vtable entry is func: " << callee->getName() << "\n");
+          if (callee->getName().str() != "__cxa_pure_virtual") { // skip pure virtual functions
+            // if this is a thunk then we extract the actual function from within
+            callee = extractFunctionFromThunk(callee);
+            if (find(callees.begin(), callees.end(), callee) == callees.end()) {
+              callees.push_back(callee);
+            }
           }
+        }
+        else {
+          // The vtable entry may not be a function if we're looking for a function
+          // in the vtable of a class that was statically casted to (using static_cast).
+          // In such a case we recursively search subclasses (as we don't know which
+          // subclass it is) and thus in one such subclass, the vtable entry might be 
+          // a TI pointer and not a function pointer.
+          DEBUG(dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n");
+          DEBUG(C->dump());
+          DEBUG(clazzVTableElem->dump());
         }
       }
       else {
-        // The vtable entry may not be a function if we're looking for a function
-        // in the vtable of a class that was statically casted to (using static_cast).
-        // In such a case we recursively search subclasses (as we don't know which
-        // subclass it is) and thus in one such subclass, the vtable entry might be 
-        // a TI pointer and not a function pointer.
-        DEBUG(dbgs() << "  vtable entry " << vtableIdx << " is not a Function\n");
-        DEBUG(C->dump());
-        DEBUG(clazzVTableElem->dump());
+        DEBUG(dbgs() << "ERROR: index exceeds size of vtable " << vTableVar->getName() << "\n");
+        skip = true;
       }
     }
     else {
-      DEBUG(dbgs() << "ERROR: index exceeds size of vtable " << vTableVar->getName() << "\n");
+      DEBUG(dbgs() << "ERROR: subObjectOffset " << subObjOffset << " does not exist in vtable " << vTableVar->getName() << "\n");
       skip = true;
     }
-  }
-  else {
-    DEBUG(dbgs() << "ERROR: subObjectOffset " << subObjOffset << " does not exist in vtable " << vTableVar->getName() << "\n");
-    skip = true;
   }
   for (GlobalVariable* subTI : classToSubclasses[TI]) {
     // When moving to a subclass, adjust subobjoffset by adding TI's offset in subTI.
