@@ -2,6 +2,7 @@
 
 #include "soaap.h"
 #include "llvm/DebugInfo.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 

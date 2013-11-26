@@ -10,7 +10,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Analysis/ProfileInfo.h"
 
 #include <sstream>
 #include <cxxabi.h>
@@ -27,7 +26,7 @@ FPInferredTargetsAnalysis CallGraphUtils::fpInferredTargetsAnalysis;
 bool CallGraphUtils::caching = false;
 
 void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
-  if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
+  /*if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
     CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
       if (F1->isDeclaration()) continue;
@@ -43,7 +42,8 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
         }
       }
     }
-  }
+  }*/
+  dbgs() << "Dynamic call graph implementation deprecated\n";
 }
 
 void CallGraphUtils::listFPCalls(Module& M) {
@@ -217,12 +217,12 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
         else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // dynamic/annotated callees/c++ virtual funcs
           numIndCalls++;
           bool isVCall = C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL;
-          if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
+          /*if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
             for (const Function* callee : PI->getDynamicCallees(C)) {
               DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
               callees.push_back((Function*)callee);
             }
-          }
+          }*/
           for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
             DEBUG(dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
             callees.push_back(callee);

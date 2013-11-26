@@ -2,7 +2,6 @@
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/DebugUtils.h"
 #include "llvm/DebugInfo.h"
-#include "llvm/Analysis/ProfileInfo.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -122,16 +121,17 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
         if (definingTypeVTableVar != NULL) {
           DEBUG(dbgs() << "Found definingVTableVar: " << *definingTypeVTableVar << "\n");
           if (staticTypeVTableVar == NULL) {
+            dbgs() << "definingVTableVar is not null, but staticTypeVTableVar is NULL\n";
             // This could be the case if no instance of the static type is ever created
             staticTypeVTableVar = definingTypeVTableVar;
           }
           CallInst* C = cast<CallInst>(&*I);
           callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
         }
-        /*else if (hasMetadata) {
+        else if (hasMetadata) {
           dbgs() << "Defining VTable is NULL!\n";
           I->dump();
-        }*/
+        }
       }
     }
     cachingDone = true;

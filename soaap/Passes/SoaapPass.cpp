@@ -1,3 +1,4 @@
+#include "llvm/Analysis/CallGraph.h"
 #include "llvm/Pass.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/PassManager.h"
@@ -28,8 +29,7 @@ using namespace std;
 
 void SoaapPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
-  AU.addRequired<CallGraph>();
-  AU.addRequired<ProfileInfo>();
+  AU.addRequired<CallGraphWrapperPass>();
 }
 
 bool SoaapPass::runOnModule(Module& M) {
@@ -40,10 +40,8 @@ bool SoaapPass::runOnModule(Module& M) {
   }
   outs() << "\n";
 
-  CallGraph& CG = getAnalysis<CallGraph>();
-  ProfileInfo& PI = getAnalysis<ProfileInfo>();
+  CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
-  LLVMAnalyses::setProfileInfoAnalysis(&PI);
 
   if (CmdLineOpts::ListFPCalls) {
     outs() << "* Listing function-pointer calls\n";

@@ -7,6 +7,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalVariable.h"
 
 using namespace soaap;

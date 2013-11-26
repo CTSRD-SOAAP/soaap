@@ -13,8 +13,8 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Analysis/ProfileInfo.h"
 #include "llvm/Analysis/CallGraph.h"
+#include "llvm/Support/Debug.h"
 
 #include "Analysis/Analysis.h"
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"

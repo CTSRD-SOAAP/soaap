@@ -24,15 +24,15 @@ add_llvm_loadable_module(libsoaap
 )
 
 # pass to output dynamic callgraph to DOT
-add_llvm_loadable_module(libdotdyncg
-  Passes/DOTDynCG.cpp
-)
+#add_llvm_loadable_module(libdotdyncg
+#  Passes/DOTDynCG.cpp
+#)
 
 # pass to instrument dynamic call edge profiling
-add_llvm_loadable_module(libcep
-  Passes/CallEdgeProfiling.cpp
-  Passes/CallEdgeProfiling.c
-)
-link_directories(${LLVM_BINARY_DIR}/lib)
-add_library(cep_rt SHARED Passes/CallEdgeProfiling.c)
-target_link_libraries(cep_rt profile_rt)
+#add_llvm_loadable_module(libcep
+#  Passes/CallEdgeProfiling.cpp
+#  Passes/CallEdgeProfiling.c
+#)
+#link_directories(${LLVM_BINARY_DIR}/lib)
+#add_library(cep_rt SHARED Passes/CallEdgeProfiling.c)
+#target_link_libraries(cep_rt profile_rt)
