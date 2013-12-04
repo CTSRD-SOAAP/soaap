@@ -82,7 +82,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   SandboxVector sandboxes;
   FunctionIntMap funcToOverhead;
   FunctionIntMap funcToClearances;
-  map<Function*,string> funcToPersistentSandboxName;
+  map<Function*,string> funcToSandboxName;
   FunctionVector ephemeralSandboxes;
 
   Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)", true);
@@ -99,27 +99,23 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
       GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
       if (isa<Function>(annotatedVal)) {
         Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
-        if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
-          outs() << INDENT_1 << "Found persistent sandbox entrypoint " << annotatedFunc->getName() << "\n";
-          // get name if one was specified
-          if (annotationStrArrayCString.size() > strlen(SANDBOX_PERSISTENT)) {
-            StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
-            outs() << INDENT_2 << "Sandbox name: " << sandboxName << "\n";
-            if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
-              outs() << INDENT_1 << "*** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
-            }
-            else {
-              funcToPersistentSandboxName[annotatedFunc] = sandboxName;
-            }
+        StringRef sandboxName;
+        if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+          outs() << INDENT_1 << "Found sandbox entrypoint " << annotatedFunc->getName() << "\n";
+          outs() << INDENT_2 << "Annotation string: " << annotationStrArrayCString << "\n";
+          if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
+            sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
           }
-        }
-        else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
-          outs() << INDENT_1 << "Found ephemeral sandbox entry-point " << annotatedFunc->getName() << "\n";
-          if (funcToPersistentSandboxName.find(annotatedFunc) != funcToPersistentSandboxName.end() || find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), annotatedFunc) != ephemeralSandboxes.end()) {
+          else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+            sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_EPHEMERAL)+1);
+            ephemeralSandboxes.push_back(annotatedFunc);
+          }
+          outs() << INDENT_2 << "Sandbox name: " << sandboxName << "\n";
+          if (funcToSandboxName.find(annotatedFunc) != funcToSandboxName.end()) {
             outs() << INDENT_1 << "*** Error: Function " << annotatedFunc->getName() << " is already an entrypoint for another sandbox\n";
           }
           else {
-            ephemeralSandboxes.push_back(annotatedFunc);
+            funcToSandboxName[annotatedFunc] = sandboxName;
           }
         }
         else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
@@ -142,20 +138,16 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   // TODO: sanity check overhead and clearance annotations
 
   // now combine all annotation information to create Sandbox instances
-  for (map<Function*,string>::iterator I=funcToPersistentSandboxName.begin(), E=funcToPersistentSandboxName.end(); I!=E; I++) {
+  for (map<Function*,string>::iterator I=funcToSandboxName.begin(), E=funcToSandboxName.end(); I!=E; I++) {
     Function* entryPoint = I->first;
     string sandboxName = I->second;
     int idx = assignBitIdxToSandboxName(sandboxName);
     int overhead = funcToOverhead[entryPoint];
     int clearances = funcToClearances[entryPoint];
+    bool persistent = find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), entryPoint) == ephemeralSandboxes.end();
 		DEBUG(dbgs() << INDENT_2 << "Creating new Sandbox instance\n");
-    sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, true, M, overhead, clearances));
+    sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, persistent, M, overhead, clearances));
 		DEBUG(dbgs() << INDENT_2 << "Created new Sandbox instance\n");
-  }
-  for (Function* entryPoint : ephemeralSandboxes) {
-    int overhead = funcToOverhead[entryPoint];
-    int clearances = funcToClearances[entryPoint];
-    sandboxes.push_back(new Sandbox("", -1, entryPoint, false, M, overhead, clearances));
   }
 
 	DEBUG(dbgs() << INDENT_1 << "Returning sandboxes vector\n");
