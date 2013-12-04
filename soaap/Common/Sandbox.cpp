@@ -322,11 +322,12 @@ void Sandbox::validateEntryPointCalls() {
   // creation-point calls as leaves (i.e. we don't traverse past them). If
   // after this, an entrypoint call is still reached, then a path has been
   // found without going through a creation-point call.
-  Function* MainFunc = module.getFunction("main");
-  BasicBlock& EntryBB = MainFunc->getEntryBlock();
-  BasicBlockVector visited;
-  InstTrace trace;
-  validateEntryPointCallsHelper(&EntryBB, visited, trace);
+  if (Function* MainFunc = module.getFunction("main")) {
+    BasicBlock& EntryBB = MainFunc->getEntryBlock();
+    BasicBlockVector visited;
+    InstTrace trace;
+    validateEntryPointCallsHelper(&EntryBB, visited, trace);
+  }
 }
 
 bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace) {
