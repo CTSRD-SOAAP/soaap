@@ -104,7 +104,7 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
           ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
           string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
           //dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n";
-          definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr);
+          definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr, true);
           hasMetadata = true;
         }
         if (MDNode* N = I->getMetadata("soaap_static_vtable_var")) {
@@ -115,7 +115,7 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
           ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
           string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
           //dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n";
-          staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr);
+          staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr, true);
           hasMetadata = true;
         }
         if (definingTypeVTableVar != NULL) {
@@ -258,18 +258,22 @@ FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Gl
         GlobalVariable* definingClazzTI = vTableToTypeInfo[definingTypeVTableVar];
         GlobalVariable* staticClazzTI = vTableToTypeInfo[staticTypeVTableVar];
 
+        /*
         if (definingClazzTI == NULL) {
           dbgs() << "definingClazzTI is null, vtable: " << definingTypeVTableVar->getName() << "\n";
           C->dump();
         }
         if (staticClazzTI == NULL) {
-          C->dump();
           dbgs() << "staticClazzTI is null, vtable: " << staticTypeVTableVar->getName() << "\n";
+          C->dump();
         }
+        */
 
-        int subObjOffset = findSubObjOffset(definingClazzTI, staticClazzTI);
-        DEBUG(dbgs() << *definingClazzTI << " is at offset " << subObjOffset << " in " << *staticClazzTI << "\n");
-        findAllCalleesInSubClasses(C, staticClazzTI, cVTableIdx, subObjOffset, callees);
+        if (definingClazzTI != NULL && staticClazzTI != NULL) {
+          int subObjOffset = findSubObjOffset(definingClazzTI, staticClazzTI);
+          DEBUG(dbgs() << *definingClazzTI << " is at offset " << subObjOffset << " in " << *staticClazzTI << "\n");
+          findAllCalleesInSubClasses(C, staticClazzTI, cVTableIdx, subObjOffset, callees);
+        }
       }
       else {
         dbgs() << "vtable idx is NOT a ConstantInt\n";
