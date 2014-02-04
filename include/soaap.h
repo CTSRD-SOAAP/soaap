@@ -85,10 +85,10 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_create_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_CREATE"_"N)
 #define __soaap_kill_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_KILL"_"N)
 
-#define SOAAP_SANDBOX_CODE_START "SOAAP_SANDBOX_CODE_START"
-#define SOAAP_SANDBOX_CODE_END "SOAAP_SANDBOX_CODE_END"
-#define __soaap_start_sandboxed_code(N) __builtin_annotation(0, SOAAP_SANDBOX_CODE_START"_"N);
-#define __soaap_end_sandboxed_code(N) __builtin_annotation(0, SOAAP_SANDBOX_CODE_END"_"N); 
+#define SOAAP_SANDBOX_REGION_START "SOAAP_SANDBOX_REGION_START"
+#define SOAAP_SANDBOX_REGION_END "SOAAP_SANDBOX_REGION_END"
+#define __soaap_sandboxed_region_start(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_START"_"N);
+#define __soaap_sandboxed_region_end(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_END"_"N); 
 
 #define __soaap_callgates(N, fns...) \
   void __soaap_declare_callgates_helper_##N(int unused, ...) { } \
