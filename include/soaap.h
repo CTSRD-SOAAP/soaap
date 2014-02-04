@@ -102,4 +102,7 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define SOAAP_FP "SOAAP_FP"
 #define __soaap_fp(fns...) __attribute__((annotate(SOAAP_FP"_"#fns)))
 
+#define SOAAP_DANGEROUS "SOAAP_DANGEROUS"
+#define __soaap_dangerous __attribute__((annotate(SOAAP_DANGEROUS)))
+
 #endif /* SOAAP_H */

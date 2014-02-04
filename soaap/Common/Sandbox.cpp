@@ -31,6 +31,22 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   }
 }
 
+Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
+  : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
+	DEBUG(dbgs() << INDENT_2 << "Finding sandboxed functions\n");
+  findSandboxedFunctions();
+	DEBUG(dbgs() << INDENT_2 << "Finding shared global variables\n");
+  findSharedGlobalVariables();
+	DEBUG(dbgs() << INDENT_2 << "Finding callgates\n");
+  findCallgates();
+	//DEBUG(dbgs() << INDENT_2 << "Finding capabilities\n");
+  //findCapabilities();
+  if (persistent) {
+    DEBUG(dbgs() << INDENT_2 << "Finding persistent creation points\n");
+    findCreationPoints();
+  }
+}
+
 Function* Sandbox::getEntryPoint() {
   return entryPoint;
 }
@@ -84,9 +100,27 @@ CallInstVector Sandbox::getCreationPoints() {
 }
 
 void Sandbox::findSandboxedFunctions() {
+  FunctionVector initialFuncs;
+  if (entryPoint == NULL) {
+    // scan the code region for the set of top-level functions being called
+    for (Instruction* I : region) {
+      if (CallInst* C  = dyn_cast<CallInst>(I)) {
+        for (Function* F : CallGraphUtils::getCallees(C, module)) {
+          if (find(initialFuncs.begin(), initialFuncs.end(), F) == initialFuncs.end()) {
+            initialFuncs.push_back(F);
+          }
+        }
+      }
+    }
+  }
+  else {
+    initialFuncs.push_back(entryPoint);
+  }
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-  CallGraphNode* node = CG->getOrInsertFunction(entryPoint);
-  findSandboxedFunctionsHelper(node);
+  for (Function* F : initialFuncs) {
+    CallGraphNode* node = CG->getOrInsertFunction(F);
+    findSandboxedFunctionsHelper(node);
+  }
 }
 
 void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
@@ -305,8 +339,17 @@ void Sandbox::findCreationPoints() {
         if (annotationStrValCString.startswith(SOAAP_PERSISTENT_SANDBOX_CREATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_PERSISTENT_SANDBOX_CREATE)+1); //+1 because of _
           if (sandboxName == name) {
-            DEBUG(dbgs() << INDENT_3 << "Found creation point: "; annotateCall->dump(););
+            DEBUG(dbgs() << INDENT_3 << "Found persistent creation point: "; annotateCall->dump(););
             creationPoints.push_back(annotateCall);
+            persistent = true;
+          }
+        }
+        else if (annotationStrValCString.startswith(SOAAP_EPHEMERAL_SANDBOX_CREATE)) {
+          StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_EPHEMERAL_SANDBOX_CREATE)+1); //+1 because of _
+          if (sandboxName == name) {
+            dbgs() << INDENT_3 << "Found ephemeral creation point: "; annotateCall->dump();;
+            creationPoints.push_back(annotateCall);
+            persistent = false;
           }
         }
       }

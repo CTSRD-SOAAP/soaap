@@ -34,6 +34,7 @@ namespace soaap {
       static FunctionVector privilegedMethods;
       static void calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
       static void calculatePrivilegedMethods(Module& M, CallGraphNode* Node);
+      static void findAllSandboxedInstructions(Instruction* I, string sboxName, InstVector& insts);
   };
 }
 

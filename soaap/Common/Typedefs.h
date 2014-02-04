@@ -25,6 +25,7 @@ namespace soaap {
   typedef SmallVector<Context*,8> ContextVector;
   typedef vector<BasicBlock*> BasicBlockVector;  // use <vector> as can be large
   typedef list<Instruction*> InstTrace;
+  typedef list<Instruction*> InstVector;
   typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
 }
 

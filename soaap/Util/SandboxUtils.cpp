@@ -4,11 +4,13 @@
 #include "Util/LLVMAnalyses.h"
 #include "soaap.h"
 #include "llvm/DebugInfo.h"
+#include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Regex.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IntrinsicInst.h"
 
 using namespace soaap;
 using namespace llvm;
@@ -85,6 +87,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   map<Function*,string> funcToSandboxName;
   FunctionVector ephemeralSandboxes;
 
+  // function-level annotations of sandboxed code
   Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)", true);
   SmallVector<StringRef, 4> matches;
   if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
@@ -137,7 +140,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
 
   // TODO: sanity check overhead and clearance annotations
 
-  // now combine all annotation information to create Sandbox instances
+  // Combine all annotation information for function-level sandboxes to create Sandbox instances
   for (map<Function*,string>::iterator I=funcToSandboxName.begin(), E=funcToSandboxName.end(); I!=E; I++) {
     Function* entryPoint = I->first;
     string sandboxName = I->second;
@@ -150,8 +153,65 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
 		DEBUG(dbgs() << INDENT_2 << "Created new Sandbox instance\n");
   }
 
+  // Handle sandboxe code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
+  if (Function* SboxStart = M.getFunction("llvm.annotation.i32")) {
+    for (Value::use_iterator UI = SboxStart->use_begin(), UE = SboxStart->use_end(); UI != UE; ++UI) {
+      User* U = UI.getUse().getUser();
+      if (isa<IntrinsicInst>(U)) {
+        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        
+        if (annotationStrValCString.startswith(SOAAP_SANDBOX_CODE_START)) {
+          StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_CODE_START)+1); //+1 because of _
+          dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotateCall->dump();;
+          InstVector sandboxedInsts;
+          findAllSandboxedInstructions(annotateCall, sandboxName, sandboxedInsts);
+          int idx = assignBitIdxToSandboxName(sandboxName);
+          sandboxes.push_back(new Sandbox(sandboxName, idx, sandboxedInsts, false, M)); //TODO: obtain persistent/ephemeral information in a better way (currently we obtain it from the creation point)
+        }
+      }
+    }
+  }
+
 	DEBUG(dbgs() << INDENT_1 << "Returning sandboxes vector\n");
   return sandboxes;
+}
+
+void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSandboxName, InstVector& insts) {
+  BasicBlock* BB = I->getParent();
+  
+  // If I is not the start of BB, then fast-forward iterator to it
+  BasicBlock::iterator BI = BB->begin();
+  while (&*BI != I) { BI++; }
+
+  for (BasicBlock::iterator BE = BB->end(); BI != BE; BI++) {
+    // If I is the end_sandboxed_code() annotation then we stop
+    I = &*BI;
+    I->dump();
+    insts.push_back(I);
+    if (isa<IntrinsicInst>(I)) {
+      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(I->getOperand(1)->stripPointerCasts());
+      ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+      StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+      
+      if (annotationStrValCString.startswith(SOAAP_SANDBOX_CODE_END)) {
+        StringRef endSandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_CODE_END)+1); //+1 because of _
+        dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump();
+        if (endSandboxName == startSandboxName) {
+          // we have found the end of the region
+          return;
+        }
+      }
+    }
+  }
+
+  // recurse on successor BBs
+  for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; SI++) {
+    BasicBlock* SBB = *SI;
+    findAllSandboxedInstructions(SBB->begin(), startSandboxName, insts);
+  }
 }
 
 FunctionVector SandboxUtils::getSandboxedMethods(SandboxVector& sandboxes) {

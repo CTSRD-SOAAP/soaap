@@ -12,6 +12,7 @@ namespace soaap {
   class Sandbox : public Context {
     public:
       Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
+      Sandbox(string n, int i, InstVector& region, bool p, Module& m);
       string getName();
       int getNameIdx();
       Function* getEntryPoint();
@@ -32,6 +33,7 @@ namespace soaap {
       string name;
       int nameIdx;
       Function* entryPoint;
+      InstVector region;
       bool persistent;
       int clearances;
       FunctionVector callgates;
