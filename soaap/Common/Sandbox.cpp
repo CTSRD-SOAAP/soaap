@@ -25,10 +25,8 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   findCallgates();
 	DEBUG(dbgs() << INDENT_2 << "Finding capabilities\n");
   findCapabilities();
-  if (persistent) {
-    DEBUG(dbgs() << INDENT_2 << "Finding persistent creation points\n");
-    findCreationPoints();
-  }
+  DEBUG(dbgs() << INDENT_2 << "Finding creation points\n");
+  findCreationPoints();
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
@@ -41,10 +39,8 @@ Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m)
   findCallgates();
 	//DEBUG(dbgs() << INDENT_2 << "Finding capabilities\n");
   //findCapabilities();
-  if (persistent) {
-    DEBUG(dbgs() << INDENT_2 << "Finding persistent creation points\n");
-    findCreationPoints();
-  }
+  DEBUG(dbgs() << INDENT_2 << "Finding creation points\n");
+  findCreationPoints();
 }
 
 Function* Sandbox::getEntryPoint() {
