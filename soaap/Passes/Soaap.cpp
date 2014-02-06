@@ -5,7 +5,7 @@
 
 #include "soaap.h"
 
-#include "SoaapPass.h"
+#include "Soaap.h"
 #include "Common/CmdLineOpts.h"
 #include "Common/Typedefs.h"
 #include "Common/Sandbox.h"
@@ -27,12 +27,12 @@ using namespace soaap;
 using namespace llvm;
 using namespace std;
 
-void SoaapPass::getAnalysisUsage(AnalysisUsage &AU) const {
+void Soaap::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
   AU.addRequired<CallGraphWrapperPass>();
 }
 
-bool SoaapPass::runOnModule(Module& M) {
+bool Soaap::runOnModule(Module& M) {
   outs() << "* Running " << getPassName();
   if (CmdLineOpts::ContextInsens) {
     outs() << " in context-insensitive mode";
@@ -107,7 +107,7 @@ bool SoaapPass::runOnModule(Module& M) {
   return false;
 }
 
-void SoaapPass::processCmdLineArgs(Module& M) {
+void Soaap::processCmdLineArgs(Module& M) {
   // process ClVulnerableVendors
   for (StringRef vendor : CmdLineOpts::VulnerableVendors) {
     DEBUG(dbgs() << "Vulnerable vendor: " << vendor << "\n");
@@ -115,60 +115,60 @@ void SoaapPass::processCmdLineArgs(Module& M) {
   }
 }
 
-void SoaapPass::checkPrivilegedCalls(Module& M) {
+void Soaap::checkPrivilegedCalls(Module& M) {
   PrivilegedCallAnalysis analysis;
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::checkLeakedRights(Module& M) {
+void Soaap::checkLeakedRights(Module& M) {
   VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors);
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::checkOriginOfAccesses(Module& M) {
+void Soaap::checkOriginOfAccesses(Module& M) {
   AccessOriginAnalysis analysis(privilegedMethods);
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::findSandboxes(Module& M) {
+void Soaap::findSandboxes(Module& M) {
   sandboxes = SandboxUtils::findSandboxes(M);
 }
 
-void SoaapPass::checkPropagationOfSandboxPrivateData(Module& M) {
+void Soaap::checkPropagationOfSandboxPrivateData(Module& M) {
   SandboxPrivateAnalysis analysis(privilegedMethods);
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::checkPropagationOfClassifiedData(Module& M) {
+void Soaap::checkPropagationOfClassifiedData(Module& M) {
   ClassifiedAnalysis analysis;
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::checkFileDescriptors(Module& M) {
+void Soaap::checkFileDescriptors(Module& M) {
   CapabilityAnalysis analysis;
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::calculatePrivilegedMethods(Module& M) {
+void Soaap::calculatePrivilegedMethods(Module& M) {
   privilegedMethods = SandboxUtils::getPrivilegedMethods(M);
 }
 
-void SoaapPass::checkGlobalVariables(Module& M) {
+void Soaap::checkGlobalVariables(Module& M) {
   GlobalVariableAnalysis analysis(privilegedMethods);
   analysis.doAnalysis(M, sandboxes);
 }
 
-void SoaapPass::instrumentPerfEmul(Module& M) {
+void Soaap::instrumentPerfEmul(Module& M) {
   PerformanceEmulationInstrumenter instrumenter;
   instrumenter.instrument(M, sandboxes);
 }
 
-char SoaapPass::ID = 0;
-INITIALIZE_PASS(SoaapPass, "soaap", "Soaap Pass", false, false);
-//static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
+char Soaap::ID = 0;
+INITIALIZE_PASS(Soaap, "soaap", "Soaap Pass", false, false);
+//static RegisterPass<Soaap> X("soaap", "Soaap Pass", false, false);
 
 static void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  PM.add(new SoaapPass);
+  PM.add(new Soaap);
 }
 
 //RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);

@@ -1,6 +1,6 @@
 # main soaap pass
 add_llvm_loadable_module(libsoaap
-  Passes/SoaapPass.cpp
+  Passes/Soaap.cpp
   Common/CmdLineOpts.cpp
   Common/Sandbox.cpp
   Analysis/GlobalVariableAnalysis.cpp

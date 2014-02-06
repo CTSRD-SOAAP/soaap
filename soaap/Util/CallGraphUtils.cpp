@@ -1,7 +1,7 @@
 #include "Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.h"
 #include "Analysis/InfoFlow/FPInferredTargetsAnalysis.h"
 #include "Common/CmdLineOpts.h"
-#include "Passes/SoaapPass.h"
+#include "Passes/Soaap.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"

@@ -1,5 +1,5 @@
-#ifndef SOAAP_SOAAPPASS_H
-#define SOAAP_SOAAPPASS_H
+#ifndef SOAAP_PASSES_SOAAP_H
+#define SOAAP_PASSES_SOAAP_H
 
 #include "llvm/Pass.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
@@ -28,14 +28,14 @@ using namespace llvm;
 using namespace std;
 
 namespace llvm {
-  void initializeSoaapPassPass(PassRegistry&);
+  void initializeSoaapPass(PassRegistry&);
 }
 
 namespace soaap {
-  struct SoaapPass : public ModulePass {
+  struct Soaap : public ModulePass {
     public:
       static char ID;
-      SoaapPass() : ModulePass(ID) { }
+      Soaap() : ModulePass(ID) { }
       virtual void getAnalysisUsage(AnalysisUsage &AU) const;
       virtual bool runOnModule(Module& M);
 

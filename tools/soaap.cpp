@@ -47,7 +47,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include <algorithm>
 #include <memory>
-#include "Passes/SoaapPass.h"
+#include "Passes/Soaap.h"
 
 using namespace llvm;
 
@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
   initializeInstCombine(Registry);
   initializeInstrumentation(Registry);
   initializeTarget(Registry);
-  initializeSoaapPassPass(Registry);
+  initializeSoaapPass(Registry);
 
   cl::ParseCommandLineOptions(argc, argv,
     "llvm .bc -> .bc modular optimizer and analysis printer\n");
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
   // about to build.
   //
   PassManager Passes;
-  Passes.add(new soaap::SoaapPass);
+  Passes.add(new soaap::Soaap);
 
   // Check that the module is well formed on completion of optimization
   if (!NoVerify && !VerifyEach)
