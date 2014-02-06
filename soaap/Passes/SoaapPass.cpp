@@ -164,10 +164,11 @@ void SoaapPass::instrumentPerfEmul(Module& M) {
 }
 
 char SoaapPass::ID = 0;
-static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
+INITIALIZE_PASS(SoaapPass, "soaap", "Soaap Pass", false, false);
+//static RegisterPass<SoaapPass> X("soaap", "Soaap Pass", false, false);
 
 static void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
   PM.add(new SoaapPass);
 }
 
-RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);
+//RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);

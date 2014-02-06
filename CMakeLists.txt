@@ -34,8 +34,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -Wno-c++11-extensions")
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
-set(LLVM_RUNTIME_OUTPUT_INTDIR ${PROJECT_BINARY_DIR})
-set(LLVM_LIBRARY_OUTPUT_INTDIR ${PROJECT_BINARY_DIR})
+set(LLVM_RUNTIME_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/bin)
+set(LLVM_LIBRARY_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/lib)
 
 set(LIT ${LLVM_OBJ}/bin/llvm-lit CACHE FILE "Location of llvm-lit")
 
@@ -49,3 +49,4 @@ link_directories(${LLVM_LIBDIR})
 
 add_subdirectory(soaap)
 add_subdirectory(tests)
+add_subdirectory(tools)

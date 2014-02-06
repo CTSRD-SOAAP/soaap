@@ -27,6 +27,10 @@
 using namespace llvm;
 using namespace std;
 
+namespace llvm {
+  void initializeSoaapPassPass(PassRegistry&);
+}
+
 namespace soaap {
   struct SoaapPass : public ModulePass {
     public:
