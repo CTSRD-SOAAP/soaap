@@ -115,16 +115,17 @@ void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Function* F : initialFuncs) {
     CallGraphNode* node = CG->getOrInsertFunction(F);
-    findSandboxedFunctionsHelper(node);
+    DenseSet<Function*> visited;
+    findSandboxedFunctionsHelper(node, visited);
   }
 }
 
-void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
+void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node, DenseSet<Function*>& visited) {
   Function* F = node->getFunction();
   DEBUG(dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
    
   // check for cycle
-  if (find(functions.begin(), functions.end(), F) != functions.end()) {
+  if (visited.find(F) != visited.end()) {
     return;
   }
 
@@ -134,13 +135,14 @@ void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
   }
 
   functions.push_back(F);
+  visited.insert(F);
 
   //  outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
   for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
     Value* V = I->first;
     CallGraphNode* calleeNode = I->second;
     if (Function* calleeFunc = calleeNode->getFunction()) {
-      findSandboxedFunctionsHelper(calleeNode);
+      findSandboxedFunctionsHelper(calleeNode, visited);
     }
   }
 }
@@ -343,7 +345,7 @@ void Sandbox::findCreationPoints() {
         else if (annotationStrValCString.startswith(SOAAP_EPHEMERAL_SANDBOX_CREATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_EPHEMERAL_SANDBOX_CREATE)+1); //+1 because of _
           if (sandboxName == name) {
-            dbgs() << INDENT_3 << "Found ephemeral creation point: "; annotateCall->dump();;
+            DEBUG(dbgs() << INDENT_3 << "Found ephemeral creation point: "; annotateCall->dump(););
             creationPoints.push_back(annotateCall);
             persistent = false;
           }

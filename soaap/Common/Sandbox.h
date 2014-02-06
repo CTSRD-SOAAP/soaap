@@ -3,6 +3,7 @@
 
 #include "Analysis/InfoFlow/Context.h"
 #include "Common/Typedefs.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Analysis/CallGraph.h"
 
 using namespace llvm;
@@ -44,7 +45,7 @@ namespace soaap {
       int overhead;
       
       void findSandboxedFunctions();
-      void findSandboxedFunctionsHelper(CallGraphNode* n);
+      void findSandboxedFunctionsHelper(CallGraphNode* n, DenseSet<Function*>& visited);
       void findSharedGlobalVariables();
       void findCallgates();
       void findCapabilities();

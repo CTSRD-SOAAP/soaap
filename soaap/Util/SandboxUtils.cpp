@@ -165,7 +165,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
         
         if (annotationStrValCString.startswith(SOAAP_SANDBOX_REGION_START)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_REGION_START)+1); //+1 because of _
-          dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotateCall->dump();;
+          DEBUG(dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotateCall->dump(););
           InstVector sandboxedInsts;
           findAllSandboxedInstructions(annotateCall, sandboxName, sandboxedInsts);
           int idx = assignBitIdxToSandboxName(sandboxName);
@@ -189,7 +189,7 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSand
   for (BasicBlock::iterator BE = BB->end(); BI != BE; BI++) {
     // If I is the end_sandboxed_code() annotation then we stop
     I = &*BI;
-    I->dump();
+    DEBUG(I->dump());
     insts.push_back(I);
     if (isa<IntrinsicInst>(I)) {
       GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(I->getOperand(1)->stripPointerCasts());
@@ -198,7 +198,7 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSand
       
       if (annotationStrValCString.startswith(SOAAP_SANDBOX_REGION_END)) {
         StringRef endSandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_REGION_END)+1); //+1 because of _
-        dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump();
+        DEBUG(dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump());
         if (endSandboxName == startSandboxName) {
           // we have found the end of the region
           return;
