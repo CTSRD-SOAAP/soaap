@@ -156,8 +156,10 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
   DEBUG(dbgs() << INDENT_1 << "Calculating reaching sandbox creations\n");
 
   // Analysis state and worklist
-  map<Instruction*,int> reachingCreationsEntry;
-  map<Instruction*,int> reachingCreationsExit;
+  // reachingCreations is the combination of entry and exit dataflow information.
+  // (We don't need to distinguish between them because a global variable access  and
+  // a sandbox_create() annotation can never be in the same instruction).
+  map<Instruction*,int> reachingCreations;
   list<BasicBlock*> worklist;
 
   DEBUG(dbgs() << INDENT_2 << "Initialising worklist with BBs containing creation annotations\n");
@@ -166,7 +168,7 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
   for (Sandbox* S : sandboxes) {
     CallInstVector CV = S->getCreationPoints();
     for (CallInst* C : CV) {
-      reachingCreationsExit[C] = (1 << S->getNameIdx()); // each creation point creates one sandbox
+      reachingCreations[C] = (1 << S->getNameIdx()); // each creation point creates one sandbox
       DEBUG(dbgs() << INDENT_3 << "Added BB for creation point " << *C << "\n");
       BasicBlock* BB = C->getParent();
       if (find(worklist.begin(), worklist.end(), BB) == worklist.end()) {
@@ -190,7 +192,7 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
     for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
       BasicBlock* PredBB = *PI;
       TerminatorInst* T = PredBB->getTerminator();
-      reachingCreationsPredBB |= reachingCreationsExit[T];
+      reachingCreationsPredBB |= reachingCreations[T];
     }
 
     DEBUG(dbgs() << INDENT_4 << "Computed entry: " << SandboxUtils::stringifySandboxNames(reachingCreationsPredBB) << "\n");
@@ -198,15 +200,13 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
 
     // Second, process the current basic block
     TerminatorInst* T = BB->getTerminator();
-    int oldTerminatorExit = reachingCreationsExit[T];
+    int oldTerminatorState = reachingCreations[T];
     Instruction* predI;
     for (Instruction& II : *BB) {
       Instruction* I = &II;
       DEBUG(dbgs() << INDENT_5 << "Instruction: " << *I << "\n");
-      reachingCreationsEntry[I] |= (predI == NULL ? reachingCreationsPredBB : reachingCreationsExit[predI]);
-      reachingCreationsExit[I] |= reachingCreationsEntry[I];
-      DEBUG(dbgs() << INDENT_6 << "Entry: " << SandboxUtils::stringifySandboxNames(reachingCreationsEntry[I]) << "\n");
-      DEBUG(dbgs() << INDENT_6 << "Exit: " << SandboxUtils::stringifySandboxNames(reachingCreationsExit[I]) << "\n");
+      reachingCreations[I] |= (predI == NULL ? reachingCreationsPredBB : reachingCreations[predI]);
+      DEBUG(dbgs() << INDENT_6 << "reachingCreations: " << SandboxUtils::stringifySandboxNames(reachingCreations[I]) << "\n");
 
       if (CallInst* CI = dyn_cast<CallInst>(I)) {
         if (!isa<IntrinsicInst>(CI)) {
@@ -218,8 +218,8 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
               // propagate to the entry block, and propagate back from the return blocks
               BasicBlock& calleeEntryBB = callee->getEntryBlock();
               Instruction& calleeFirstI = *calleeEntryBB.begin();
-              updateReachingCreationsStateAndPropagate(reachingCreationsEntry, &calleeFirstI, reachingCreationsEntry[I], worklist);
-              DEBUG(dbgs() << INDENT_6 << "New Entry: " << SandboxUtils::stringifySandboxNames(reachingCreationsEntry[&calleeFirstI]) << "\n");
+              updateReachingCreationsStateAndPropagate(reachingCreations, &calleeFirstI, reachingCreations[I], worklist);
+              DEBUG(dbgs() << INDENT_6 << "New state: " << SandboxUtils::stringifySandboxNames(reachingCreations[&calleeFirstI]) << "\n");
 
             }
           }
@@ -232,8 +232,8 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
         CallInstVector callers = CallGraphUtils::getCallers(callee, M);
         for (CallInst* CI : callers) {
           DEBUG(dbgs() << INDENT_6 << "Propagating to caller " << *CI << "\n");
-          updateReachingCreationsStateAndPropagate(reachingCreationsExit, CI, reachingCreationsEntry[RI], worklist);
-          DEBUG(dbgs() << INDENT_6 << "New Exit: " << SandboxUtils::stringifySandboxNames(reachingCreationsExit[CI]) << "\n");
+          updateReachingCreationsStateAndPropagate(reachingCreations, CI, reachingCreations[RI], worklist);
+          DEBUG(dbgs() << INDENT_6 << "New state: " << SandboxUtils::stringifySandboxNames(reachingCreations[CI]) << "\n");
         }
       }
       predI = I;
@@ -243,7 +243,7 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
     DEBUG(dbgs() << INDENT_4 << "Propagating to successor BBs\n");
 
     // Thirdly, propagate to successor blocks (if terminator's state changed)
-    if (reachingCreationsExit[T] != oldTerminatorExit) {
+    if (reachingCreations[T] != oldTerminatorState) {
       for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; ++SI) {
         BasicBlock* SuccBB = *SI;
         if (find(worklist.begin(), worklist.end(), SuccBB) == worklist.end()) {
@@ -271,11 +271,11 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
                 readerSandboxNames |= (1 << S->getNameIdx());
               }
             }
-            int possInconsSandboxes = readerSandboxNames & reachingCreationsEntry[store];
+            int possInconsSandboxes = readerSandboxNames & reachingCreations[store];
             if (possInconsSandboxes) {
               // check that this store is preceded by a sandbox_create annotation
               DEBUG(dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
-              DEBUG(dbgs() << "   readerSandboxNames: " << SandboxUtils::stringifySandboxNames(readerSandboxNames) << ", reachingCreationsEntry: " << SandboxUtils::stringifySandboxNames(reachingCreationsEntry[store]) << ", possInconsSandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << "\n");
+              DEBUG(dbgs() << "   readerSandboxNames: " << SandboxUtils::stringifySandboxNames(readerSandboxNames) << ", reachingCreations: " << SandboxUtils::stringifySandboxNames(reachingCreations[store]) << ", possInconsSandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << "\n");
               if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
                 outs() << " *** Write to shared variable \"" << gv->getName() << "\" " << findGlobalDeclaration(M, gv) << "outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
