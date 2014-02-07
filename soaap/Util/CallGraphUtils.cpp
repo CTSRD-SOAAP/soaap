@@ -204,6 +204,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   long numVCalls = 0;
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
+    CallGraphNode* F1Node = CG->getOrInsertFunction(F1);
     DEBUG(dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
     for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
@@ -250,6 +251,8 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
         callToCallees[C] = callees;
         for (Function* callee : callees) {
           calleeToCalls[callee].push_back(C); // we process each C exactly once, so no dups!
+          CallGraphNode* calleeNode = CG->getOrInsertFunction(callee);
+          F1Node->addCalledFunction(CallSite(C), calleeNode);
         }
       }
     }
