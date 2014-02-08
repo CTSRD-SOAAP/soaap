@@ -179,11 +179,15 @@ FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
   if (callToCallees.empty() || !caching) {
     populateCallCalleeCaches(M);
   }
-  DEBUG(dbgs() << INDENT_5 << "Callees: ");
-  for (Function* F : callToCallees[C]) {
-    DEBUG(dbgs() << F->getName() << " ");
+  bool debug = false;
+  DEBUG(debug = true);
+  if (debug) {
+    dbgs() << INDENT_5 << "Callees: ";
+    for (Function* F : callToCallees[C]) {
+      dbgs() << F->getName() << " ";
+    }
+    dbgs() << "\n";
   }
-  DEBUG(dbgs() << "\n");
   return callToCallees[C];
 }
 
