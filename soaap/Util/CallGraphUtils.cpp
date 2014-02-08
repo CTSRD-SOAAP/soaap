@@ -209,7 +209,6 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   long numIndCallees = 0;
   long numVCalls = 0;
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-  int funcCount = 0;
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     CallGraphNode* F1Node = CG->getOrInsertFunction(F1);
