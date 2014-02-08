@@ -32,6 +32,26 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   }          
 
   // now check calls within sandboxes
+  for (Function* privilegedFunc : privAnnotFuncs) {
+    for (Value::use_iterator I = privilegedFunc->use_begin(), E = privilegedFunc->use_end(); I != E; I++) {
+      if (CallInst* C = dyn_cast<CallInst>(*I)) {
+        Function* enclosingFunc = C->getParent()->getParent();
+        for (Sandbox* S : sandboxes) {
+          if (!S->hasCallgate(privilegedFunc) && S->containsFunction(enclosingFunc)) {
+            outs() << " *** Sandbox \"" << S->getName() << "\" calls privileged function \"" << privilegedFunc->getName() << "\" that they are not allowed to. If intended, annotate this permission using the __soaap_callgates annotation.\n";
+            if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
+              DILocation Loc(N);                      // DILocation is in DebugInfo.h
+              unsigned Line = Loc.getLineNumber();
+              StringRef File = Loc.getFilename();
+              outs() << " +++ Line " << Line << " of file " << File << "\n";
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /*
   for (Sandbox* S : sandboxes) {
     FunctionVector callgates = S->getCallgates();
     for (Function* F : S->getFunctions()) {
@@ -59,4 +79,5 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
       }
     }
   }
+  */
 }
