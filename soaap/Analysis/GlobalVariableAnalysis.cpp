@@ -160,29 +160,31 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
   // (We don't need to distinguish between them because a global variable access  and
   // a sandbox_create() annotation can never be in the same instruction).
   map<Instruction*,int> reachingCreations;
-  list<BasicBlock*> worklist;
+  SetVector<BasicBlock*> worklist;
 
   DEBUG(dbgs() << INDENT_2 << "Initialising worklist with BBs containing creation annotations\n");
+  
+  dbgs() << "Total number of functions: " << M.getFunctionList().size() << "\n";
+  dbgs() << "Total number of privileged functions: " << privilegedMethods.size() << "\n";
 
   // Initialise worklist with basic blocks that contain creation points.
   for (Sandbox* S : sandboxes) {
     CallInstVector CV = S->getCreationPoints();
+    dbgs() << "Total number of sandboxed functions: " << S->getFunctions().size() << "\n";
     for (CallInst* C : CV) {
       reachingCreations[C] = (1 << S->getNameIdx()); // each creation point creates one sandbox
       DEBUG(dbgs() << INDENT_3 << "Added BB for creation point " << *C << "\n");
       BasicBlock* BB = C->getParent();
-      if (find(worklist.begin(), worklist.end(), BB) == worklist.end()) {
-        worklist.push_back(BB);
-      }
+      worklist.insert(BB);
     }
   }
+
 
   DEBUG(dbgs() << INDENT_2 << "Worklist contains " << worklist.size() << " BBs\n");
   DEBUG(dbgs() << INDENT_2 << "Computing fixed point\n");
 
   while (!worklist.empty()) {
-    BasicBlock* BB = worklist.front();
-    worklist.pop_front();
+    BasicBlock* BB = worklist.pop_back_val();
 
     DEBUG(dbgs() << INDENT_3 << "BB: " << *BB << "\n");
     DEBUG(dbgs() << INDENT_4 << "Computing entry\n");
@@ -246,11 +248,11 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
     if (reachingCreations[T] != oldTerminatorState) {
       for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; ++SI) {
         BasicBlock* SuccBB = *SI;
-        if (find(worklist.begin(), worklist.end(), SuccBB) == worklist.end()) {
-          worklist.push_back(SuccBB);
-        }
+        worklist.insert(SuccBB); 
       }
     }
+
+    //dbgs() << "Worklist size: " << worklist.size() << "\n";
   }
 
   // Now check for each privileged write, whether it may be preceded by a sandbox-creation
@@ -293,13 +295,11 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
   }
 }
 
-void GlobalVariableAnalysis::updateReachingCreationsStateAndPropagate(map<Instruction*,int>& state, Instruction* I, int val, list<BasicBlock*>& worklist) {
+void GlobalVariableAnalysis::updateReachingCreationsStateAndPropagate(map<Instruction*,int>& state, Instruction* I, int val, SetVector<BasicBlock*>& worklist) {
   int oldState = state[I];
   state[I] |= val;
   if (state[I] != oldState) {
     BasicBlock* BB = I->getParent();
-    if (find(worklist.begin(), worklist.end(), BB) == worklist.end()) {
-      worklist.push_back(BB);
-    }
+    worklist.insert(BB);
   }
 }
