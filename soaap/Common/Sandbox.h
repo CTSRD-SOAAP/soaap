@@ -27,6 +27,8 @@ namespace soaap {
       int getOverhead();
       bool isPersistent();
       CallInstVector getCreationPoints();
+      bool containsFunction(Function* F);
+      bool hasCallgate(Function* F);
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
 
     private:
@@ -38,14 +40,15 @@ namespace soaap {
       bool persistent;
       int clearances;
       FunctionVector callgates;
-      FunctionVector functions;
+      FunctionVector functionsVec;
+      DenseSet<Function*> functionsSet;
       CallInstVector creationPoints;
       GlobalVariableIntMap sharedVarToPerms;
       ValueIntMap caps;
       int overhead;
       
       void findSandboxedFunctions();
-      void findSandboxedFunctionsHelper(CallGraphNode* n, DenseSet<Function*>& visited);
+      void findSandboxedFunctionsHelper(CallGraphNode* n);
       void findSharedGlobalVariables();
       void findCallgates();
       void findCapabilities();

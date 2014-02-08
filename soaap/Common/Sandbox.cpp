@@ -56,7 +56,7 @@ int Sandbox::getNameIdx() {
 }
 
 FunctionVector Sandbox::getFunctions() {
-  return functions;
+  return functionsVec;
 }
 
 GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
@@ -95,6 +95,14 @@ CallInstVector Sandbox::getCreationPoints() {
   return creationPoints;
 }
 
+bool Sandbox::containsFunction(Function* F) {
+  return functionsSet.find(F) != functionsSet.end();
+}
+
+bool Sandbox::hasCallgate(Function* F) {
+  return find(callgates.begin(), callgates.end(), F) != callgates.end();
+}
+
 void Sandbox::findSandboxedFunctions() {
   FunctionVector initialFuncs;
   if (entryPoint == NULL) {
@@ -115,17 +123,18 @@ void Sandbox::findSandboxedFunctions() {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Function* F : initialFuncs) {
     CallGraphNode* node = CG->getOrInsertFunction(F);
-    DenseSet<Function*> visited;
-    findSandboxedFunctionsHelper(node, visited);
+    findSandboxedFunctionsHelper(node);
   }
+  DEBUG(dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
 }
 
-void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node, DenseSet<Function*>& visited) {
+
+void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
   Function* F = node->getFunction();
   DEBUG(dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
    
   // check for cycle
-  if (visited.find(F) != visited.end()) {
+  if (functionsSet.find(F) != functionsSet.end()) {
     return;
   }
 
@@ -134,15 +143,15 @@ void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node, DenseSet<Functio
     return;
   }
 
-  functions.push_back(F);
-  visited.insert(F);
+  functionsVec.push_back(F);
+  functionsSet.insert(F);
 
   //  outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
   for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
     Value* V = I->first;
     CallGraphNode* calleeNode = I->second;
     if (Function* calleeFunc = calleeNode->getFunction()) {
-      findSandboxedFunctionsHelper(calleeNode, visited);
+      findSandboxedFunctionsHelper(calleeNode);
     }
   }
 }

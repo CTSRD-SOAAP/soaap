@@ -33,12 +33,11 @@ void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
 void CapabilityAnalysis::validateDescriptorAccesses(Module& M, SandboxVector& sandboxes, string syscall, int requiredPerm) {
   if (Function* syscallFn = M.getFunction(syscall)) {
     for (Sandbox* S : sandboxes) {
-      FunctionVector sandboxedFuncs = S->getFunctions();
       for (Value::use_iterator I=syscallFn->use_begin(), E=syscallFn->use_end();
            (I != E) && isa<CallInst>(*I); I++) {
         CallInst* Call = cast<CallInst>(*I);
         Function* Caller = cast<Function>(Call->getParent()->getParent());
-        if (find(sandboxedFuncs.begin(), sandboxedFuncs.end(), Caller) != sandboxedFuncs.end()) {
+        if (S->containsFunction(Caller)) {
           Value* fd = Call->getArgOperand(0);
           if (!(state[S][fd] & requiredPerm)) {
             outs() << " *** Insufficient privileges for \"" << syscall << "()\" in sandboxed method \"" << Caller->getName() << "\"\n";
