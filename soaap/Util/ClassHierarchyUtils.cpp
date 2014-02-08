@@ -93,44 +93,45 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
       if (F->isDeclaration()) continue;
       for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-        GlobalVariable* definingTypeVTableVar = NULL;
-        GlobalVariable* staticTypeVTableVar = NULL;
-        bool hasMetadata = false;
-        if (MDNode* N = I->getMetadata("soaap_defining_vtable_var")) {
-          definingTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
-          hasMetadata = true;
-        }
-        else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
-          ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
-          string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
-          //dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n";
-          definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr, true);
-          hasMetadata = true;
-        }
-        if (MDNode* N = I->getMetadata("soaap_static_vtable_var")) {
-          staticTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
-          hasMetadata = true;
-        }
-        else if (MDNode* N = I->getMetadata("soaap_static_vtable_name")) {
-          ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
-          string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
-          //dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n";
-          staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr, true);
-          hasMetadata = true;
-        }
-        if (definingTypeVTableVar != NULL) {
-          DEBUG(dbgs() << "Found definingVTableVar: " << *definingTypeVTableVar << "\n");
-          if (staticTypeVTableVar == NULL) {
-            dbgs() << "definingVTableVar is not null, but staticTypeVTableVar is NULL\n";
-            // This could be the case if no instance of the static type is ever created
-            staticTypeVTableVar = definingTypeVTableVar;
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          GlobalVariable* definingTypeVTableVar = NULL;
+          GlobalVariable* staticTypeVTableVar = NULL;
+          bool hasMetadata = false;
+          if (MDNode* N = I->getMetadata("soaap_defining_vtable_var")) {
+            definingTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+            hasMetadata = true;
           }
-          CallInst* C = cast<CallInst>(&*I);
-          callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
-        }
-        else if (hasMetadata) {
-          dbgs() << "Defining VTable is NULL!\n";
-          I->dump();
+          else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
+            ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
+            string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
+            //dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n";
+            definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr, true);
+            hasMetadata = true;
+          }
+          if (MDNode* N = I->getMetadata("soaap_static_vtable_var")) {
+            staticTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+            hasMetadata = true;
+          }
+          else if (MDNode* N = I->getMetadata("soaap_static_vtable_name")) {
+            ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
+            string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
+            //dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n";
+            staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr, true);
+            hasMetadata = true;
+          }
+          if (definingTypeVTableVar != NULL) {
+            DEBUG(dbgs() << "Found definingVTableVar: " << *definingTypeVTableVar << "\n");
+            if (staticTypeVTableVar == NULL) {
+              dbgs() << "definingVTableVar is not null, but staticTypeVTableVar is NULL\n";
+              // This could be the case if no instance of the static type is ever created
+              staticTypeVTableVar = definingTypeVTableVar;
+            }
+            callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
+          }
+          else if (hasMetadata) {
+            dbgs() << "Defining VTable is NULL!\n";
+            I->dump();
+          }
         }
       }
     }
