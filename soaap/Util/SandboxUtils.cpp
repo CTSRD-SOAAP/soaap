@@ -19,6 +19,7 @@ int SandboxUtils::nextSandboxNameBitIdx = 0;
 map<string,int> SandboxUtils::sandboxNameToBitIdx;
 map<int,string> SandboxUtils::bitIdxToSandboxName;
 FunctionVector SandboxUtils::privilegedMethods;
+SmallSet<Function*,16> SandboxUtils::sandboxEntryPoints;
 
 string SandboxUtils::stringifySandboxNames(int sandboxNames) {
   string sandboxNamesStr = "[";
@@ -56,28 +57,7 @@ int SandboxUtils::getBitIdxFromSandboxName(string sandboxName) {
 }
 
 bool SandboxUtils::isSandboxEntryPoint(Module& M, Function* F) {
-  if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
-    ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
-    for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
-      ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
-      // get the annotation value first
-      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-      StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-
-      GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-      if (isa<Function>(annotatedVal)) {
-        Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
-        if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
-          //DEBUG(dbgs() << "   Found sandbox entrypoint " << annotatedFunc->getName() << "\n");
-          if (annotatedFunc == F) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-  return false;
+  return sandboxEntryPoints.count(F);
 }
 
 SandboxVector SandboxUtils::findSandboxes(Module& M) {
@@ -104,6 +84,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
         Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
         StringRef sandboxName;
         if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+          sandboxEntryPoints.insert(annotatedFunc);
           outs() << INDENT_1 << "Found sandbox entrypoint " << annotatedFunc->getName() << "\n";
           outs() << INDENT_2 << "Annotation string: " << annotationStrArrayCString << "\n";
           if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
