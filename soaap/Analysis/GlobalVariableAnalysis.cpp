@@ -164,13 +164,13 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
 
   DEBUG(dbgs() << INDENT_2 << "Initialising worklist with BBs containing creation annotations\n");
   
-  dbgs() << "Total number of functions: " << M.getFunctionList().size() << "\n";
-  dbgs() << "Total number of privileged functions: " << privilegedMethods.size() << "\n";
+  DEBUG(dbgs() << "Total number of functions: " << M.getFunctionList().size() << "\n");
+  DEBUG(dbgs() << "Total number of privileged functions: " << privilegedMethods.size() << "\n");
 
   // Initialise worklist with basic blocks that contain creation points.
   for (Sandbox* S : sandboxes) {
     CallInstVector CV = S->getCreationPoints();
-    dbgs() << "Total number of sandboxed functions: " << S->getFunctions().size() << "\n";
+    DEBUG(dbgs() << "Total number of sandboxed functions: " << S->getFunctions().size() << "\n");
     for (CallInst* C : CV) {
       reachingCreations[C] = (1 << S->getNameIdx()); // each creation point creates one sandbox
       DEBUG(dbgs() << INDENT_3 << "Added BB for creation point " << *C << "\n");
