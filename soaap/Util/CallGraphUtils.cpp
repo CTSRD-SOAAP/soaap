@@ -136,32 +136,34 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
 
   // for each fp-call, add annotated edges to the call graph
   DEBUG(dbgs() << INDENT_1 << "Finding all fp calls\n");
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
-    CallGraphNode* callerNode = CG->getOrInsertFunction(F);
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      if (!isa<IntrinsicInst>(&*I)) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (isIndirectCall(C)) {
-            Value* FP = C->getCalledValue();
-            DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
-            DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
-            DEBUG(dbgs() << INDENT_3 << "FP: " << *FP << "\n");
-            DEBUG(dbgs() << INDENT_3 << "Inferred Targets: ";);
-            for (Function* T : fpInferredTargetsAnalysis.getTargets(FP)) {
-              DEBUG(dbgs() << " " << T->getName());
-              CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
-              callerNode->addCalledFunction(CallSite(C), calleeNode);
+  if (fpInferredTargetsAnalysis.hasTargets() || fpAnnotatedTargetsAnalysis.hasTargets()) {
+    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+    for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+      if (F->isDeclaration()) continue;
+      CallGraphNode* callerNode = CG->getOrInsertFunction(F);
+      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+        if (!isa<IntrinsicInst>(&*I)) {
+          if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+            if (isIndirectCall(C)) {
+              Value* FP = C->getCalledValue();
+              DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
+              DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
+              DEBUG(dbgs() << INDENT_3 << "FP: " << *FP << "\n");
+              DEBUG(dbgs() << INDENT_3 << "Inferred Targets: ";);
+              for (Function* T : fpInferredTargetsAnalysis.getTargets(FP)) {
+                DEBUG(dbgs() << " " << T->getName());
+                CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
+                callerNode->addCalledFunction(CallSite(C), calleeNode);
+              }
+              DEBUG(dbgs() << "\n");
+              DEBUG(dbgs() << INDENT_3 << "Annotated Targets: ";);
+              for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
+                DEBUG(dbgs() << " " << T->getName());
+                CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
+                callerNode->addCalledFunction(CallSite(C), calleeNode);
+              }
+              DEBUG(dbgs() << "\n");
             }
-            DEBUG(dbgs() << "\n");
-            DEBUG(dbgs() << INDENT_3 << "Annotated Targets: ";);
-            for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-              DEBUG(dbgs() << " " << T->getName());
-              CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
-              callerNode->addCalledFunction(CallSite(C), calleeNode);
-            }
-            DEBUG(dbgs() << "\n");
           }
         }
       }

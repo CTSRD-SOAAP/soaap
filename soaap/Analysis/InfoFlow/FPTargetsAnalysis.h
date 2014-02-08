@@ -10,6 +10,7 @@ namespace soaap {
   class FPTargetsAnalysis: public InfoFlowAnalysis<FunctionVector> {
     public:
       virtual FunctionVector getTargets(Value* FP);
+      virtual bool hasTargets() { return !state.empty(); }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
