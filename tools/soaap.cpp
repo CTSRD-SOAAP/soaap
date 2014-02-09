@@ -62,16 +62,7 @@ OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
 static cl::opt<bool>
-OutputAssembly("S", cl::desc("Write output as LLVM assembly"));
-
-static cl::opt<bool>
-NoVerify("disable-verify", cl::desc("Do not verify result module"), cl::Hidden);
-
-static cl::opt<bool>
-VerifyEach("verify-each", cl::desc("Verify after each transform"));
-
-static cl::opt<bool>
-AnalyzeOnly("analyze", cl::desc("Only perform analysis, no optimization"));
+Verify("verify", cl::desc("Verify result module"), cl::Hidden);
 
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal();
@@ -130,7 +121,7 @@ int main(int argc, char **argv) {
   Passes.add(new soaap::Soaap);
 
   // Check that the module is well formed on completion of optimization
-  if (!NoVerify && !VerifyEach)
+  if (Verify)
     Passes.add(createVerifierPass());
 
   // Now that we have all of the passes ready, run them.
