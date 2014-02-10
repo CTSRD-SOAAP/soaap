@@ -34,7 +34,11 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
         for (Instruction& I : BB.getInstList()) {
   //            I.dump();
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
-            if (GlobalVariable* gv = dyn_cast<GlobalVariable>(load->getPointerOperand())) {
+            Value* operand = load->getPointerOperand()->stripPointerCasts();
+            if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(operand)) {
+              operand = gep->getPointerOperand();
+            }
+            if (GlobalVariable* gv = dyn_cast<GlobalVariable>(operand)) {
               //outs() << "VAR_READ_MASK?: " << (varToPerms[gv] & VAR_READ_MASK) << ", sandbox-check: " << stringifySandboxNames(globalVarToSandboxNames[gv] & sandboxedMethodToNames[F]) << "\n";
               //if (gv->isDeclaration()) continue; // not concerned with externs
               if (!(varToPerms[gv] & VAR_READ_MASK)) {
@@ -51,7 +55,11 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
             }
           }
           else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
-            if (GlobalVariable* gv = dyn_cast<GlobalVariable>(store->getPointerOperand())) {
+            Value* operand = store->getPointerOperand()->stripPointerCasts();
+            if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(operand)) {
+              operand = gep->getPointerOperand();
+            }
+            if (GlobalVariable* gv = dyn_cast<GlobalVariable>(operand)) {
               if (gv->isDeclaration()) continue; // not concerned with externs
               // check that the programmer has annotated that this
               // variable can be written to
