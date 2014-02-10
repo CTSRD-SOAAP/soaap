@@ -44,3 +44,8 @@ bool CmdLineOpts::ListAllFuncs;
 static cl::opt<bool, true> ClListAllFuncs("soaap-list-all-funcs",
        cl::desc("List all functions"),
        cl::location(CmdLineOpts::ListAllFuncs));
+
+bool CmdLineOpts::Pedantic;
+static cl::opt<bool, true> ClPedantic("soaap-pedantic",
+       cl::desc("Output all warnings"),
+       cl::location(CmdLineOpts::Pedantic));

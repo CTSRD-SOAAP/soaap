@@ -19,6 +19,7 @@ namespace soaap {
       static bool InferFPTargets;
       static bool ListFPTargets;
       static bool ListAllFuncs;
+      static bool Pedantic;
   };
 }
 

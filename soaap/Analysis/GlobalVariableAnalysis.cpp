@@ -4,6 +4,7 @@
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
+#include "Common/CmdLineOpts.h"
 #include "Common/Sandbox.h"
 #include "llvm/DebugInfo.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -42,7 +43,7 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               //outs() << "VAR_READ_MASK?: " << (varToPerms[gv] & VAR_READ_MASK) << ", sandbox-check: " << stringifySandboxNames(globalVarToSandboxNames[gv] & sandboxedMethodToNames[F]) << "\n";
               //if (gv->isDeclaration()) continue; // not concerned with externs
               if (!(varToPerms[gv] & VAR_READ_MASK)) {
-                if (find(alreadyReportedReads.begin(), alreadyReportedReads.end(), gv) == alreadyReportedReads.end()) {
+                if (CmdLineOpts::Pedantic || find(alreadyReportedReads.begin(), alreadyReportedReads.end(), gv) == alreadyReportedReads.end()) {
                   outs() << " *** Sandboxed method \"" << F->getName().str() << "\" [" << S->getName() << "] read global variable \"" << gv->getName().str() << "\" " << findGlobalDeclaration(M, gv) << "but is not allowed to. If the access is intended, the variable needs to be annotated with __soaap_read_var.\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
@@ -64,7 +65,7 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               // check that the programmer has annotated that this
               // variable can be written to
               if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
-                if (find(alreadyReportedWrites.begin(), alreadyReportedWrites.end(), gv) == alreadyReportedWrites.end()) {
+                if (CmdLineOpts::Pedantic || find(alreadyReportedWrites.begin(), alreadyReportedWrites.end(), gv) == alreadyReportedWrites.end()) {
                   outs() << " *** Sandboxed method \"" << F->getName().str() << "\" [" << S->getName() << "] wrote to global variable \"" << gv->getName().str() << "\" " << findGlobalDeclaration(M, gv) << "but is not allowed to\n";
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
