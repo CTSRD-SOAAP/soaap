@@ -61,6 +61,9 @@ static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
+static cl::opt<bool>                                                                                      
+OutputAssembly("S", cl::desc("Write output as LLVM assembly"));                                           
+
 static cl::opt<bool>
 Verify("verify", cl::desc("Verify result module"), cl::Hidden);
 
@@ -124,8 +127,17 @@ int main(int argc, char **argv) {
   if (Verify)
     Passes.add(createVerifierPass());
 
+  // Pass to create output
+  if (OutputAssembly)
+    Passes.add(createPrintModulePass(&Out->os()));                                                      
+  else                                                                                                  
+    Passes.add(createBitcodeWriterPass(Out->os()));                                                     
+
   // Now that we have all of the passes ready, run them.
   Passes.run(*M.get());
+
+  // Declare success.
+  Out->keep();
 
   return 0;
 }
