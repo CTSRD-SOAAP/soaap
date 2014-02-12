@@ -1,20 +1,3 @@
 #!/bin/sh
 
-OPT="`which opt`"
-if [ "${OPT}" = "" ]; then
-	if [ "${LLVM_BINARY_DIR}" == "" ]; then
-		echo "'opt' not on PATH and LLVM_BINARY_DIR not set"
-		exit 1
-	fi
-
-	OPT="${LLVM_BINARY_DIR}/bin/opt"
-fi
-
-OS="`uname -s`"
-if [ "${OS}" = "Darwin" ]; then
-	LIBSUFFIX=dylib
-else
-	LIBSUFFIX=so
-fi
-
-${OPT} -load libsoaap.${LIBSUFFIX} -soaap $*
+${SOAAP_BUILD_DIR}/bin/soaap $*
