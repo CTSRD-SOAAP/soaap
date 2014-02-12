@@ -133,16 +133,17 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
 }
 
 string GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
-  NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu");
-  ostringstream ss;
-  for (int i=0; i<NMD->getNumOperands(); i++) {
-    DICompileUnit CU(NMD->getOperand(i));
-    DIArray globals = CU.getGlobalVariables();
-    for (int j=0; j<globals.getNumElements(); j++) {
-      DIGlobalVariable GV(globals.getElement(j));
-      if (GV.getGlobal() == G) {
-        ss << "(" << GV.getFilename().str() << ":" << GV.getLineNumber() << ") ";
-        return ss.str();
+  if (NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu")) {
+    ostringstream ss;
+    for (int i=0; i<NMD->getNumOperands(); i++) {
+      DICompileUnit CU(NMD->getOperand(i));
+      DIArray globals = CU.getGlobalVariables();
+      for (int j=0; j<globals.getNumElements(); j++) {
+        DIGlobalVariable GV(globals.getElement(j));
+        if (GV.getGlobal() == G) {
+          ss << "(" << GV.getFilename().str() << ":" << GV.getLineNumber() << ") ";
+          return ss.str();
+        }
       }
     }
   }
