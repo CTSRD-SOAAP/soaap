@@ -37,7 +37,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -Wno-c++11-extensions")
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/lib)
 
-set(LIT ${LLVM_OBJ}/bin/llvm-lit CACHE FILE "Location of llvm-lit")
+set(LIT ${LLVM_OBJDIR}/bin/llvm-lit CACHE FILE "Location of llvm-lit")
 
 include_directories(${LLVM_INCDIR})
 include_directories(${LLVM_SRCDIR}/lib)
