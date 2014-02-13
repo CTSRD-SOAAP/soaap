@@ -48,6 +48,7 @@ namespace soaap {
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
+      virtual Value* propagateForExternCall(CallInst* CI, const Value* V);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
       virtual void addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist);
       virtual FactType bottomValue() = 0;
@@ -129,8 +130,15 @@ namespace soaap {
             else if (CallInst* CI = dyn_cast<CallInst>(I)) {
               // propagate to the callee(s)
               DEBUG(dbgs() << INDENT_4 << "Call instruction; propagating to callees\n");
-              propagateToCallees(CI, V, C, worklist, sandboxes, M);
-              continue;
+              if (CallGraphUtils::isExternCall(CI)) { // no function body, so we approximate effects of known funcs
+                if ((V2 = propagateForExternCall(CI, V)) == NULL) {
+                  continue;
+                }
+              }
+              else {
+                propagateToCallees(CI, V, C, worklist, sandboxes, M);
+                continue;
+              }
             }
             else if (ReturnInst* RI = dyn_cast<ReturnInst>(I)) {
               if (Value* RetVal = RI->getReturnValue()) {
@@ -230,6 +238,18 @@ namespace soaap {
         }
       }
     }
+  }
+
+  template <typename FactType>
+  Value* InfoFlowAnalysis<FactType>::propagateForExternCall(CallInst* CI, const Value* V) {
+    // propagate dataflow value of relevant arg(s) (if happen to be V) to
+    // the return value of the call CI
+    Function* F = CI->getCalledFunction();
+    DEBUG(dbgs() << "Extern call, f=" << F->getName() << "\n");
+    if (F->getName() == "strdup") {
+      return CI;
+    }
+    return NULL;
   }
 
 }

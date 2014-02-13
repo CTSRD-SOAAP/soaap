@@ -290,3 +290,6 @@ Function* CallGraphUtils::getDirectCallee(CallInst* C) {
   return calledFunc;
 }
 
+bool CallGraphUtils::isExternCall(CallInst* C) {
+  return callToCallees[C].size() == 1 && callToCallees[C][0]->isDeclaration();
+}

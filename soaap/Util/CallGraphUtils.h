@@ -20,6 +20,7 @@ namespace soaap {
       static Function* getDirectCallee(CallInst* C);
       static FunctionVector getCallees(const CallInst* C, Module& M);
       static CallInstVector getCallers(const Function* F, Module& M);
+      static bool isExternCall(CallInst* C);
     
     private:
       static map<const CallInst*, FunctionVector> callToCallees;
