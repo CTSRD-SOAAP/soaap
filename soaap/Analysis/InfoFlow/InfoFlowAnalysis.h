@@ -93,7 +93,7 @@ namespace soaap {
       for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
         User* U = dyn_cast<User>(UI.getUse().getUser());
         DEBUG(dbgs() << INDENT_3 << "Use: "; U->dump(););
-        const Value* V2;
+        const Value* V2 = NULL;
         if (Constant* CS = dyn_cast<Constant>(U)) {
           V2 = CS;
           if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
@@ -131,9 +131,7 @@ namespace soaap {
               // propagate to the callee(s)
               DEBUG(dbgs() << INDENT_4 << "Call instruction; propagating to callees\n");
               if (CallGraphUtils::isExternCall(CI)) { // no function body, so we approximate effects of known funcs
-                if ((V2 = propagateForExternCall(CI, V)) == NULL) {
-                  continue;
-                }
+                V2 = propagateForExternCall(CI, V);
               }
               else {
                 propagateToCallees(CI, V, C, worklist, sandboxes, M);
@@ -159,9 +157,9 @@ namespace soaap {
             else {
               V2 = I; // this covers PHINode instructions
             }
-            if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
-              DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
-              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V2->dump(););
+            if (V2 != NULL && propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
+              DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump());
+              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V2->dump());
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ")\n");
               addToWorklist(V2, C, worklist);
             }
@@ -249,6 +247,7 @@ namespace soaap {
     if (F->getName() == "strdup") {
       return CI;
     }
+    DEBUG(dbgs() << "Returning NULL\n");
     return NULL;
   }
 
