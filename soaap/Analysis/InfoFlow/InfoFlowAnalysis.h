@@ -165,7 +165,7 @@ namespace soaap {
               continue;
             }
             else {
-              V2 = I; // this covers PHINode instructions
+              V2 = I; // this covers PHINode and gep instructions
             }
             if (V2 != NULL && propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
               DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump());
@@ -219,10 +219,14 @@ namespace soaap {
 
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
+
     for (Function* callee : CallGraphUtils::getCallees(CI, M)) {
       DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
       Context* C2 = ContextUtils::calleeContext(C, callee, sandboxes, M);
+      Function::ArgumentListType& params = callee->getArgumentList();
+
       // NOTE: no way to index a function's list of parameters
+      // NOTE2: If this is a variadic parmaeter, then propagate to callee's va_list
       int argIdx = 0;
       for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
         if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
@@ -230,6 +234,40 @@ namespace soaap {
           if (propagateToValue(V, AI, C, C2, M)) { // propagate
             DEBUG(dbgs() << "Adding AI to worklist\n");
             addToWorklist(AI, C2, worklist);
+          }
+        }
+      }
+      // check var args (if any)
+      if (callee->isVarArg()) {
+        // find va_list var, it will have type [1 x %struct.__va_list_tag]*
+        BasicBlock& EntryBB = callee->getEntryBlock();
+        Value* VarArgPtr = NULL;
+        
+        for (BasicBlock::iterator I = EntryBB.begin(), E = EntryBB.end(); I != E; I++) {
+          if (AllocaInst* Alloca = dyn_cast<AllocaInst>(I)) {
+            if (ArrayType* AT = dyn_cast<ArrayType>(Alloca->getAllocatedType())) {
+              if (StructType* ST = dyn_cast<StructType>(AT->getElementType())) {
+                DEBUG(dbgs() << "Struct type has name: " << ST->getName() << "\n");
+                if (ST->getName() == "struct.__va_list_tag") {
+                  VarArgPtr = Alloca;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        if (VarArgPtr == NULL) {
+          dbgs() << "SOAAP ERROR: Could not find var arg pointer in " << callee->getName() << "\n";
+        }
+        else {
+          for (; argIdx < CI->getNumArgOperands(); argIdx++) {
+            if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
+              DEBUG(dbgs() << INDENT_6 << "Propagating to VarArgPtr");
+              if (propagateToValue(V, VarArgPtr, C, C2, M)) { // propagate
+                DEBUG(dbgs() << "Adding VarArgPtr to worklist: "; VarArgPtr->dump());
+                addToWorklist(VarArgPtr, C2, worklist);
+              }
+            }
           }
         }
       }
@@ -260,7 +298,7 @@ namespace soaap {
     if (funcName == "strdup") {
       return CI;
     }
-    else if (funcName == "asprintf") { 
+    else if (funcName == "asprintf" || funcName == "vasprintf") { 
       // if V is not the format string or the output param, then propagate to out param
       if (CI->getArgOperand(0) != V && CI->getArgOperand(1) != V) {
         return CI->getArgOperand(0);
