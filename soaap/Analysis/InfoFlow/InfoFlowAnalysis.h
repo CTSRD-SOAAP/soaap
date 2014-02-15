@@ -89,6 +89,16 @@ namespace soaap {
       worklist.pop_front();
 
       DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: "; V->dump(););
+      
+      // special case for GEP (propagate to the aggregate)
+      if (const GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>(V)) {
+        DEBUG(dbgs() << INDENT_2 << "GEP; propagating to aggregate\n");
+        // propagate to the aggregate
+        if (propagateToValue(V, GEP->getPointerOperand(), C, C, M)) { // propagate taint from (V,C) to (V2,C)
+          addToWorklist(GEP->getPointerOperand(), C, worklist);
+        }
+      }
+
       DEBUG(dbgs() << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n");
       for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
         User* U = dyn_cast<User>(UI.getUse().getUser());
@@ -216,7 +226,9 @@ namespace soaap {
       int argIdx = 0;
       for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
         if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
-          if (propagateToValue(V, AI, C, C2, M)) { // propagate 
+          DEBUG(dbgs() << INDENT_6 << "Propagating to "; AI->dump(););
+          if (propagateToValue(V, AI, C, C2, M)) { // propagate
+            DEBUG(dbgs() << "Adding AI to worklist\n");
             addToWorklist(AI, C2, worklist);
           }
         }
@@ -244,8 +256,15 @@ namespace soaap {
     // the return value of the call CI
     Function* F = CI->getCalledFunction();
     DEBUG(dbgs() << "Extern call, f=" << F->getName() << "\n");
-    if (F->getName() == "strdup") {
+    string funcName = F->getName();
+    if (funcName == "strdup") {
       return CI;
+    }
+    else if (funcName == "asprintf") { 
+      // if V is not the format string or the output param, then propagate to out param
+      if (CI->getArgOperand(0) != V && CI->getArgOperand(1) != V) {
+        return CI->getArgOperand(0);
+      }
     }
     DEBUG(dbgs() << "Returning NULL\n");
     return NULL;
