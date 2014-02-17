@@ -11,6 +11,9 @@ using namespace std;
 namespace soaap {
 
   class CapabilityAnalysis : public InfoFlowAnalysis<int> {
+    public:
+      CapabilityAnalysis(bool contextInsensitive) : InfoFlowAnalysis<int>(contextInsensitive) { }
+
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);

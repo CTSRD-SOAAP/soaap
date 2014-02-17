@@ -10,11 +10,9 @@
 using namespace soaap;
 
 void FPTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
-  ContextUtils::startContextInsensitiveAnalysis();
 }
 
 void FPTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  ContextUtils::finishContextInsensitiveAnalysis();
 }
 
 // return the union of from and to

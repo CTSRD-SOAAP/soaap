@@ -12,7 +12,7 @@ namespace soaap {
     static const int ORIGIN_SANDBOX = 1;
 
     public:
-      AccessOriginAnalysis(FunctionVector& privileged) : privilegedMethods(privileged) { }
+      AccessOriginAnalysis(bool contextInsensitive, FunctionVector& privileged) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privileged) { }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);

@@ -36,7 +36,6 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Running " << getPassName();
   if (CmdLineOpts::ContextInsens) {
     outs() << " in context-insensitive mode";
-    ContextUtils::startContextInsensitiveAnalysis();
   }
   outs() << "\n";
 
@@ -126,7 +125,7 @@ void Soaap::checkLeakedRights(Module& M) {
 }
 
 void Soaap::checkOriginOfAccesses(Module& M) {
-  AccessOriginAnalysis analysis(privilegedMethods);
+  AccessOriginAnalysis analysis(CmdLineOpts::ContextInsens, privilegedMethods);
   analysis.doAnalysis(M, sandboxes);
 }
 
@@ -135,17 +134,17 @@ void Soaap::findSandboxes(Module& M) {
 }
 
 void Soaap::checkPropagationOfSandboxPrivateData(Module& M) {
-  SandboxPrivateAnalysis analysis(privilegedMethods);
+  SandboxPrivateAnalysis analysis(CmdLineOpts::ContextInsens, privilegedMethods);
   analysis.doAnalysis(M, sandboxes);
 }
 
 void Soaap::checkPropagationOfClassifiedData(Module& M) {
-  ClassifiedAnalysis analysis;
+  ClassifiedAnalysis analysis(CmdLineOpts::ContextInsens);
   analysis.doAnalysis(M, sandboxes);
 }
 
 void Soaap::checkFileDescriptors(Module& M) {
-  CapabilityAnalysis analysis;
+  CapabilityAnalysis analysis(CmdLineOpts::ContextInsens);
   analysis.doAnalysis(M, sandboxes);
 }
 

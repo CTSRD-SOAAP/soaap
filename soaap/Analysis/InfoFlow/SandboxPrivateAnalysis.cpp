@@ -26,7 +26,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
           DEBUG(dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
-          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), sandboxes, M);
+          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M);
           for (Context* C : Cs) {
             addToWorklist(annotateCall, C, worklist);
             state[C][annotateCall] |= (1 << bitIdx);
@@ -51,7 +51,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
           DEBUG(dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
-          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), sandboxes, M); 
+          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
           for (Context* C : Cs) {
             state[C][annotatedVar] |= (1 << bitIdx);
             addToWorklist(annotatedVar, C, worklist);

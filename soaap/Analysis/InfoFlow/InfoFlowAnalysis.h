@@ -38,10 +38,12 @@ namespace soaap {
       typedef map<const Value*, FactType> DataflowFacts;
       typedef pair<const Value*, Context*> ValueContextPair;
       typedef list<ValueContextPair> ValueContextPairList;
+      InfoFlowAnalysis(bool contextInsens = false) : contextInsensitive(contextInsens) { }
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
 
     protected:
       map<Context*, DataflowFacts> state;
+      bool contextInsensitive;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
       virtual FactType performMeet(FactType fromVal, FactType toVal) = 0;
@@ -66,7 +68,7 @@ namespace soaap {
   void InfoFlowAnalysis<FactType>::performDataFlowAnalysis(ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
 
     // merge contexts if this is a context-insensitive analysis
-    if (ContextUtils::isContextInsensitiveAnalysis()) {
+    if (contextInsensitive) {
       DEBUG(dbgs() << INDENT_1 << "Merging contexts\n");
       worklist.clear();
       for (typename map<Context*,DataflowFacts>::iterator I=state.begin(), E=state.end(); I != E; I++) {
@@ -116,7 +118,7 @@ namespace soaap {
         else if (Instruction* I = dyn_cast<Instruction>(UI.getUse().getUser())) {
           if (C == ContextUtils::NO_CONTEXT) {
             // update the taint value for the correct context and put the new pair on the worklist
-            ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), sandboxes, M);
+            ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);
             for (Context* C2 : C2s) {
               DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V->dump(););
@@ -125,7 +127,7 @@ namespace soaap {
               addToWorklist(V, C2, worklist);
             }
           }
-          else if (ContextUtils::isInContext(I, C, sandboxes, M)) { // check if using instruction is in context C
+          else if (ContextUtils::isInContext(I, C, contextInsensitive, sandboxes, M)) { // check if using instruction is in context C
             if (StoreInst* SI = dyn_cast<StoreInst>(I)) {
               if (V == SI->getPointerOperand()) // to avoid infinite looping
                 continue;
@@ -179,7 +181,7 @@ namespace soaap {
     }
 
     // unmerge contexts if this is a context-insensitive analysis
-    if (ContextUtils::isContextInsensitiveAnalysis()) {
+    if (contextInsensitive) {
       DEBUG(dbgs() << INDENT_1 << "Unmerging contexts\n");
       ContextVector Cs = ContextUtils::getAllContexts(sandboxes);
       DataflowFacts F = state[ContextUtils::SINGLE_CONTEXT];
@@ -222,7 +224,7 @@ namespace soaap {
 
     for (Function* callee : CallGraphUtils::getCallees(CI, M)) {
       DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
-      Context* C2 = ContextUtils::calleeContext(C, callee, sandboxes, M);
+      Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
       Function::ArgumentListType& params = callee->getArgumentList();
 
       // NOTE: no way to index a function's list of parameters
@@ -279,7 +281,7 @@ namespace soaap {
     Function* F = RI->getParent()->getParent();
     for (CallInst* CI : CallGraphUtils::getCallers(F, M)) {
       DEBUG(dbgs() << INDENT_5 << "Propagating to caller "; CI->dump(););
-      ContextVector C2s = ContextUtils::callerContexts(RI, CI, C, sandboxes, M);
+      ContextVector C2s = ContextUtils::callerContexts(RI, CI, C, contextInsensitive, sandboxes, M);
       for (Context* C2 : C2s) {
         if (propagateToValue(V, CI, C, C2, M)) {
           addToWorklist(CI, C2, worklist);

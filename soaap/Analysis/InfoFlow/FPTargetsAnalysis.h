@@ -9,6 +9,7 @@ using namespace llvm;
 namespace soaap {
   class FPTargetsAnalysis: public InfoFlowAnalysis<FunctionVector> {
     public:
+      FPTargetsAnalysis() : InfoFlowAnalysis<FunctionVector>(true) { }
       virtual FunctionVector getTargets(Value* FP);
       virtual bool hasTargets() { return !state.empty(); }
 

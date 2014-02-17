@@ -3,15 +3,13 @@
 
 using namespace soaap;
 
-bool ContextUtils::IsContextInsensitiveAnalysis = false;
-stack<bool> ContextUtils::isContextInsensitiveAnalysisHistory;
 Context* const ContextUtils::NO_CONTEXT = new Context();
 Context* const ContextUtils::PRIV_CONTEXT = new Context();
 Context* const ContextUtils::SINGLE_CONTEXT = new Context();
 
-Context* ContextUtils::calleeContext(Context* C, Function* callee, SandboxVector& sandboxes, Module& M) {
+Context* ContextUtils::calleeContext(Context* C, bool contextInsensitive, Function* callee, SandboxVector& sandboxes, Module& M) {
   // callee context is the same sandbox, another sandbox or callgate (privileged)
-  if (IsContextInsensitiveAnalysis) {
+  if (contextInsensitive) {
     return SINGLE_CONTEXT;
   }
   else if (SandboxUtils::isSandboxEntryPoint(M, callee)) {
@@ -26,15 +24,15 @@ Context* ContextUtils::calleeContext(Context* C, Function* callee, SandboxVector
   return C;
 }
 
-ContextVector ContextUtils::callerContexts(ReturnInst* RI, CallInst* CI, Context* C, SandboxVector& sandboxes, Module& M) {
+ContextVector ContextUtils::callerContexts(ReturnInst* RI, CallInst* CI, Context* C, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
   // caller context is the same sandbox or other sandboxes/privileged context (if enclosing function is an entry point)
-  if (IsContextInsensitiveAnalysis) {
+  if (contextInsensitive) {
     return ContextVector(1, SINGLE_CONTEXT);
   }
   else {
     Function* enclosingFunc = RI->getParent()->getParent();
     if (SandboxUtils::isSandboxEntryPoint(M, enclosingFunc)) {
-      return getContextsForMethod(CI->getParent()->getParent(), sandboxes, M);
+      return getContextsForMethod(CI->getParent()->getParent(), contextInsensitive, sandboxes, M);
     }
     else {
       return ContextVector(1, C);
@@ -42,8 +40,8 @@ ContextVector ContextUtils::callerContexts(ReturnInst* RI, CallInst* CI, Context
   }
 }
 
-ContextVector ContextUtils::getContextsForMethod(Function* F, SandboxVector& sandboxes, Module& M) {
-  if (IsContextInsensitiveAnalysis) {
+ContextVector ContextUtils::getContextsForMethod(Function* F, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
+  if (contextInsensitive) {
     return ContextVector(1, SINGLE_CONTEXT);
   }
   else {
@@ -57,8 +55,8 @@ ContextVector ContextUtils::getContextsForMethod(Function* F, SandboxVector& san
   }
 }
 
-bool ContextUtils::isInContext(Instruction* I, Context* C, SandboxVector& sandboxes, Module& M) {
-  ContextVector Cs = getContextsForMethod(I->getParent()->getParent(), sandboxes, M);
+bool ContextUtils::isInContext(Instruction* I, Context* C, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
+  ContextVector Cs = getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);
   return find(Cs.begin(), Cs.end(), C) != Cs.end();
 }
 

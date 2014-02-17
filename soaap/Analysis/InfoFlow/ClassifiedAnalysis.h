@@ -9,6 +9,9 @@ using namespace llvm;
 namespace soaap {
 
   class ClassifiedAnalysis: public InfoFlowAnalysis<int> {
+    public:
+      ClassifiedAnalysis(bool contextInsensitive) : InfoFlowAnalysis<int>(contextInsensitive) { }
+
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
