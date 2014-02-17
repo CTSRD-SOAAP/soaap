@@ -36,7 +36,7 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Running " << getPassName();
   if (CmdLineOpts::ContextInsens) {
     outs() << " in context-insensitive mode";
-    ContextUtils::setIsContextInsensitiveAnalysis(true);
+    ContextUtils::startContextInsensitiveAnalysis();
   }
   outs() << "\n";
 

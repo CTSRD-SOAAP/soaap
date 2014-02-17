@@ -66,7 +66,7 @@ namespace soaap {
   void InfoFlowAnalysis<FactType>::performDataFlowAnalysis(ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
 
     // merge contexts if this is a context-insensitive analysis
-    if (ContextUtils::IsContextInsensitiveAnalysis) {
+    if (ContextUtils::isContextInsensitiveAnalysis()) {
       DEBUG(dbgs() << INDENT_1 << "Merging contexts\n");
       worklist.clear();
       for (typename map<Context*,DataflowFacts>::iterator I=state.begin(), E=state.end(); I != E; I++) {
@@ -179,7 +179,7 @@ namespace soaap {
     }
 
     // unmerge contexts if this is a context-insensitive analysis
-    if (ContextUtils::IsContextInsensitiveAnalysis) {
+    if (ContextUtils::isContextInsensitiveAnalysis()) {
       DEBUG(dbgs() << INDENT_1 << "Unmerging contexts\n");
       ContextVector Cs = ContextUtils::getAllContexts(sandboxes);
       DataflowFacts F = state[ContextUtils::SINGLE_CONTEXT];

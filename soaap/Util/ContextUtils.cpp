@@ -4,6 +4,7 @@
 using namespace soaap;
 
 bool ContextUtils::IsContextInsensitiveAnalysis = false;
+stack<bool> ContextUtils::isContextInsensitiveAnalysisHistory;
 Context* const ContextUtils::NO_CONTEXT = new Context();
 Context* const ContextUtils::PRIV_CONTEXT = new Context();
 Context* const ContextUtils::SINGLE_CONTEXT = new Context();
