@@ -18,6 +18,7 @@ namespace soaap {
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual FunctionVector performMeet(FunctionVector from, FunctionVector to);
       virtual FunctionVector bottomValue() { return FunctionVector(); }
+      virtual string stringifyFact(FunctionVector fact);
   };
 }
 

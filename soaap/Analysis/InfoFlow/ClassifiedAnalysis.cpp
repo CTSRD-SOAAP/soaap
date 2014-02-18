@@ -110,3 +110,7 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
 int ClassifiedAnalysis::performMeet(int from, int to) {
   return from | to;
 }
+
+string ClassifiedAnalysis::stringifyFact(int fact) {
+  return ClassifiedUtils::stringifyClassNames(fact);
+}

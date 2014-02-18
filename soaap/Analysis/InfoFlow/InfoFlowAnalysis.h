@@ -54,6 +54,7 @@ namespace soaap {
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
       virtual void addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist);
       virtual FactType bottomValue() = 0;
+      virtual string stringifyFact(FactType f) = 0;
   };
 
   template <class FactType>
@@ -91,6 +92,7 @@ namespace soaap {
       worklist.pop_front();
 
       DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: "; V->dump(););
+      DEBUG(dbgs() << "state[C][V]: " << stringifyFact(state[C][V]) << "\n");
       
       // special case for GEP (propagate to the aggregate)
       if (const GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>(V)) {
@@ -236,9 +238,12 @@ namespace soaap {
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
 
+    DEBUG(dbgs() << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
+
     for (Function* callee : CallGraphUtils::getCallees(CI, M)) {
       DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
       Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
+      DEBUG(dbgs() << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
       Function::ArgumentListType& params = callee->getArgumentList();
 
       // To be sound, we need to take the meet of all values passed in for each
@@ -258,14 +263,15 @@ namespace soaap {
           bool change = false;
           for (CallInst* caller : callers) { // CI will be in callers
             if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
-              V = caller->getArgOperand(argIdx)->stripPointerCasts();
-              if (propagateToValue(V, AI, C, C2, M)) { // propagate
+              Value* V2 = caller->getArgOperand(argIdx)->stripPointerCasts();
+              if (propagateToValue(V2, AI, C, C2, M)) { // propagate
                 change = true;
               }
             }
           }
           if (change) {
-            DEBUG(dbgs() << "Adding AI to worklist\n");
+            DEBUG(dbgs() << "Adding (AI,C2) to worklist\n");
+            DEBUG(dbgs() << "state[C2][AI]: " << stringifyFact(state[C2][AI]) << "\n");
             addToWorklist(AI, C2, worklist);
           }
         }

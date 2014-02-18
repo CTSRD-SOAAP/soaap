@@ -72,6 +72,7 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_classify(L) __attribute__((annotate(CLASSIFY"_"L)))
 #define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
 #define __soaap_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
+__attribute__((noinline)) static void __soaap_declassify(void* v) { }
 
 #define __soaap_sync_data(N)
 

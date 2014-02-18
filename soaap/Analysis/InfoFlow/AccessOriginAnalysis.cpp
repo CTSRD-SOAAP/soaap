@@ -82,3 +82,7 @@ void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module&
     outs() << "Unable to find a trace\n";
   }
 }
+
+string AccessOriginAnalysis::stringifyFact(int fact) {
+  return SandboxUtils::stringifySandboxNames(fact);
+}

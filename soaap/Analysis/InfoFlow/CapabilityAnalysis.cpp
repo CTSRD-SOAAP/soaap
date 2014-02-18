@@ -55,3 +55,7 @@ void CapabilityAnalysis::validateDescriptorAccesses(Module& M, SandboxVector& sa
     }
   }
 }
+
+string CapabilityAnalysis::stringifyFact(int fact) {
+  return SandboxUtils::stringifySandboxNames(fact);
+}

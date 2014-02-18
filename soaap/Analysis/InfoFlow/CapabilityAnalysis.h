@@ -19,6 +19,7 @@ namespace soaap {
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual int performMeet(int fromVal, int toVal);
       virtual int bottomValue() { return 0; }
+      virtual string stringifyFact(int fact);
 
     private:
       void validateDescriptorAccesses(Module& M, SandboxVector& sandboxes, string syscall, int requiredPerm);

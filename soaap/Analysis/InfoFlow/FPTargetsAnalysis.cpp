@@ -29,3 +29,16 @@ FunctionVector FPTargetsAnalysis::performMeet(FunctionVector from, FunctionVecto
 FunctionVector FPTargetsAnalysis::getTargets(Value* FP) {
   return state[ContextUtils::SINGLE_CONTEXT][FP];
 }
+
+string FPTargetsAnalysis::stringifyFact(FunctionVector funcs) {
+  string funcNamesStr = "[";
+  int currIdx = 0;
+  bool first = true;
+  for (Function* F : funcs) {
+    if (!first)
+      funcNamesStr += ",";
+    funcNamesStr += F->getName();
+  }
+  funcNamesStr += "]";
+  return funcNamesStr;
+}
