@@ -11,8 +11,7 @@ using namespace soaap;
 
 void DeclassifierAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
 
-  dbgs() << "Starting declassifier analysis\n";
-  llvm::DebugFlag = true;
+  DEBUG(dbgs() << "Starting declassifier analysis\n");
 
   // initialise with pointers to annotated fields and uses of annotated global variables
   string declassifyFuncBaseName = "__soaap_declassify";
@@ -74,8 +73,7 @@ void DeclassifierAnalysis::findAllFollowingInstructions(Instruction* I, Value* V
 }
 
 void DeclassifierAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  dbgs() << "Finished declassifier analysis\n";
-  llvm::DebugFlag = false;
+  DEBUG(dbgs() << "Finished declassifier analysis\n");
 }
 
 bool DeclassifierAnalysis::performMeet(bool from, bool to) {
