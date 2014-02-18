@@ -3,6 +3,10 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "Util/DebugUtils.h"
+#include "llvm/DebugInfo.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Utils/Local.h"
 #define IN_SOAAP_INSTRUMENTER
 #include "soaap_perf.h"
 
@@ -84,38 +88,42 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
            * created local var i.e. see ifd and ifd.addr1
            * above
            */
-          Argument* annotatedArg = NULL;
+          if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
+            DIVariable varDbg(dbgDecl->getVariable());
+            string annotatedVarName = varDbg.getName().str();
+            Argument* annotatedArg = NULL;
 
-          for (Argument &arg : enclosingFunc->getArgumentList()) {
-            if ((annotatedVar->getName().startswith(StringRef(Twine(arg.getName(), ".addr").str())))) {
-              annotatedArg = &arg;
+            for (Argument &arg : enclosingFunc->getArgumentList()) {
+              if (arg.getName().str() == annotatedVarName) {
+                annotatedArg = &arg;
+              }
             }
-          }
 
-          if (annotatedArg != NULL) {
-            if (annotationStrValCString == DATA_IN) {
-              outs() << "__DATA_IN annotated parameter"
-                " found!\n";
-              if (data_in) {
-                errs() << "[XXX] Only one parameter "
-                  "should be annotated with __data_in"
-                  " attribute";
-                return;
+            if (annotatedArg != NULL) {
+              if (annotationStrValCString == DATA_IN) {
+                outs() << "__DATA_IN annotated parameter"
+                  " found!\n";
+                if (data_in) {
+                  errs() << "[XXX] Only one parameter "
+                    "should be annotated with __data_in"
+                    " attribute";
+                  return;
+                }
+                /* Get the data_in param */
+                data_in = annotatedArg;
               }
-              /* Get the data_in param */
-              data_in = annotatedArg;
-            }
-            else if (annotationStrValCString == DATA_OUT) {
-              outs() << "__DATA_OUT annotated parameter"
-                " found!\n";
-              if (data_out) {
-                errs() << "[XXX] Only one parameter "
-                  "should be annotated with __data_out"
-                  " attribute";
-                return;
+              else if (annotationStrValCString == DATA_OUT) {
+                outs() << "__DATA_OUT annotated parameter"
+                  " found!\n";
+                if (data_out) {
+                  errs() << "[XXX] Only one parameter "
+                    "should be annotated with __data_out"
+                    " attribute";
+                  return;
+                }
+                /* Get the data_in param */
+                data_out = annotatedArg;
               }
-              /* Get the data_in param */
-              data_out = annotatedArg;
             }
           }
         }
@@ -152,10 +160,23 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
      * Pick the appropriate function to inject based on the
      * annotations and perform the actual instrumentation in the
      * sandboxed function prologue.
-     * NOTE: At the moment, we do not handle __data_out.
+	 * XXX IM: Make this cleaner after SOAAP deadline.
      */
     CallInst* enterSandboxCall = NULL;
-    if (data_in) {
+    if (data_in && data_out) {
+      SmallVector<Value*, 2> soaap_perf_datainout_args;
+      soaap_perf_datainout_args.push_back(data_in);
+      soaap_perf_datainout_args.push_back(data_out);
+
+      enterPersistentSandboxFn
+        = M.getFunction("soaap_perf_enter_datainout_persistent_sbox");
+      enterEphemeralSandboxFn
+        = M.getFunction("soaap_perf_enter_datainout_ephemeral_sbox");
+      enterSandboxCall = CallInst::Create(persistent
+        ? enterPersistentSandboxFn : enterEphemeralSandboxFn,
+        ArrayRef<Value*>(soaap_perf_datainout_args));
+      enterSandboxCall->insertBefore(firstInst);
+    } else if (data_in) {
       enterPersistentSandboxFn
         = M.getFunction("soaap_perf_enter_datain_persistent_sbox");
       enterEphemeralSandboxFn
@@ -163,6 +184,15 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
       enterSandboxCall = CallInst::Create(persistent
         ? enterPersistentSandboxFn : enterEphemeralSandboxFn,
         ArrayRef<Value*>(data_in));
+      enterSandboxCall->insertBefore(firstInst);
+    } else if (data_out) {
+      enterPersistentSandboxFn
+        = M.getFunction("soaap_perf_enter_dataout_persistent_sbox");
+      enterEphemeralSandboxFn
+        = M.getFunction("soaap_perf_enter_dataout_ephemeral_sbox");
+      enterSandboxCall = CallInst::Create(persistent
+        ? enterPersistentSandboxFn : enterEphemeralSandboxFn,
+        ArrayRef<Value*>(data_out));
       enterSandboxCall->insertBefore(firstInst);
     } else {
       enterPersistentSandboxFn

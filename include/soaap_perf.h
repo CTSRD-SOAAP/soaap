@@ -6,7 +6,6 @@
 
 #ifndef IN_SOAAP_INSTRUMENTER
 
-#include <unistd.h>
 
 #define __soaap_data_in __attribute__((annotate(DATA_IN)))
 #define __soaap_data_out  __attribute__((annotate(DATA_OUT)))
@@ -21,6 +20,7 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <string.h>
 
 #define DEBUG
 #define PROF
@@ -40,29 +40,33 @@
 
 #define UDSOCKETS
 
-#define MAGIC 0xd3ad
-#define OP_SENDBACK 0x01
+#define MAGIC 0xcafebabe
+#define OP_SENDBACK 0x0001
+#define OP_SENDRECEIVE 0x0010
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE _SC_PAGE_SIZE
 #endif
 
+#define SOAAP_BUF_LEN PAGE_SIZE
+
 struct ctrl_msg {
-    uint16_t magic;
-    u_char op;
-    uint32_t reqsize;
+    uint32_t magic;
+    uint16_t op;
+    uint32_t sbox_datain_len;
+    uint32_t sbox_dataout_len;
 } __packed;
 
 
 pid_t soaap_pid;
 int pfds[2]; /* Paired descriptors used for both sockets and pipes */
-char soaap_buf[PAGE_SIZE];
-char soaap_tmpbuf[PAGE_SIZE];
+char soaap_buf[SOAAP_BUF_LEN];
+char soaap_tmpbuf[SOAAP_BUF_LEN];
 
-__attribute__((used)) void
-soaap_perf_create_persistent_sbox()
+__attribute__((used)) static void
+soaap_perf_create_persistent_sbox(void)
 {
-  int nbytes;
+  int nbytes, nbytes_left;
   struct ctrl_msg *cm;
   int buflen = PAGE_SIZE;
 
@@ -92,13 +96,37 @@ soaap_perf_create_persistent_sbox()
     /* nbytes will be zero on EOF */
     while( (nbytes = read(pfds[0], soaap_buf, buflen)) > 0) {
       DPRINTF(" SANDBOX: read %d bytes", nbytes);
-      if (nbytes == sizeof(struct ctrl_msg)) {
+      /* XXX IM: ctrl msg might not be read at once -- FIX this */
+      if (nbytes >= (int) sizeof(struct ctrl_msg)) {
         cm = (struct ctrl_msg *) soaap_buf;
         if (cm->magic & ~(MAGIC))
           continue;
-        else {
-          write(pfds[0], soaap_tmpbuf, cm->reqsize);
-          DPRINTF("SANDBOX: sent back %d bytes", cm->reqsize);
+
+        switch (cm->op) {
+        case OP_SENDRECEIVE:
+          nbytes_left = cm->sbox_datain_len + sizeof(struct ctrl_msg) - nbytes;
+          DPRINTF("SANDBOX: waiting to receive %d", nbytes_left);
+
+          /* Chew all incoming data */
+          while (nbytes_left) {
+            if ((nbytes = read(pfds[0], soaap_buf, SOAAP_BUF_LEN)) > 0)
+              nbytes_left -= nbytes;
+          }
+        case OP_SENDBACK:
+          /* Fallback */
+          /* Send back data */
+          DPRINTF("SANDBOX: sending back %d bytes", cm->sbox_dataout_len);
+          while (cm->sbox_dataout_len > SOAAP_BUF_LEN) {
+            nbytes = write(pfds[0], soaap_tmpbuf, SOAAP_BUF_LEN);
+            cm->sbox_dataout_len -= nbytes;
+          }
+          while (cm->sbox_dataout_len > 0) {
+            nbytes = write(pfds[0], soaap_tmpbuf, cm->sbox_dataout_len);
+            cm->sbox_dataout_len -= nbytes;
+          }
+          break;
+        default:
+          DPRINTF("Unknown operation");
         }
       }
     }
@@ -110,7 +138,7 @@ soaap_perf_create_persistent_sbox()
   close(pfds[0]);
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_enter_persistent_sbox()
 {
 
@@ -121,19 +149,18 @@ soaap_perf_enter_persistent_sbox()
   
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_enter_ephemeral_sbox()
 {
 
   DPRINTF("Emulating performance of entering ephemeral sandbox.");
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_enter_datain_persistent_sbox(int datalen_in)
 {
 
   int nbytes = 0;
-  int buflen = PAGE_SIZE;
 
   DPRINTF("Emulating performance of using persistent sandbox.");
 
@@ -145,8 +172,8 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
    * argument.
    */
   if (datalen_in >= 0) {
-    while(datalen_in > buflen) {
-      nbytes = write(pfds[1], soaap_buf, buflen);
+    while(datalen_in > SOAAP_BUF_LEN) {
+      nbytes = write(pfds[1], soaap_buf, SOAAP_BUF_LEN);
       DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
       datalen_in -= nbytes;
     }
@@ -171,55 +198,112 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
   DPRINTF("PARENT: exiting");
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_enter_dataout_persistent_sbox(int datalen_out)
 {
 
-  int nbytes = 0, left;
-  int buflen = PAGE_SIZE;
+  int nbytes = 0, nbytes_left;
   struct ctrl_msg cm;
 
   DPRINTF("Emulating performance of using persistent sandbox.");
+
+  if (datalen_out <= 0) {
+    DPRINTF("Zero or negative request for data");
+    return;
+  }
 
   DPRINTF("DATALEN IN: %d", datalen_out);
 
   /* Initialize cm */
   cm.magic = MAGIC;
   cm.op = OP_SENDBACK;
+  cm.sbox_datain_len = 0; // Sandbox doesn't need to wait for more data
+  cm.sbox_dataout_len = datalen_out;
 
   /*
    * Request the sandbox to send back datalen_out bytes.
    */
-  if (datalen_out > 0) {
-    left = sizeof(cm);
+  nbytes_left = sizeof(cm);
+  while (nbytes_left > 0) {
+    nbytes = write(pfds[1], &cm, nbytes_left);
+    nbytes_left -= nbytes;
+  }
+  DPRINTF("PARENT: requested sandbox to send %d bytes", datalen_out);
 
-    cm.reqsize = datalen_out;
-    while (left > 0) {
-      nbytes = write(pfds[1], &cm, left);
-      if (nbytes != sizeof(cm)) {
-        DPRINTF("[XXX] Failed to send ctrl msg!");
-        return;
-      }
-      left -= nbytes;
-    }
-    DPRINTF("PARENT: requested sandbox to send %d bytes", datalen_out);
-
-    while( left > 0 ) {
-      nbytes = read(pfds[1], soaap_tmpbuf, left);
-      DPRINTF("PARENT: read from fd %d bytes", nbytes);
-      left -= nbytes;
-    }
-    return;
+  nbytes_left = cm.sbox_dataout_len;
+  while( nbytes_left > 0 ) {
+    nbytes = read(pfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
+    DPRINTF("PARENT: read from fd %d bytes", nbytes);
+    nbytes_left -= nbytes;
   }
 }
 
-__attribute__((used)) void
-soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
+__attribute__((used)) static void
+soaap_perf_enter_datainout_persistent_sbox(int datalen_in, int datalen_out)
 {
 
-  int epfds[2], nbytes;
+  int nbytes = 0, nbytes_left, tmpnbytes;
+  uint32_t *magicptr;
+  struct ctrl_msg cm;
+
+  DPRINTF("Emulating performance of using persistent sandbox.");
+
+  DPRINTF("DATALEN IN: %d", datalen_out);
+
+  if (!datalen_in && !datalen_out)
+    return;
+
+  /* Initialize cm */
+  cm.magic = MAGIC;
+  cm.op = OP_SENDRECEIVE;
+  cm.sbox_datain_len = datalen_in; // Sandbox doesn't need to wait for more data
+  cm.sbox_dataout_len = datalen_out; // Sandbox doesn't need to wait for more data
+
+  /* Initialize ctrl message and required data */
+  nbytes_left = sizeof(cm) + datalen_in;
+  memmove(soaap_buf, &cm, sizeof(cm));
+  magicptr = (uint32_t *) soaap_buf;
+
+  /*
+   * Send and receive data from/to the sandbox
+   */
+  while(nbytes_left > SOAAP_BUF_LEN) {
+    nbytes = write(pfds[1], soaap_buf, SOAAP_BUF_LEN);
+
+    /* Ensure that the ctrl message is sent */
+    while (nbytes <  (int) sizeof(cm)) {
+      tmpnbytes = write(pfds[1], &soaap_buf, sizeof(cm) - nbytes);
+      nbytes += tmpnbytes;
+    }
+
+    /* Unset the magic */
+    *magicptr &= ~(MAGIC);
+
+    nbytes_left -= nbytes;
+  }
+
+  while (nbytes_left > 0) {
+    nbytes = write(pfds[1], soaap_buf, nbytes_left);
+    nbytes_left -= nbytes;
+  }
+  DPRINTF("PARENT: sent to sandbox %d bytes and "
+    "requested back %d bytes", datalen_in, datalen_out);
+
+  /* Chew the data that sent from the sandbox */
+  nbytes_left = cm.sbox_dataout_len;
+  while( nbytes_left > 0 ) {
+    nbytes = read(pfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
+    DPRINTF("PARENT: read from fd %d bytes", nbytes);
+    nbytes_left -= nbytes;
+  }
+}
+
+__attribute__((used)) static void
+soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
+{
+  int nbytes;
+  int epfds[2];
   pid_t pid;
-  int buflen = PAGE_SIZE;
 
   DPRINTF("Emulating performance of using ephemeral sandbox.");
 
@@ -242,7 +326,7 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
 
   if (!pid) {
     close(epfds[1]);
-    while ((nbytes = read(epfds[0], soaap_buf, buflen)) > 0) {
+    while ((nbytes = read(epfds[0], soaap_buf, SOAAP_BUF_LEN)) > 0) {
       ;
       DPRINTF(" SANDBOX: read %d bytes", nbytes);
     }
@@ -256,8 +340,8 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
      * argument.
      */
     if (datalen_in >= 0) {
-      while(datalen_in > buflen) {
-        nbytes = write(epfds[1], soaap_buf, buflen);
+      while(datalen_in > SOAAP_BUF_LEN) {
+        nbytes = write(epfds[1], soaap_buf, SOAAP_BUF_LEN);
         DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
         datalen_in -= nbytes;
       }
@@ -274,11 +358,11 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
 
     /* Send EOF to sandbox, cleanup and wait */
     close(epfds[1]);
-    wait(NULL);
+    //wait(NULL);
   }
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_tic(struct timespec *start_ts)
 {
 
@@ -290,7 +374,7 @@ soaap_perf_tic(struct timespec *start_ts)
 #endif
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_overhead_toc(struct timespec *sbox_ts)
 {
 #ifdef PROF
@@ -301,7 +385,7 @@ soaap_perf_overhead_toc(struct timespec *sbox_ts)
 #endif
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_total_toc(struct timespec *start_ts, struct timespec *sbox_ts)
 {
 #ifdef PROF
@@ -342,7 +426,7 @@ soaap_perf_total_toc(struct timespec *start_ts, struct timespec *sbox_ts)
 #endif
 }
 
-__attribute__((used)) void
+__attribute__((used)) static void
 soaap_perf_total_toc_thres(struct timespec *start_ts, struct timespec *sbox_ts,
   int thres)
 {
