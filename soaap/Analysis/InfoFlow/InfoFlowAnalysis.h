@@ -166,8 +166,22 @@ namespace soaap {
               addToWorklist(I, C, worklist);
               continue;
             }
+            else if (PHINode* PHI = dyn_cast<PHINode>(I)) {
+              // take the meet of all incoming values
+              bool change = false;
+              int i;
+              for (i=0; i<PHI->getNumIncomingValues(); i++) {
+                Value* IV = PHI->getIncomingValue(i);
+                if (propagateToValue(IV, PHI, C, C, M)) {
+                  change = true;
+                }
+              }
+              if (change) {
+                addToWorklist(PHI, C, worklist);
+              }
+            }
             else {
-              V2 = I; // this covers PHINode and gep instructions
+              V2 = I; // this covers gep instructions
             }
             if (V2 != NULL && propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
               DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump());
@@ -227,13 +241,30 @@ namespace soaap {
       Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
       Function::ArgumentListType& params = callee->getArgumentList();
 
+      // To be sound, we need to take the meet of all values passed in for each
+      // parameter that we are propagating to (i.e. from all other call sites and
+      // not only CI). Otherwise, must analyses will lead to incorrect results.
+      CallInstVector callers = CallGraphUtils::getCallers(callee, M);
+
       // NOTE: no way to index a function's list of parameters
       // NOTE2: If this is a variadic parmaeter, then propagate to callee's va_list
       int argIdx = 0;
       for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
         if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
           DEBUG(dbgs() << INDENT_6 << "Propagating to "; AI->dump(););
-          if (propagateToValue(V, AI, C, C2, M)) { // propagate
+          // Take meet of all argument values passed in at argIdx by 
+          // all callers in context C. This makes our analysis sound
+          // when our meet operator is intersection.
+          bool change = false;
+          for (CallInst* caller : callers) { // CI will be in callers
+            if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
+              V = caller->getArgOperand(argIdx)->stripPointerCasts();
+              if (propagateToValue(V, AI, C, C2, M)) { // propagate
+                change = true;
+              }
+            }
+          }
+          if (change) {
             DEBUG(dbgs() << "Adding AI to worklist\n");
             addToWorklist(AI, C2, worklist);
           }
