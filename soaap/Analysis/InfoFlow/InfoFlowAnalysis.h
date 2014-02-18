@@ -338,8 +338,13 @@ namespace soaap {
       return CI;
     }
     else if (funcName == "asprintf" || funcName == "vasprintf") { 
-      // if V is not the format string or the output param, then propagate to out param
+      // if V is not the format string or the out param, then propagate to out param
       if (CI->getArgOperand(0) != V && CI->getArgOperand(1) != V) {
+        return CI->getArgOperand(0);
+      }
+    }
+    else if (funcName == "strcpy") {
+      if (CI->getArgOperand(0) != V) { // V is not dst, so it must be src
         return CI->getArgOperand(0);
       }
     }
