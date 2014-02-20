@@ -16,14 +16,14 @@ void FPTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes
 }
 
 // return the union of from and to
-FunctionVector FPTargetsAnalysis::performMeet(FunctionVector from, FunctionVector to) {
-  FunctionVector meet = from;
-  for (Function* F : to) {
-    if (find(meet.begin(), meet.end(), F) == meet.end()) {
-      meet.push_back(F);
+bool FPTargetsAnalysis::performMeet(FunctionVector from, FunctionVector& to) {
+  int oldToCount = to.size();
+  for (Function* F : from) {
+    if (find(to.begin(), to.end(), F) == to.end()) {
+      to.push_back(F);
     }
   }
-  return meet;
+  return to.size() > oldToCount;
 }
 
 FunctionVector FPTargetsAnalysis::getTargets(Value* FP) {

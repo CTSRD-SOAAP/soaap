@@ -273,8 +273,10 @@ bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to
   return false;
 }
 
-int SandboxPrivateAnalysis::performMeet(int from, int to) {
-  return from | to;
+bool SandboxPrivateAnalysis::performMeet(int from, int& to) {
+  int oldTo = to;
+  to = from | to;
+  return to != oldTo;
 }
 
 string SandboxPrivateAnalysis::stringifyFact(int fact) {

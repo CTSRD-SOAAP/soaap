@@ -46,7 +46,8 @@ namespace soaap {
       bool contextInsensitive;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
-      virtual FactType performMeet(FactType fromVal, FactType toVal) = 0;
+      // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
+      virtual bool performMeet(FactType fromVal, FactType& toVal) = 0;
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
@@ -228,9 +229,9 @@ namespace soaap {
                    // regardless of whether the value was non-zero
     }                   
     else {
-      FactType old = state[cTo][to];
-      state[cTo][to] = performMeet(state[cFrom][from], old);
-      return state[cTo][to] != old;
+      //FactType old = state[cTo][to];
+      //state[cTo][to] = performMeet(state[cFrom][from], old);
+      return performMeet(state[cFrom][from], state[cTo][to]);
     }
   }
 

@@ -107,8 +107,10 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
   }
 }
 
-int ClassifiedAnalysis::performMeet(int from, int to) {
-  return from | to;
+bool ClassifiedAnalysis::performMeet(int from, int& to) {
+  int oldTo = to;
+  to = from | to;
+  return to != oldTo;
 }
 
 string ClassifiedAnalysis::stringifyFact(int fact) {

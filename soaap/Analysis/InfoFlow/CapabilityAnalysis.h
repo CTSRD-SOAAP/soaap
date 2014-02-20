@@ -17,7 +17,7 @@ namespace soaap {
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
-      virtual int performMeet(int fromVal, int toVal);
+      virtual bool performMeet(int fromVal, int& toVal);
       virtual int bottomValue() { return 0; }
       virtual string stringifyFact(int fact);
 

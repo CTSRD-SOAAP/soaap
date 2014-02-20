@@ -76,8 +76,10 @@ void DeclassifierAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
   DEBUG(dbgs() << "Finished declassifier analysis\n");
 }
 
-bool DeclassifierAnalysis::performMeet(bool from, bool to) {
-  return from && to;
+bool DeclassifierAnalysis::performMeet(bool from, bool& to) {
+  bool oldTo = to;
+  to = from && to;
+  return to != oldTo;
 }
 
 bool DeclassifierAnalysis::isDeclassified(const Value* V) {

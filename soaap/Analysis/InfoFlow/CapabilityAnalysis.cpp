@@ -18,8 +18,10 @@ void CapabilityAnalysis::initialise(ValueContextPairList& worklist, Module& M, S
   }
 }
 
-int CapabilityAnalysis::performMeet(int fromVal, int toVal) {
-  return fromVal & toVal;
+bool CapabilityAnalysis::performMeet(int fromVal, int& toVal) {
+  int oldToVal = toVal;
+  toVal =fromVal & toVal;
+  return toVal != oldToVal;
 }
 
 void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
