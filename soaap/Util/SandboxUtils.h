@@ -26,6 +26,7 @@ namespace soaap {
       static Sandbox* getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes);
       static void outputSandboxedFunctions(SandboxVector& sandboxes);
+      static bool isSandboxedFunction(Function* F, SandboxVector& sandboxes);
     
     private:
       static map<string,int> sandboxNameToBitIdx;

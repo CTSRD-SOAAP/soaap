@@ -43,10 +43,10 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
       }
     }
   }*/
-  dbgs() << "Dynamic call graph implementation deprecated\n";
+  //dbgs() << "Dynamic call graph implementation deprecated\n";
 }
 
-void CallGraphUtils::listFPCalls(Module& M) {
+void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   unsigned long numFPcalls = 0;
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
@@ -67,7 +67,8 @@ void CallGraphUtils::listFPCalls(Module& M) {
                 int status = -4;
                 char* demangled = abi::__cxa_demangle(funcName.c_str(), 0, 0, &status);
                 DEBUG(dbgs() << "demangled, status=" << status << "\n");
-                outs() << INDENT_1 << (status == 0 ? demangled : funcName) << ":\n";
+                string sandboxed = SandboxUtils::isSandboxedFunction(F, sandboxes) ? " (sandboxed) " : "";
+                outs() << INDENT_1 << (status == 0 ? demangled : funcName) << sandboxed << ":\n";
                 displayedFuncName = true;
               }
               outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
