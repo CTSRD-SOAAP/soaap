@@ -92,7 +92,8 @@ namespace soaap {
       Context* C = P.second;
       worklist.pop_front();
 
-      DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: "; V->dump(););
+      DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: ");
+      if (isa<Function>(V)) { DEBUG(dbgs() << "<function body>\n"); } else { DEBUG(V->dump()); }
       DEBUG(dbgs() << "state[C][V]: " << stringifyFact(state[C][V]) << "\n");
       
       // special case for GEP (propagate to the aggregate)
