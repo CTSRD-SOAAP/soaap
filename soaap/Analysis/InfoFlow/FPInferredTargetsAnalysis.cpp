@@ -124,6 +124,45 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
     }
   }
 
+  DEBUG(dbgs() << "Globals:\n");
+  // In some applications, functions are stored within globals aggregates like arrays
+  // We search for such arrays conflating any structure contained within
+  for (Module::global_iterator G = M.global_begin(), E = M.global_end(); G != E; ++G) {
+    if (GlobalVariable* Gvar = dyn_cast<GlobalVariable>(G)) {
+      //Gvar->dump();
+      if (Gvar->hasInitializer()) {
+        DEBUG(Gvar->getInitializer()->dump());
+        if (ConstantArray* CA = dyn_cast<ConstantArray>(Gvar->getInitializer())) {
+          DEBUG(dbgs() << "Constant array, num of operands: " << CA->getNumOperands() << "\n");
+          for (int i=0; i<CA->getNumOperands(); i++) {
+            Value* V = CA->getOperand(i);
+            if (Function* F = dyn_cast<Function>(V->stripInBoundsOffsets())) {
+              DEBUG(dbgs() << "Func: " << F->getName() << "\n");
+              state[ContextUtils::SINGLE_CONTEXT][Gvar].insert(F);
+              addToWorklist(Gvar, ContextUtils::SINGLE_CONTEXT, worklist);
+            }
+            else if (ConstantStruct* S = dyn_cast<ConstantStruct>(V->stripInBoundsOffsets())) {
+              DEBUG(dbgs() << "Struct found within global " << Gvar->getName() << "\n");
+              DEBUG(dbgs() << "Num operands: " << S->getNumOperands() << "\n");
+              for (int j=0; j<S->getNumOperands(); j++) {
+                Value* SMem = S->getOperand(j)->stripInBoundsOffsets();
+                if (Function* F = dyn_cast<Function>(SMem)) {
+                  DEBUG(dbgs() << "Func in struct: " << F->getName() << "\n");
+                  state[ContextUtils::SINGLE_CONTEXT][Gvar].insert(F);
+                  addToWorklist(Gvar, ContextUtils::SINGLE_CONTEXT, worklist);
+                }
+              }
+            }
+            else {
+              //dbgs() << "Unknown element type\n";
+              //V->dump();
+            }
+          }
+        }
+      }
+    }
+  }
+
   
 }
 
