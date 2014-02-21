@@ -10,6 +10,7 @@ namespace soaap {
   class FPInferredTargetsAnalysis: public FPTargetsAnalysis {
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
+      virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
   };
 }
 

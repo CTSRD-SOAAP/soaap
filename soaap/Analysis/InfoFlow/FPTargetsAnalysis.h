@@ -7,18 +7,18 @@
 using namespace llvm;
 
 namespace soaap {
-  class FPTargetsAnalysis: public InfoFlowAnalysis<FunctionVector> {
+  class FPTargetsAnalysis: public InfoFlowAnalysis<FunctionSet> {
     public:
-      FPTargetsAnalysis() : InfoFlowAnalysis<FunctionVector>(true) { }
-      virtual FunctionVector getTargets(Value* FP);
+      FPTargetsAnalysis() : InfoFlowAnalysis<FunctionSet>(true) { }
+      virtual FunctionSet getTargets(Value* FP);
       virtual bool hasTargets() { return !state.empty(); }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
-      virtual bool performMeet(FunctionVector from, FunctionVector& to);
-      virtual FunctionVector bottomValue() { return FunctionVector(); }
-      virtual string stringifyFact(FunctionVector fact);
+      virtual bool performMeet(FunctionSet from, FunctionSet& to);
+      virtual FunctionSet bottomValue() { return FunctionSet(); }
+      virtual string stringifyFact(FunctionSet fact);
   };
 }
 

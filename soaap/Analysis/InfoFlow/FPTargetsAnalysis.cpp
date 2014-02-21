@@ -16,21 +16,21 @@ void FPTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes
 }
 
 // return the union of from and to
-bool FPTargetsAnalysis::performMeet(FunctionVector from, FunctionVector& to) {
-  int oldToCount = to.size();
+bool FPTargetsAnalysis::performMeet(FunctionSet from, FunctionSet& to) {
+  bool change = false;
   for (Function* F : from) {
-    if (find(to.begin(), to.end(), F) == to.end()) {
-      to.push_back(F);
+    if (to.insert(F)) {
+      change = true;
     }
   }
-  return to.size() > oldToCount;
+  return change;
 }
 
-FunctionVector FPTargetsAnalysis::getTargets(Value* FP) {
+FunctionSet FPTargetsAnalysis::getTargets(Value* FP) {
   return state[ContextUtils::SINGLE_CONTEXT][FP];
 }
 
-string FPTargetsAnalysis::stringifyFact(FunctionVector funcs) {
+string FPTargetsAnalysis::stringifyFact(FunctionSet funcs) {
   string funcNamesStr = "[";
   int currIdx = 0;
   bool first = true;
