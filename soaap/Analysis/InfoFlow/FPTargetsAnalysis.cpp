@@ -38,6 +38,7 @@ string FPTargetsAnalysis::stringifyFact(FunctionSet funcs) {
     if (!first)
       funcNamesStr += ",";
     funcNamesStr += F->getName();
+    first = false;
   }
   funcNamesStr += "]";
   return funcNamesStr;
