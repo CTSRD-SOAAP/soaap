@@ -125,35 +125,40 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
   DEBUG(dbgs() << "Globals:\n");
   // In some applications, functions are stored within globals aggregates like arrays
   // We search for such arrays conflating any structure contained within
+  ValueSet visited;
   for (Module::global_iterator G = M.global_begin(), E = M.global_end(); G != E; ++G) {
-    findAllFunctionPointersInValue(G, worklist);
+    findAllFunctionPointersInValue(G, worklist, visited);
   }
   
 }
 
-void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueContextPairList& worklist) {
-  if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
-    if (G->hasInitializer()) {
-      findAllFunctionPointersInValue(G->getInitializer(), worklist);
+void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueContextPairList& worklist, ValueSet& visited) {
+  if (!visited.count(V)) {
+    visited.insert(V);
+    if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
+      DEBUG(dbgs() << INDENT_1 << "Global var: " << G->getName() << "\n");
+      if (G->hasInitializer()) {
+        findAllFunctionPointersInValue(G->getInitializer(), worklist, visited);
+      }
     }
-  }
-  else if (ConstantArray* CA = dyn_cast<ConstantArray>(V)) {
-    DEBUG(dbgs() << "Constant array, num of operands: " << CA->getNumOperands() << "\n");
-    for (int i=0; i<CA->getNumOperands(); i++) {
-      Value* V2 = CA->getOperand(i)->stripInBoundsOffsets();
-      findAllFunctionPointersInValue(V2, worklist);
+    else if (ConstantArray* CA = dyn_cast<ConstantArray>(V)) {
+      DEBUG(dbgs() << INDENT_1 << "Constant array, num of operands: " << CA->getNumOperands() << "\n");
+      for (int i=0; i<CA->getNumOperands(); i++) {
+        Value* V2 = CA->getOperand(i)->stripInBoundsOffsets();
+        findAllFunctionPointersInValue(V2, worklist, visited);
+      }
     }
-  }
-  else if (Function* F = dyn_cast<Function>(V)) {
-    DEBUG(dbgs() << "Func: " << F->getName() << "\n");
-    state[ContextUtils::SINGLE_CONTEXT][V].insert(F);
-    addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
-  }
-  else if (ConstantStruct* S = dyn_cast<ConstantStruct>(V)) {
-    DEBUG(dbgs() << "Struct, num of fields: " << S->getNumOperands() << "\n");
-    for (int j=0; j<S->getNumOperands(); j++) {
-      Value* V2 = S->getOperand(j)->stripInBoundsOffsets();
-      findAllFunctionPointersInValue(V2, worklist);
+    else if (Function* F = dyn_cast<Function>(V)) {
+      DEBUG(dbgs() << INDENT_1 << "Func: " << F->getName() << "\n");
+      state[ContextUtils::SINGLE_CONTEXT][V].insert(F);
+      addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
+    }
+    else if (ConstantStruct* S = dyn_cast<ConstantStruct>(V)) {
+      DEBUG(dbgs() << INDENT_1 << "Struct, num of fields: " << S->getNumOperands() << "\n");
+      for (int j=0; j<S->getNumOperands(); j++) {
+        Value* V2 = S->getOperand(j)->stripInBoundsOffsets();
+        findAllFunctionPointersInValue(V2, worklist, visited);
+      }
     }
   }
 }

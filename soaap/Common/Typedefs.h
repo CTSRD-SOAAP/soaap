@@ -27,6 +27,7 @@ namespace soaap {
   typedef list<Instruction*> InstTrace;
   typedef list<Instruction*> InstVector;
   typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
+  typedef SmallSet<Value*,16> ValueSet;
 }
 
 #endif
