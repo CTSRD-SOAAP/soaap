@@ -11,6 +11,9 @@
 //#include "valgrind/taintgrind.h"
 #include <stdio.h>
 
+#define __weak_reference2(sym,alias) \
+  extern __typeof (sym) alias __attribute__ ((weak, __alias__ (#sym)))
+
 // types of sandboxes
 #define SANDBOX_PERSISTENT "SANDBOX_PERSISTENT"
 #define SANDBOX_EPHEMERAL "SANDBOX_EPHEMERAL"
