@@ -108,6 +108,16 @@ namespace soaap {
           else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
             Agg = load->getPointerOperand();
           }
+          else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
+            // in this case, we need to rewind back to the local/global Value*
+            // that flows to the return value of call's callee. This would
+            // involve doing more information flow analysis. However, for now
+            // we hardcode the specific cases:
+            if (call->getCalledFunction()->getName() == "buffer_ptr") {
+              Agg = call->getArgOperand(0);
+              Agg->dump();
+            }
+          }
           else {
             dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
           }
