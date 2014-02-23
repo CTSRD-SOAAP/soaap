@@ -97,11 +97,25 @@ namespace soaap {
       DEBUG(dbgs() << "state[C][V]: " << stringifyFact(state[C][V]) << "\n");
       
       // special case for GEP (propagate to the aggregate)
-      if (const GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>(V)) {
-        DEBUG(dbgs() << INDENT_2 << "GEP; propagating to aggregate\n");
-        // propagate to the aggregate
-        if (propagateToValue(V, GEP->getPointerOperand(), C, C, M)) { // propagate taint from (V,C) to (V2,C)
-          addToWorklist(GEP->getPointerOperand(), C, worklist);
+      if (GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>((Value*)V)) {
+        DEBUG(dbgs() << INDENT_2 << "GEP\n");
+        // rewind to the aggregate and propagate
+        Value* Agg = GEP->getPointerOperand()->stripInBoundsOffsets();
+        while (!(isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg))) {
+          if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
+            Agg = gep->getPointerOperand();
+          }
+          else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
+            Agg = load->getPointerOperand();
+          }
+          else {
+            dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
+          }
+          Agg = Agg->stripInBoundsOffsets();
+        }
+        if (propagateToValue(V, Agg, C, C, M)) { 
+          DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
+          addToWorklist(Agg, C, worklist);
         }
       }
 
@@ -240,6 +254,7 @@ namespace soaap {
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
 
+    DEBUG(dbgs() << "Call instruction: " << *CI << "\n");
     DEBUG(dbgs() << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
 
     for (Function* callee : CallGraphUtils::getCallees(CI, M)) {
@@ -359,11 +374,12 @@ namespace soaap {
     string result;
     raw_string_ostream ss(result);
     if (isa<Function>(V)) {
-      result = V->getName();
+      ss << V->getName();
     }
     else {
       V->print(ss);
     }
+    ss << " - " << *V->getType();
     return result;
   }
 
