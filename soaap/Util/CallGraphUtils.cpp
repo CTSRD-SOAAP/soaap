@@ -280,13 +280,20 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
 
 bool CallGraphUtils::isIndirectCall(CallInst* C) {
   Value* V = C->getCalledValue();
-  return V != NULL && !isa<Function>(V->stripPointerCasts());
+  return V != NULL && !(isa<Function>(V->stripPointerCasts()) || isa<GlobalAlias>(V->stripPointerCasts()));
 }
 
 Function* CallGraphUtils::getDirectCallee(CallInst* C) {
   Function* calledFunc = C->getCalledFunction();
   if (calledFunc == NULL) {
-    calledFunc = dyn_cast<Function>(C->getCalledValue()->stripPointerCasts());
+    Value* V = C->getCalledValue()->stripPointerCasts();
+    calledFunc = dyn_cast<Function>(V);
+    if (calledFunc == NULL) {
+      if (GlobalAlias* GA = dyn_cast<GlobalAlias>(V)) {
+        calledFunc = dyn_cast<Function>(GA->getAliasedGlobal());
+        //dbgs() << *C << " has direct callee " << calledFunc->getName() << "\n";
+      }
+    }
   }
   return calledFunc;
 }
