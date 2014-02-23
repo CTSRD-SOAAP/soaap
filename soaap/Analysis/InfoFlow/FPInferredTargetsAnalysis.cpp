@@ -109,12 +109,10 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
             if (Function* T = dyn_cast<Function>(Arg)) {
               if (!T->isDeclaration()) {
                 // we are assigning a function
-                FunctionSet targets;
-                targets.insert(T);
                 //Arg->dump();
                 //dbgs() << *Lvar << " = " << T->getName() << "()\n";
                 //DEBUG(dbgs() << "Adding param " << *Param << " to worklist\n");
-                state[ContextUtils::SINGLE_CONTEXT][Param] = targets;
+                state[ContextUtils::SINGLE_CONTEXT][Param].insert(T);
                 addToWorklist(Param, ContextUtils::SINGLE_CONTEXT, worklist);
               }
             }
