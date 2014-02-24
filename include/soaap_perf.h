@@ -23,7 +23,7 @@
 #include <string.h>
 
 #define DEBUG
-#define PROF
+//#define PROF
 
 /* DPRINTF */
 #ifdef DEBUG
@@ -144,8 +144,8 @@ soaap_perf_enter_persistent_sbox()
 
   DPRINTF("Emulating performance of entering persistent sandbox.");
   DPRINTF("Sending request over RPC.");
-  int nbytes = write(pfds[1], soaap_buf, 1);
-  DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
+  write(pfds[1], soaap_buf, 1);
+  //DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
   
 }
 
@@ -354,6 +354,136 @@ soaap_perf_enter_datain_ephemeral_sbox(int datalen_in)
         DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
         datalen_in -= nbytes;
       }
+    }
+
+    /* Send EOF to sandbox, cleanup and wait */
+    close(epfds[1]);
+    //wait(NULL);
+  }
+}
+
+__attribute__((used)) static void
+soaap_perf_enter_datainout_ephemeral_sbox(int datalen_in, int datalen_out)
+{
+  int nbytes, nbytes_left;
+  int epfds[2];
+  pid_t pid;
+  uint32_t *magicptr;
+  struct ctrl_msg cm, *cmptr;
+
+  DPRINTF("Emulating performance of using ephemeral sandbox.");
+
+  if (!datalen_in && !datalen_out)
+    return;
+
+#ifdef PIPES
+  /* Use pipes for IPC */
+  pipe(epfds);
+#elif defined (UDSOCKETS)
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, epfds) == -1) {
+    perror("socketpair");
+    exit(1);
+  }
+#endif
+
+  DPRINTF("Creating new ephemeral sandbox.");
+  pid = fork();
+  if (pid == -1) {
+    perror("fork");
+    return;
+  }
+
+  if (!pid) {
+    /* SANDBOX */
+    close(epfds[1]);
+    while ((nbytes = read(epfds[0], soaap_buf, SOAAP_BUF_LEN)) > 0) {
+      DPRINTF(" SANDBOX: read %d bytes", nbytes);
+      if (nbytes >= (int) sizeof(struct ctrl_msg)) {
+        cmptr = (struct ctrl_msg *) soaap_buf;
+        if (cmptr->magic & ~(MAGIC))
+          continue;
+
+        switch (cmptr->op) {
+        case OP_SENDRECEIVE:
+          nbytes_left = cmptr->sbox_datain_len + sizeof(struct ctrl_msg) - nbytes;
+          DPRINTF("SANDBOX: waiting to receive %d", nbytes_left);
+
+          /* Chew all incoming data */
+          while (nbytes_left) {
+            if ((nbytes = read(epfds[0], soaap_buf, SOAAP_BUF_LEN)) > 0)
+              nbytes_left -= nbytes;
+          }
+        case OP_SENDBACK:
+          /* Fallback */
+          /* Send back data */
+          DPRINTF("SANDBOX: sending back %d bytes", cmptr->sbox_dataout_len);
+          while (cmptr->sbox_dataout_len > SOAAP_BUF_LEN) {
+            nbytes = write(epfds[0], soaap_tmpbuf, SOAAP_BUF_LEN);
+            cmptr->sbox_dataout_len -= nbytes;
+          }
+          while (cmptr->sbox_dataout_len > 0) {
+            nbytes = write(epfds[0], soaap_tmpbuf, cmptr->sbox_dataout_len);
+            cmptr->sbox_dataout_len -= nbytes;
+          }
+          break;
+        default:
+          DPRINTF("Unknown operation");
+        }
+      }
+    }
+    DPRINTF(" SANDBOX: exiting");
+    exit(0);
+
+  } else {
+    /* PARENT */
+    close(pfds[0]);
+
+    /* Initialize cm */
+    cm.magic = MAGIC;
+    cm.op = OP_SENDRECEIVE;
+    cm.sbox_datain_len = datalen_in; // Sandbox doesn't need to wait for more data
+    cm.sbox_dataout_len = datalen_out; // Sandbox doesn't need to wait for more data
+
+    /* Initialize ctrl message and required data */
+    nbytes_left = sizeof(cm) + datalen_in;
+    memmove(soaap_buf, &cm, sizeof(cm));
+    magicptr = (uint32_t *) soaap_buf;
+
+    /*
+     * Write datalen_in bytes over the pipe in chunks of buflen (PAGESIZE).
+     * We are exiting if this function is called with a negative integer as
+     * argument.
+     */
+    while(nbytes_left > SOAAP_BUF_LEN) {
+      nbytes = write(epfds[1], soaap_buf, SOAAP_BUF_LEN);
+      if (nbytes < 0) {
+        perror("PARENT write()");
+        return;
+      }
+      DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
+
+      /* Unset the magic */
+      *magicptr &= ~(MAGIC);
+
+      /* Update remaining bytes */
+      nbytes_left -= nbytes;
+    }
+    while (nbytes_left > 0) {
+      nbytes = write(epfds[1], soaap_buf, nbytes_left);
+      if (nbytes < 0) {
+        perror("PARENT write()");
+        return;
+      }
+      DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
+      nbytes_left -= nbytes;
+    }
+
+    /* Chew the data that sent from the sandbox */
+    nbytes_left = cm.sbox_dataout_len;
+    while( nbytes_left > 0 ) {
+      nbytes = read(epfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
+      DPRINTF("PARENT: read from fd %d bytes", nbytes);
+      nbytes_left -= nbytes;
     }
 
     /* Send EOF to sandbox, cleanup and wait */
