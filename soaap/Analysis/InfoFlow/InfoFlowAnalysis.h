@@ -46,7 +46,8 @@ namespace soaap {
       bool contextInsensitive;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
-      virtual FactType performMeet(FactType fromVal, FactType toVal) = 0;
+      // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
+      virtual bool performMeet(FactType fromVal, FactType& toVal) = 0;
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
@@ -54,6 +55,8 @@ namespace soaap {
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
       virtual void addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist);
       virtual FactType bottomValue() = 0;
+      virtual string stringifyFact(FactType f) = 0;
+      virtual string stringifyValue(const Value* V);
   };
 
   template <class FactType>
@@ -90,27 +93,52 @@ namespace soaap {
       Context* C = P.second;
       worklist.pop_front();
 
-      DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: "; V->dump(););
+      DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: " << stringifyValue(V) << "\n");
+      DEBUG(dbgs() << "state[C][V]: " << stringifyFact(state[C][V]) << "\n");
       
       // special case for GEP (propagate to the aggregate)
-      if (const GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>(V)) {
-        DEBUG(dbgs() << INDENT_2 << "GEP; propagating to aggregate\n");
-        // propagate to the aggregate
-        if (propagateToValue(V, GEP->getPointerOperand(), C, C, M)) { // propagate taint from (V,C) to (V2,C)
-          addToWorklist(GEP->getPointerOperand(), C, worklist);
+      if (GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>((Value*)V)) {
+        DEBUG(dbgs() << INDENT_2 << "GEP\n");
+        // rewind to the aggregate and propagate
+        Value* Agg = GEP->getPointerOperand()->stripInBoundsOffsets();
+        while (!(isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg))) {
+          if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
+            Agg = gep->getPointerOperand();
+          }
+          else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
+            Agg = load->getPointerOperand();
+          }
+          else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
+            // in this case, we need to rewind back to the local/global Value*
+            // that flows to the return value of call's callee. This would
+            // involve doing more information flow analysis. However, for now
+            // we hardcode the specific cases:
+            if (call->getCalledFunction()->getName() == "buffer_ptr") {
+              Agg = call->getArgOperand(0);
+              Agg->dump();
+            }
+          }
+          else {
+            dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
+          }
+          Agg = Agg->stripInBoundsOffsets();
+        }
+        if (propagateToValue(V, Agg, C, C, M)) { 
+          DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
+          addToWorklist(Agg, C, worklist);
         }
       }
 
       DEBUG(dbgs() << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n");
       for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
         User* U = dyn_cast<User>(UI.getUse().getUser());
-        DEBUG(dbgs() << INDENT_3 << "Use: "; U->dump(););
+        DEBUG(dbgs() << INDENT_3 << "Use: " << stringifyValue(U) << "\n";);
         const Value* V2 = NULL;
         if (Constant* CS = dyn_cast<Constant>(U)) {
           V2 = CS;
           if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
-            DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
-            DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V2->dump(););
+            DEBUG(dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V));
+            DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2) << "\n";);
             DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ")\n");
             addToWorklist(V2, C, worklist);
           }
@@ -120,8 +148,8 @@ namespace soaap {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);
             for (Context* C2 : C2s) {
-              DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump(););
-              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V->dump(););
+              DEBUG(dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V));
+              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V));
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C2) << ")\n");
               propagateToValue(V, V, C, C2, M); 
               addToWorklist(V, C2, worklist);
@@ -184,8 +212,8 @@ namespace soaap {
               V2 = I; // this covers gep instructions
             }
             if (V2 != NULL && propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
-              DEBUG(dbgs() << INDENT_4 << "Propagating ("; V->dump());
-              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to ("; V2->dump());
+              DEBUG(dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V));
+              DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2));
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ")\n");
               addToWorklist(V2, C, worklist);
             }
@@ -226,9 +254,9 @@ namespace soaap {
                    // regardless of whether the value was non-zero
     }                   
     else {
-      FactType old = state[cTo][to];
-      state[cTo][to] = performMeet(state[cFrom][from], old);
-      return state[cTo][to] != old;
+      //FactType old = state[cTo][to];
+      //state[cTo][to] = performMeet(state[cFrom][from], old);
+      return performMeet(state[cFrom][from], state[cTo][to]);
     }
   }
 
@@ -236,9 +264,13 @@ namespace soaap {
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
 
+    DEBUG(dbgs() << "Call instruction: " << *CI << "\n");
+    DEBUG(dbgs() << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
+
     for (Function* callee : CallGraphUtils::getCallees(CI, M)) {
       DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
       Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
+      DEBUG(dbgs() << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
       Function::ArgumentListType& params = callee->getArgumentList();
 
       // To be sound, we need to take the meet of all values passed in for each
@@ -251,21 +283,22 @@ namespace soaap {
       int argIdx = 0;
       for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
         if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
-          DEBUG(dbgs() << INDENT_6 << "Propagating to "; AI->dump(););
+          DEBUG(dbgs() << INDENT_6 << "Propagating to " << stringifyValue(AI));
           // Take meet of all argument values passed in at argIdx by 
           // all callers in context C. This makes our analysis sound
           // when our meet operator is intersection.
           bool change = false;
           for (CallInst* caller : callers) { // CI will be in callers
             if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
-              V = caller->getArgOperand(argIdx)->stripPointerCasts();
-              if (propagateToValue(V, AI, C, C2, M)) { // propagate
+              Value* V2 = caller->getArgOperand(argIdx)->stripPointerCasts();
+              if (propagateToValue(V2, AI, C, C2, M)) { // propagate
                 change = true;
               }
             }
           }
           if (change) {
-            DEBUG(dbgs() << "Adding AI to worklist\n");
+            DEBUG(dbgs() << "Adding (AI,C2) to worklist\n");
+            DEBUG(dbgs() << "state[C2][AI]: " << stringifyFact(state[C2][AI]) << "\n");
             addToWorklist(AI, C2, worklist);
           }
         }
@@ -297,7 +330,7 @@ namespace soaap {
             if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
               DEBUG(dbgs() << INDENT_6 << "Propagating to VarArgPtr");
               if (propagateToValue(V, VarArgPtr, C, C2, M)) { // propagate
-                DEBUG(dbgs() << "Adding VarArgPtr to worklist: "; VarArgPtr->dump());
+                DEBUG(dbgs() << "Adding VarArgPtr to worklist: " << stringifyValue(VarArgPtr));
                 addToWorklist(VarArgPtr, C2, worklist);
               }
             }
@@ -311,7 +344,7 @@ namespace soaap {
   void InfoFlowAnalysis<FactType>::propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
     Function* F = RI->getParent()->getParent();
     for (CallInst* CI : CallGraphUtils::getCallers(F, M)) {
-      DEBUG(dbgs() << INDENT_5 << "Propagating to caller "; CI->dump(););
+      DEBUG(dbgs() << INDENT_5 << "Propagating to caller " << stringifyValue(CI));
       ContextVector C2s = ContextUtils::callerContexts(RI, CI, C, contextInsensitive, sandboxes, M);
       for (Context* C2 : C2s) {
         if (propagateToValue(V, CI, C, C2, M)) {
@@ -332,13 +365,32 @@ namespace soaap {
       return CI;
     }
     else if (funcName == "asprintf" || funcName == "vasprintf") { 
-      // if V is not the format string or the output param, then propagate to out param
+      // if V is not the format string or the out param, then propagate to out param
       if (CI->getArgOperand(0) != V && CI->getArgOperand(1) != V) {
+        return CI->getArgOperand(0);
+      }
+    }
+    else if (funcName == "strcpy") {
+      if (CI->getArgOperand(0) != V) { // V is not dst, so it must be src
         return CI->getArgOperand(0);
       }
     }
     DEBUG(dbgs() << "Returning NULL\n");
     return NULL;
+  }
+
+  template <typename FactType>
+  string InfoFlowAnalysis<FactType>::stringifyValue(const Value* V) {
+    string result;
+    raw_string_ostream ss(result);
+    if (isa<Function>(V)) {
+      ss << V->getName();
+    }
+    else {
+      V->print(ss);
+    }
+    ss << " - " << *V->getType();
+    return result;
   }
 
 }

@@ -16,16 +16,58 @@ void FPTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes
 }
 
 // return the union of from and to
-FunctionVector FPTargetsAnalysis::performMeet(FunctionVector from, FunctionVector to) {
-  FunctionVector meet = from;
-  for (Function* F : to) {
-    if (find(meet.begin(), meet.end(), F) == meet.end()) {
-      meet.push_back(F);
+bool FPTargetsAnalysis::performMeet(FunctionSet from, FunctionSet& to) {
+  bool change = false;
+  for (Function* F : from) {
+    if (to.insert(F)) {
+      change = true;
     }
   }
-  return meet;
+  return change;
 }
 
-FunctionVector FPTargetsAnalysis::getTargets(Value* FP) {
-  return state[ContextUtils::SINGLE_CONTEXT][FP];
+FunctionSet FPTargetsAnalysis::getTargets(Value* FP) {
+  FunctionSet& targets = state[ContextUtils::SINGLE_CONTEXT][FP];
+  // prune targets with the wrong function prototypes
+  FunctionType* FT = NULL;
+  if (PointerType* PT = dyn_cast<PointerType>(FP->getType())) {
+    if (PointerType* PT2 = dyn_cast<PointerType>(PT->getElementType())) {
+      FT = dyn_cast<FunctionType>(PT2->getElementType());
+    }
+    else {
+      FT = dyn_cast<FunctionType>(PT->getElementType());
+    }
+  }
+
+  if (FT != NULL) {
+    FunctionSet kill;
+    for (Function* F : targets) {
+      if (F->getFunctionType() != FT) {
+        kill.insert(F);
+      }
+    }
+    for (Function* F : kill) {
+      targets.erase(F);
+    }
+  }
+  else {
+    dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
+  }
+  
+  return targets;
+  //return state[ContextUtils::SINGLE_CONTEXT][FP];
+}
+
+string FPTargetsAnalysis::stringifyFact(FunctionSet funcs) {
+  string funcNamesStr = "[";
+  int currIdx = 0;
+  bool first = true;
+  for (Function* F : funcs) {
+    if (!first)
+      funcNamesStr += ",";
+    funcNamesStr += F->getName();
+    first = false;
+  }
+  funcNamesStr += "]";
+  return funcNamesStr;
 }

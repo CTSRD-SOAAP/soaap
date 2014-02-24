@@ -311,3 +311,12 @@ void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
     outs() << "\n";
   }
 }
+
+bool SandboxUtils::isSandboxedFunction(Function* F, SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    if (S->containsFunction(F)) {
+      return true;
+    }
+  }
+  return false;
+}

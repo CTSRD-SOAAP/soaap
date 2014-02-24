@@ -51,8 +51,10 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
 }
 
 
-int AccessOriginAnalysis::performMeet(int from, int to) {
-  return from | to;
+bool AccessOriginAnalysis::performMeet(int from, int& to) {
+  int oldTo = to;
+  to = from | to;
+  return to != oldTo;
 }
 
 void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module& M) {
@@ -81,4 +83,8 @@ void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module&
 
     outs() << "Unable to find a trace\n";
   }
+}
+
+string AccessOriginAnalysis::stringifyFact(int fact) {
+  return SandboxUtils::stringifySandboxNames(fact);
 }

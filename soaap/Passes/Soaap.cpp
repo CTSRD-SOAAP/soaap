@@ -42,10 +42,6 @@ bool Soaap::runOnModule(Module& M) {
   CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
 
-  if (CmdLineOpts::ListFPCalls) {
-    outs() << "* Listing function-pointer calls\n";
-    CallGraphUtils::listFPCalls(M);
-  }
   if (CmdLineOpts::ListAllFuncs) {
     CallGraphUtils::listAllFuncs(M);
     return true;
@@ -68,6 +64,10 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Finding sandboxes\n";
   findSandboxes(M);
 
+  if (CmdLineOpts::ListFPCalls) {
+    outs() << "* Listing function-pointer calls\n";
+    CallGraphUtils::listFPCalls(M, sandboxes);
+  }
   if (CmdLineOpts::ListSandboxedFuncs) {
     outs() << "* Listing sandboxed functions\n";
     SandboxUtils::outputSandboxedFunctions(sandboxes);

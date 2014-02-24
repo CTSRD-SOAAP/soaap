@@ -21,7 +21,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
         ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
         StringRef annotationStrValStr = annotationStrValArray->getAsCString();
         if (annotationStrValStr.startswith(SOAAP_FP)) {
-          FunctionVector callees;
+          FunctionSet callees;
           string funcListCsv = annotationStrValStr.substr(strlen(SOAAP_FP)+1); //+1 because of _
           DEBUG(dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
           istringstream ss(funcListCsv);
@@ -34,7 +34,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
             DEBUG(dbgs() << INDENT_2 << "Function: " << func << "\n");
             if (Function* callee = M.getFunction(func)) {
               DEBUG(dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
-              callees.push_back(callee);
+              callees.insert(callee);
             }
           }
           state[ContextUtils::SINGLE_CONTEXT][annotatedVar] = callees;
@@ -56,7 +56,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
         StringRef annotationStrValStr = annotationStrValArray->getAsCString();
         
         if (annotationStrValStr.startswith(SOAAP_FP)) {
-          FunctionVector callees;
+          FunctionSet callees;
           string funcListCsv = annotationStrValStr.substr(strlen(SOAAP_FP)+1); //+1 because of _
           DEBUG(dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
           istringstream ss(funcListCsv);
@@ -69,7 +69,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
             DEBUG(dbgs() << INDENT_2 << "Function: " << func << "\n");
             if (Function* callee = M.getFunction(func)) {
               DEBUG(dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
-              callees.push_back(callee);
+              callees.insert(callee);
             }
           }
           state[ContextUtils::SINGLE_CONTEXT][annotateCall] = callees;

@@ -1,0 +1,12 @@
+*.bc
+*.ll
+*.json
+*.gmon
+*.prof
+*.out
+*.core
+*.swp
+*.dot
+*.svg
+*.dyncg
+*.soaap*

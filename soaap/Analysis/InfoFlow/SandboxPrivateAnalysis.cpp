@@ -9,6 +9,9 @@
 using namespace soaap;
 
 void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
+
+  declassifierAnalysis.doAnalysis(M, sandboxes);
+  
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
     for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
@@ -263,6 +266,19 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   }
 }
 
-int SandboxPrivateAnalysis::performMeet(int from, int to) {
-  return from | to;
+bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
+  if (!declassifierAnalysis.isDeclassified(from)) {
+    return InfoFlowAnalysis<int>::propagateToValue(from, to, cFrom, cTo, M);
+  }
+  return false;
+}
+
+bool SandboxPrivateAnalysis::performMeet(int from, int& to) {
+  int oldTo = to;
+  to = from | to;
+  return to != oldTo;
+}
+
+string SandboxPrivateAnalysis::stringifyFact(int fact) {
+  return SandboxUtils::stringifySandboxNames(fact);
 }
