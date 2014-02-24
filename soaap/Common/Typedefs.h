@@ -20,6 +20,7 @@ namespace soaap {
   typedef SmallSet<Function*,16> FunctionSet;
   typedef map<Function*,int> FunctionIntMap;
   typedef SmallVector<CallInst*,16> CallInstVector;
+  typedef SmallSet<CallInst*,16> CallInstSet;
   typedef map<const Value*,int> ValueIntMap;
   typedef SmallVector<string,16> StringVector;
   typedef SmallVector<Context*,8> ContextVector;

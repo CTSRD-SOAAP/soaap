@@ -19,14 +19,14 @@ namespace soaap {
       static void listAllFuncs(Module& M);
       static bool isIndirectCall(CallInst* C);
       static Function* getDirectCallee(CallInst* C);
-      static FunctionVector getCallees(const CallInst* C, Module& M);
-      static CallInstVector getCallers(const Function* F, Module& M);
+      static FunctionSet getCallees(const CallInst* C, Module& M);
+      static CallInstSet getCallers(const Function* F, Module& M);
       static bool isExternCall(CallInst* C);
       static void addCallees(CallInst* C, FunctionSet& callees);
     
     private:
-      static map<const CallInst*, FunctionVector> callToCallees;
-      static map<const Function*, CallInstVector> calleeToCalls;
+      static map<const CallInst*, FunctionSet> callToCallees;
+      static map<const Function*, CallInstSet> calleeToCalls;
       static FPAnnotatedTargetsAnalysis fpAnnotatedTargetsAnalysis;
       static FPInferredTargetsAnalysis fpInferredTargetsAnalysis;
       static bool caching;

@@ -24,7 +24,7 @@ using namespace std;
 GlobalVariableVector ClassHierarchyUtils::classes;
 ClassHierarchy ClassHierarchyUtils::classToSubclasses;
 //ClassHierarchy ClassHierarchyUtils::classToDescendents;
-map<CallInst*,FunctionVector> ClassHierarchyUtils::callToCalleesCache;
+map<CallInst*,FunctionSet> ClassHierarchyUtils::callToCalleesCache;
 map<GlobalVariable*,GlobalVariable*> ClassHierarchyUtils::typeInfoToVTable;
 map<GlobalVariable*,GlobalVariable*> ClassHierarchyUtils::vTableToTypeInfo;
 map<GlobalVariable*,map<int,int> > ClassHierarchyUtils::vTableToSecondaryVTableMaps;
@@ -139,7 +139,7 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
   }
 }
 
-FunctionVector ClassHierarchyUtils::getCalleesForVirtualCall(CallInst* C, Module& M) {
+FunctionSet ClassHierarchyUtils::getCalleesForVirtualCall(CallInst* C, Module& M) {
   if (!cachingDone) {
     cacheAllCalleesForVirtualCalls(M);
   }
@@ -223,9 +223,9 @@ void ClassHierarchyUtils::ppClassHierarchyHelper(GlobalVariable* c, ClassHierarc
 }
 
 
-FunctionVector ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeVTableVar, GlobalVariable* staticTypeVTableVar, Module& M) {
+FunctionSet ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeVTableVar, GlobalVariable* staticTypeVTableVar, Module& M) {
   
-  FunctionVector callees;
+  FunctionSet callees;
 
   // We know this is a virtual call, as it has already been annotated with debugging metadata
   // in a previous pass (mdnode N). 
@@ -319,7 +319,7 @@ int ClassHierarchyUtils::findSubObjOffset(GlobalVariable* definingClazzTI, Globa
   }
 }
 
-void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionVector& callees) {
+void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionSet& callees) {
   DEBUG(dbgs() << "Looking for func at vtable idx " << vtableIdx << " in " << TI->getName() << " (subObjOffset=" << subObjOffset << ")\n");
   bool skip = false;
   if (GlobalVariable* vTableVar = typeInfoToVTable[TI]) { // Maybe NULL if TI doesn't have a vtable def
@@ -344,9 +344,7 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
           if (callee->getName().str() != "__cxa_pure_virtual") { // skip pure virtual functions
             // if this is a thunk then we extract the actual function from within
             callee = extractFunctionFromThunk(callee);
-            if (find(callees.begin(), callees.end(), callee) == callees.end()) {
-              callees.push_back(callee);
-            }
+            callees.insert(callee);
           }
         }
         else {

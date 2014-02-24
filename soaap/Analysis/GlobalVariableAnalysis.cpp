@@ -223,7 +223,7 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
       if (CallInst* CI = dyn_cast<CallInst>(I)) {
         if (!isa<IntrinsicInst>(CI)) {
           DEBUG(dbgs() << INDENT_6 << "Call to non-intrinsic\n");
-          FunctionVector callees = CallGraphUtils::getCallees(CI, M);
+          FunctionSet callees = CallGraphUtils::getCallees(CI, M);
           for (Function* callee : callees) {
             if (!SandboxUtils::isSandboxEntryPoint(M, callee) && !callee->isDeclaration()) {
               DEBUG(dbgs() << INDENT_6 << "Propagating to callee " << callee->getName() << "\n");
@@ -241,7 +241,7 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
         // propagate to callers
         DEBUG(dbgs() << INDENT_6 << "Return\n");
         Function* callee = RI->getParent()->getParent();
-        CallInstVector callers = CallGraphUtils::getCallers(callee, M);
+        CallInstSet callers = CallGraphUtils::getCallers(callee, M);
         for (CallInst* CI : callers) {
           DEBUG(dbgs() << INDENT_6 << "Propagating to caller " << *CI << "\n");
           updateReachingCreationsStateAndPropagate(reachingCreations, CI, reachingCreations[RI], worklist);

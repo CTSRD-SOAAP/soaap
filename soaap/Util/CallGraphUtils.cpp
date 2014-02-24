@@ -19,8 +19,8 @@
 using namespace soaap;
 using namespace llvm;
 
-map<const CallInst*, FunctionVector> CallGraphUtils::callToCallees;
-map<const Function*, CallInstVector> CallGraphUtils::calleeToCalls;
+map<const CallInst*, FunctionSet> CallGraphUtils::callToCallees;
+map<const Function*, CallInstSet> CallGraphUtils::calleeToCalls;
 FPAnnotatedTargetsAnalysis CallGraphUtils::fpAnnotatedTargetsAnalysis;
 FPInferredTargetsAnalysis CallGraphUtils::fpInferredTargetsAnalysis;
 bool CallGraphUtils::caching = false;
@@ -177,7 +177,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   caching = true;
 }
 
-FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
+FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {
   DEBUG(dbgs() << INDENT_5 << "Getting callees for " << *C << "\n");
   if (callToCallees.empty() || !caching) {
     populateCallCalleeCaches(M);
@@ -194,7 +194,7 @@ FunctionVector CallGraphUtils::getCallees(const CallInst* C, Module& M) {
   return callToCallees[C];
 }
 
-CallInstVector CallGraphUtils::getCallers(const Function* F, Module& M) {
+CallInstSet CallGraphUtils::getCallers(const Function* F, Module& M) {
   DEBUG(dbgs() << INDENT_5 << "Getting callers for " << F->getName() << "\n");
   if (calleeToCalls.empty() || !caching) {
     populateCallCalleeCaches(M);
@@ -223,11 +223,11 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
     DEBUG(dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
     for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-        FunctionVector callees;
+        FunctionSet callees;
         if (Function* callee = getDirectCallee(C)) {
           if (!callee->isIntrinsic()) {
             DEBUG(dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
-            callees.push_back(callee);
+            callees.insert(callee);
             DEBUG(numDirectCallees++);
           }
         }
@@ -236,20 +236,20 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
           /*if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
             for (const Function* callee : PI->getDynamicCallees(C)) {
               DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
-              callees.push_back((Function*)callee);
+              callees.insert((Function*)callee);
             }
           }*/
           for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
             DEBUG(dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
-            callees.push_back(callee);
+            callees.insert(callee);
           }
           for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
             DEBUG(dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
-            callees.push_back(callee);
+            callees.insert(callee);
           }
           for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
             DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
-            callees.push_back(callee);
+            callees.insert(callee);
           }
           DEBUG(numIndCalls++);
           DEBUG(numIndCallees += callees.size());
@@ -267,7 +267,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
         DEBUG(numCallees += callees.size());
         callToCallees[C] = callees;
         for (Function* callee : callees) {
-          calleeToCalls[callee].push_back(C); // we process each C exactly once, so no dups!
+          calleeToCalls[callee].insert(C); // we process each C exactly once, so no dups!
           CallGraphNode* calleeNode = CG->getOrInsertFunction(callee);
           F1Node->addCalledFunction(CallSite(C), calleeNode);
         }
@@ -311,22 +311,24 @@ Function* CallGraphUtils::getDirectCallee(CallInst* C) {
 }
 
 bool CallGraphUtils::isExternCall(CallInst* C) {
-  return callToCallees[C].size() == 1 && callToCallees[C][0]->isDeclaration();
+  FunctionSet& callees = callToCallees[C];
+  if (callees.size() == 1) {
+    for (Function* callee : callees) {
+      return callee->isDeclaration();
+    }
+  }
+  return false;
 }
 
 void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* callerNode = CG->getOrInsertFunction(C->getParent()->getParent());
-  FunctionVector& currentCallees = (FunctionVector&)callToCallees[C];
+  FunctionSet& currentCallees = (FunctionSet&)callToCallees[C];
   for (Function* callee : callees) {
-    if (find(currentCallees.begin(), currentCallees.end(), callee) == currentCallees.end()) {
+    if (currentCallees.insert(callee)) {
       CallGraphNode* calleeNode = CG->getOrInsertFunction(callee);
       callerNode->addCalledFunction(CallSite(C), calleeNode);
-      currentCallees.push_back(callee);
     }
-    CallInstVector& currentCallers = (CallInstVector&)calleeToCalls[callee];
-    if (find(currentCallers.begin(), currentCallers.end(), C) == currentCallers.end()) {
-      currentCallers.push_back(C);
-    }
+    calleeToCalls[callee].insert(C);
   }
 }

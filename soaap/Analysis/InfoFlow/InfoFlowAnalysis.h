@@ -287,7 +287,7 @@ namespace soaap {
       // To be sound, we need to take the meet of all values passed in for each
       // parameter that we are propagating to (i.e. from all other call sites and
       // not only CI). Otherwise, must analyses will lead to incorrect results.
-      CallInstVector callers = CallGraphUtils::getCallers(callee, M);
+      CallInstSet callers = CallGraphUtils::getCallers(callee, M);
 
       // NOTE: no way to index a function's list of parameters
       // NOTE2: If this is a variadic parmaeter, then propagate to callee's va_list
