@@ -116,7 +116,7 @@ namespace soaap {
             // we hardcode the specific cases:
             if (call->getCalledFunction()->getName() == "buffer_ptr") {
               Agg = call->getArgOperand(0);
-              Agg->dump();
+              DEBUG(Agg->dump());
             }
             else {
               dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
