@@ -114,6 +114,7 @@ namespace soaap {
             // that flows to the return value of call's callee. This would
             // involve doing more information flow analysis. However, for now
             // we hardcode the specific cases:
+            //TODO: replace!
             if (call->getCalledFunction()->getName() == "buffer_ptr") {
               Agg = call->getArgOperand(0);
               DEBUG(Agg->dump());
