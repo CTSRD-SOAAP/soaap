@@ -315,9 +315,13 @@ bool CallGraphUtils::isExternCall(CallInst* C) {
 }
 
 void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
+  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  CallGraphNode* callerNode = CG->getOrInsertFunction(C->getParent()->getParent());
   FunctionVector& currentCallees = (FunctionVector&)callToCallees[C];
   for (Function* callee : callees) {
     if (find(currentCallees.begin(), currentCallees.end(), callee) == currentCallees.end()) {
+      CallGraphNode* calleeNode = CG->getOrInsertFunction(callee);
+      callerNode->addCalledFunction(CallSite(C), calleeNode);
       currentCallees.push_back(callee);
     }
     CallInstVector& currentCallers = (CallInstVector&)calleeToCalls[callee];
