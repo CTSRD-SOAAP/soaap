@@ -166,3 +166,7 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
 void FPInferredTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   //llvm::DebugFlag = false;
 }
+
+void FPInferredTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FunctionSet& newState) {
+  CallGraphUtils::addCallees(CI, newState);
+}

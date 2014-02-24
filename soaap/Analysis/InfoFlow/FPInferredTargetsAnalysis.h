@@ -12,6 +12,7 @@ namespace soaap {
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual void findAllFunctionPointersInValue(Value* V, ValueContextPairList& worklist, ValueSet& visited);
+      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FunctionSet& newState);
   };
 }
 

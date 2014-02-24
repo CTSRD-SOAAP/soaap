@@ -71,7 +71,7 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
                 outs() << INDENT_1 << (status == 0 ? demangled : funcName) << sandboxed << ":\n";
                 displayedFuncName = true;
               }
-              outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
+              outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "(" << *C << ")\n";
             }
             numFPcalls++;
           }
@@ -208,7 +208,14 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   map<int,int> calleeCountToFrequencies;
   long numIndCalls = 0;
   long numIndCallees = 0;
+  long numCallees = 0;
+  long numDirectCallees = 0;
   long numVCalls = 0;
+
+  // clear caches
+  callToCallees.clear();
+  calleeToCalls.clear();
+
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
@@ -221,6 +228,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
           if (!callee->isIntrinsic()) {
             DEBUG(dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
             callees.push_back(callee);
+            DEBUG(numDirectCallees++);
           }
         }
         else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // dynamic/annotated callees/c++ virtual funcs
@@ -243,6 +251,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
             callees.push_back(callee);
           }
+          DEBUG(numIndCalls++);
           DEBUG(numIndCallees += callees.size());
           if (isVCall) {
             DEBUG(calleeCountToFrequencies[callees.size()]++);
@@ -255,6 +264,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             }*/
           }
         }
+        DEBUG(numCallees += callees.size());
         callToCallees[C] = callees;
         for (Function* callee : callees) {
           calleeToCalls[callee].push_back(C); // we process each C exactly once, so no dups!
@@ -266,6 +276,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   }
   bool outputStats = false;
   DEBUG(outputStats = true);
+  DEBUG(dbgs() << "Direct callees: " << numDirectCallees << ", indirect calls: " << numIndCalls << ", indirect callees: " << numIndCallees << ", numCallees: " << numCallees << "\n");
   if (outputStats) {
     dbgs() << "-----------------------------------------------------------------\n";
     dbgs() << "Outputting callee-count frequencies... (" << numIndCalls << " ind calls, " << numVCalls << " v calls, " <<  numIndCallees << " callees)\n";
@@ -276,6 +287,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
     }
     dbgs() << "(Recounted number of indirect calls: " << numIndCalls2 << ")\n";
   }
+  caching = true;
 }
 
 bool CallGraphUtils::isIndirectCall(CallInst* C) {
@@ -300,4 +312,17 @@ Function* CallGraphUtils::getDirectCallee(CallInst* C) {
 
 bool CallGraphUtils::isExternCall(CallInst* C) {
   return callToCallees[C].size() == 1 && callToCallees[C][0]->isDeclaration();
+}
+
+void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
+  FunctionVector& currentCallees = (FunctionVector&)callToCallees[C];
+  for (Function* callee : callees) {
+    if (find(currentCallees.begin(), currentCallees.end(), callee) == currentCallees.end()) {
+      currentCallees.push_back(callee);
+    }
+    CallInstVector& currentCallers = (CallInstVector&)calleeToCalls[callee];
+    if (find(currentCallers.begin(), currentCallers.end(), C) == currentCallers.end()) {
+      currentCallers.push_back(C);
+    }
+  }
 }

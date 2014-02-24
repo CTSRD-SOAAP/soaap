@@ -57,6 +57,7 @@ namespace soaap {
       virtual FactType bottomValue() = 0;
       virtual string stringifyFact(FactType f) = 0;
       virtual string stringifyValue(const Value* V);
+      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState);
   };
 
   template <class FactType>
@@ -117,6 +118,9 @@ namespace soaap {
               Agg = call->getArgOperand(0);
               Agg->dump();
             }
+            else {
+              dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
+            }
           }
           else {
             dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
@@ -172,6 +176,12 @@ namespace soaap {
               DEBUG(dbgs() << INDENT_4 << "Call instruction; propagating to callees\n");
               if (CallGraphUtils::isExternCall(CI)) { // no function body, so we approximate effects of known funcs
                 V2 = propagateForExternCall(CI, V);
+              }
+              else if (CI->getCalledValue()->stripPointerCasts() == V) {
+                // nothing to propagate, but subclasses might want to be informed
+                // when the state of a function pointer changed
+                stateChangedForFunctionPointer(CI, V, state[C][V]);
+                continue;
               }
               else {
                 propagateToCallees(CI, V, C, worklist, sandboxes, M);
@@ -391,6 +401,11 @@ namespace soaap {
     }
     ss << " - " << *V->getType();
     return result;
+  }
+
+  // default behaviour is to do nothing
+  template<typename FactType>
+  void InfoFlowAnalysis<FactType>::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState) {
   }
 
 }
