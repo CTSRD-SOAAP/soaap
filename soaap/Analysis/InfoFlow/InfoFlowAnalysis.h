@@ -58,6 +58,7 @@ namespace soaap {
       virtual string stringifyFact(FactType f) = 0;
       virtual string stringifyValue(const Value* V);
       virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState);
+      virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueContextPairList& worklist, Module& M);
   };
 
   template <class FactType>
@@ -101,45 +102,7 @@ namespace soaap {
       if (GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>((Value*)V)) {
         DEBUG(dbgs() << INDENT_2 << "GEP\n");
         // rewind to the aggregate and propagate
-        Value* Agg = GEP->getPointerOperand()->stripInBoundsOffsets();
-        while (!(isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg))) {
-          if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
-            Agg = gep->getPointerOperand();
-          }
-          else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
-            Agg = load->getPointerOperand();
-          }
-          else if (IntrinsicInst* intrins = dyn_cast<IntrinsicInst>(Agg)) {
-            if (intrins->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
-              Agg = intrins->getArgOperand(0);
-            }
-            else {
-              dbgs() << "WARNING: unexpected intrinsic instruction: " << *Agg << "\n";
-            }
-          }
-          else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
-            // in this case, we need to rewind back to the local/global Value*
-            // that flows to the return value of call's callee. This would
-            // involve doing more information flow analysis. However, for now
-            // we hardcode the specific cases:
-            //TODO: replace!
-            if (call->getCalledFunction()->getName() == "buffer_ptr") {
-              Agg = call->getArgOperand(0);
-              DEBUG(Agg->dump());
-            }
-            else {
-              dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
-            }
-          }
-          else {
-            dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
-          }
-          Agg = Agg->stripInBoundsOffsets();
-        }
-        if (propagateToValue(V, Agg, C, C, M)) { 
-          DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
-          addToWorklist(Agg, C, worklist);
-        }
+        propagateToAggregate(GEP, C, GEP, worklist, M);
       }
 
       DEBUG(dbgs() << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n");
@@ -259,6 +222,53 @@ namespace soaap {
       }
     }
 
+  }
+
+  template<typename FactType>
+  void InfoFlowAnalysis<FactType>::propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueContextPairList& worklist, Module& M) {
+    Agg = Agg->stripInBoundsOffsets();
+    if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg)) {
+      if (propagateToValue(V, Agg, C, C, M)) { 
+        DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
+        addToWorklist(Agg, C, worklist);
+      }
+    }
+    else {
+      if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
+        propagateToAggregate(V, C, gep->getPointerOperand(), worklist, M);
+      }
+      else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
+        propagateToAggregate(V, C, load->getPointerOperand(), worklist, M);
+      }
+      else if (IntrinsicInst* intrins = dyn_cast<IntrinsicInst>(Agg)) {
+        if (intrins->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
+          propagateToAggregate(V, C, intrins->getArgOperand(0), worklist, M);
+        }
+        else {
+          dbgs() << "WARNING: unexpected intrinsic instruction: " << *Agg << "\n";
+        }
+      }
+      else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
+        // in this case, we need to rewind back to the local/global Value*
+        // that flows to the return value of call's callee. This would
+        // involve doing more information flow analysis. However, for now
+        // we hardcode the specific cases:
+        //TODO: replace!
+        if (call->getCalledFunction()->getName() == "buffer_ptr") {
+          propagateToAggregate(V, C, call->getArgOperand(0), worklist, M);
+        }
+        else {
+          dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
+        }
+      }
+      else if (SelectInst* select = dyn_cast<SelectInst>(Agg)) {
+        propagateToAggregate(V, C, select->getTrueValue(), worklist, M);
+        propagateToAggregate(V, C, select->getFalseValue(), worklist, M);
+      }
+      else {
+        dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
+      }
+    }
   }
 
   template <typename FactType>
