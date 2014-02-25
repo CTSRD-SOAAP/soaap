@@ -49,7 +49,7 @@ namespace soaap {
       // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
       virtual bool performMeet(FactType fromVal, FactType& toVal) = 0;
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
-      virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
+      virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, bool propagateAllArgs, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual Value* propagateForExternCall(CallInst* CI, const Value* V);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
@@ -178,14 +178,18 @@ namespace soaap {
               if (CallGraphUtils::isExternCall(CI)) { // no function body, so we approximate effects of known funcs
                 V2 = propagateForExternCall(CI, V);
               }
-              else if (CI->getCalledValue()->stripPointerCasts() == V) {
-                // nothing to propagate, but subclasses might want to be informed
-                // when the state of a function pointer changed
-                stateChangedForFunctionPointer(CI, V, state[C][V]);
-                continue;
-              }
               else {
-                propagateToCallees(CI, V, C, worklist, sandboxes, M);
+                bool propagateAllArgs = false;
+                if (CI->getCalledValue()->stripPointerCasts() == V) {
+                  // subclasses might want to be informed when
+                  // the state of a function pointer changed
+                  stateChangedForFunctionPointer(CI, V, state[C][V]);
+                  
+                  // if callee information has changed, we should propagate all
+                  // args to callees in case this is the first time for some
+                  propagateAllArgs = true;
+                }
+                propagateToCallees(CI, V, C, propagateAllArgs, worklist, sandboxes, M);
                 continue;
               }
             }
@@ -273,7 +277,7 @@ namespace soaap {
 
 
   template <typename FactType>
-  void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
+  void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, bool propagateAllArgs, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
 
     DEBUG(dbgs() << "Call instruction: " << *CI << "\n");
     DEBUG(dbgs() << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
@@ -293,11 +297,12 @@ namespace soaap {
       // NOTE2: If this is a variadic parmaeter, then propagate to callee's va_list
       int argIdx = 0;
       for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
-        if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
+        if (propagateAllArgs || CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
           DEBUG(dbgs() << INDENT_6 << "Propagating to " << stringifyValue(AI));
           // Take meet of all argument values passed in at argIdx by 
           // all callers in context C. This makes our analysis sound
           // when our meet operator is intersection.
+          DEBUG(dbgs() << INDENT_6 << "Taking meet of all arg idx " << argIdx << " values from all callers\n");
           bool change = false;
           for (CallInst* caller : callers) { // CI will be in callers
             if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {

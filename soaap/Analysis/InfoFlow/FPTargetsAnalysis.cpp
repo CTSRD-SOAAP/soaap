@@ -27,35 +27,7 @@ bool FPTargetsAnalysis::performMeet(FunctionSet from, FunctionSet& to) {
 }
 
 FunctionSet FPTargetsAnalysis::getTargets(Value* FP) {
-  FunctionSet& targets = state[ContextUtils::SINGLE_CONTEXT][FP];
-  // prune targets with the wrong function prototypes
-  FunctionType* FT = NULL;
-  if (PointerType* PT = dyn_cast<PointerType>(FP->getType())) {
-    if (PointerType* PT2 = dyn_cast<PointerType>(PT->getElementType())) {
-      FT = dyn_cast<FunctionType>(PT2->getElementType());
-    }
-    else {
-      FT = dyn_cast<FunctionType>(PT->getElementType());
-    }
-  }
-
-  if (FT != NULL) {
-    FunctionSet kill;
-    for (Function* F : targets) {
-      if (F->getFunctionType() != FT) {
-        kill.insert(F);
-      }
-    }
-    for (Function* F : kill) {
-      targets.erase(F);
-    }
-  }
-  else {
-    dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
-  }
-  
-  return targets;
-  //return state[ContextUtils::SINGLE_CONTEXT][FP];
+  return state[ContextUtils::SINGLE_CONTEXT][FP];
 }
 
 string FPTargetsAnalysis::stringifyFact(FunctionSet funcs) {
@@ -70,4 +42,34 @@ string FPTargetsAnalysis::stringifyFact(FunctionSet funcs) {
   }
   funcNamesStr += "]";
   return funcNamesStr;
+}
+
+void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FunctionSet& newState) {
+  // Filter out those callees that aren't compatible with FP's function type
+  FunctionType* FT = NULL;
+  if (PointerType* PT = dyn_cast<PointerType>(FP->getType())) {
+    if (PointerType* PT2 = dyn_cast<PointerType>(PT->getElementType())) {
+      FT = dyn_cast<FunctionType>(PT2->getElementType());
+    }
+    else {
+      FT = dyn_cast<FunctionType>(PT->getElementType());
+    }
+  }
+
+  if (FT != NULL) {
+    FunctionSet kill;
+    for (Function* F : newState) {
+      if (F->getFunctionType() != FT) {
+        kill.insert(F);
+      }
+    }
+    for (Function* F : kill) {
+      newState.erase(F);
+    }
+  }
+  else {
+    dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
+  }
+
+  CallGraphUtils::addCallees(CI, newState);
 }

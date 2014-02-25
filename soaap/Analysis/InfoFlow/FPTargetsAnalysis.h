@@ -19,6 +19,7 @@ namespace soaap {
       virtual bool performMeet(FunctionSet from, FunctionSet& to);
       virtual FunctionSet bottomValue() { return FunctionSet(); }
       virtual string stringifyFact(FunctionSet fact);
+      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FunctionSet& newState);
   };
 }
 
