@@ -188,7 +188,7 @@ namespace soaap {
               }
               else {
                 bool propagateAllArgs = false;
-                if (CI->getCalledValue()->stripPointerCasts() == V) {
+                if (CI->getCalledValue() == V) {
                   // subclasses might want to be informed when
                   // the state of a function pointer changed
                   stateChangedForFunctionPointer(CI, V, state[C][V]);
@@ -309,7 +309,7 @@ namespace soaap {
       // NOTE2: If this is a variadic parmaeter, then propagate to callee's va_list
       int argIdx = 0;
       for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
-        if (propagateAllArgs || CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
+        if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
           DEBUG(dbgs() << INDENT_6 << "Propagating to " << stringifyValue(AI));
           // Take meet of all argument values passed in at argIdx by 
           // all callers in context C. This makes our analysis sound
@@ -318,7 +318,8 @@ namespace soaap {
           bool change = false;
           for (CallInst* caller : callers) { // CI will be in callers
             if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
-              Value* V2 = caller->getArgOperand(argIdx)->stripPointerCasts();
+              DEBUG(dbgs() << INDENT_6 << "Caller: " << *caller << " (enclosing func: " << caller->getParent()->getParent()->getName() << ")\n");
+              Value* V2 = caller->getArgOperand(argIdx);
               if (propagateToValue(V2, AI, C, C2, M)) { // propagate
                 change = true;
               }
@@ -355,7 +356,7 @@ namespace soaap {
         }
         else {
           for (; argIdx < CI->getNumArgOperands(); argIdx++) {
-            if (CI->getArgOperand(argIdx)->stripPointerCasts() == V) {
+            if (CI->getArgOperand(argIdx) == V) {
               DEBUG(dbgs() << INDENT_6 << "Propagating to VarArgPtr");
               if (propagateToValue(V, VarArgPtr, C, C2, M)) { // propagate
                 DEBUG(dbgs() << "Adding VarArgPtr to worklist: " << stringifyValue(VarArgPtr));
