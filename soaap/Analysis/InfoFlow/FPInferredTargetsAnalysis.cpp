@@ -100,6 +100,16 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
           }
         }
       }
+      else if (SelectInst* S = dyn_cast<SelectInst>(&*I)) {
+        if (Function* F = dyn_cast<Function>(S->getTrueValue()->stripPointerCasts())) {
+          state[ContextUtils::SINGLE_CONTEXT][S].insert(F);
+          addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+        }
+        if (Function* F = dyn_cast<Function>(S->getFalseValue()->stripPointerCasts())) {
+          state[ContextUtils::SINGLE_CONTEXT][S].insert(F);
+          addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+        }
+      }
       else if (CallInst* C = dyn_cast<CallInst>(&*I)) { // passing functions as params
         if (Function* callee = CallGraphUtils::getDirectCallee(C)) {
           int argIdx = 0;
