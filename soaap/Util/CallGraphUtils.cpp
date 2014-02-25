@@ -332,3 +332,18 @@ void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
     calleeToCalls[callee].insert(C);
   }
 }
+
+
+string CallGraphUtils::stringifyFunctionSet(FunctionSet& funcs) {
+  string funcNamesStr = "[";
+  int currIdx = 0;
+  bool first = true;
+  for (Function* F : funcs) {
+    if (!first)
+      funcNamesStr += ",";
+    funcNamesStr += F->getName();
+    first = false;
+  }
+  funcNamesStr += "]";
+  return funcNamesStr;
+}

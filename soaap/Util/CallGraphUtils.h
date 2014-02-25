@@ -23,6 +23,7 @@ namespace soaap {
       static CallInstSet getCallers(const Function* F, Module& M);
       static bool isExternCall(CallInst* C);
       static void addCallees(CallInst* C, FunctionSet& callees);
+      static string stringifyFunctionSet(FunctionSet& funcs);
     
     private:
       static map<const CallInst*, FunctionSet> callToCallees;

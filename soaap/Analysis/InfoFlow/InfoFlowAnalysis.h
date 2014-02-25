@@ -282,7 +282,11 @@ namespace soaap {
     DEBUG(dbgs() << "Call instruction: " << *CI << "\n");
     DEBUG(dbgs() << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
 
-    for (Function* callee : CallGraphUtils::getCallees(CI, M)) {
+
+    FunctionSet callees = CallGraphUtils::getCallees(CI, M);
+    DEBUG(dbgs() << INDENT_5 << "callees: " << CallGraphUtils::stringifyFunctionSet(callees) << "\n");
+
+    for (Function* callee : callees) {
       DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
       Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
       DEBUG(dbgs() << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
