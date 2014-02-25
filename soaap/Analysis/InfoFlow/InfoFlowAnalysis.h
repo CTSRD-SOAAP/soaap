@@ -109,6 +109,14 @@ namespace soaap {
           else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
             Agg = load->getPointerOperand();
           }
+          else if (IntrinsicInst* intrins = dyn_cast<IntrinsicInst>(Agg)) {
+            if (intrins->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
+              Agg = intrins->getArgOperand(0);
+            }
+            else {
+              dbgs() << "WARNING: unexpected intrinsic instruction: " << *Agg << "\n";
+            }
+          }
           else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
             // in this case, we need to rewind back to the local/global Value*
             // that flows to the return value of call's callee. This would
@@ -120,7 +128,7 @@ namespace soaap {
               DEBUG(Agg->dump());
             }
             else {
-              dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
+              dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
             }
           }
           else {
