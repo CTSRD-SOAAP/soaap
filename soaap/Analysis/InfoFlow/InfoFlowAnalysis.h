@@ -265,6 +265,11 @@ namespace soaap {
         propagateToAggregate(V, C, select->getTrueValue(), worklist, M);
         propagateToAggregate(V, C, select->getFalseValue(), worklist, M);
       }
+      else if (PHINode* phi = dyn_cast<PHINode>(Agg)) {
+        for (int i=0; i<phi->getNumIncomingValues(); i++) {
+          propagateToAggregate(V, C, phi->getIncomingValue(i), worklist, M);
+        }
+      }
       else {
         dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
       }
