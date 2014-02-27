@@ -264,6 +264,18 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
             }*/
           }
         }
+        
+        // remove declaration-only functions
+        FunctionSet kill;
+        for (Function* F : callees) {
+          if (F->isDeclaration()) {
+            kill.insert(F);
+          }
+        }
+        for (Function* F : kill) {
+          callees.erase(F);
+        }
+
         DEBUG(numCallees += callees.size());
         callToCallees[C] = callees;
         for (Function* callee : callees) {
