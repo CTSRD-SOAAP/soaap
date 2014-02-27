@@ -49,7 +49,7 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
   if (FT != NULL) {
     FunctionSet kill;
     for (Function* F : newState) {
-      if (F->getFunctionType() != FT) {
+      if (F->getFunctionType() != FT || F->isDeclaration()) {
         kill.insert(F);
       }
     }
