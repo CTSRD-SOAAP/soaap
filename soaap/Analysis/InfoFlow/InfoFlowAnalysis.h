@@ -5,6 +5,7 @@
 #include <list>
 
 #include "llvm/DebugInfo.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Value.h"
@@ -37,13 +38,14 @@ namespace soaap {
     public:
       typedef map<const Value*, FactType> DataflowFacts;
       typedef pair<const Value*, Context*> ValueContextPair;
-      typedef list<ValueContextPair> ValueContextPairList;
-      InfoFlowAnalysis(bool contextInsens = false) : contextInsensitive(contextInsens) { }
+      typedef SetVector<ValueContextPair> ValueContextPairList;
+      InfoFlowAnalysis(bool c = false, bool m = false) : contextInsensitive(c), mustAnalysis(m) { }
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
 
     protected:
       map<Context*, DataflowFacts> state;
       bool contextInsensitive;
+      bool mustAnalysis;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
       // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
@@ -90,10 +92,11 @@ namespace soaap {
 
     // perform propagation until fixed point is reached
     while (!worklist.empty()) {
-      ValueContextPair P = worklist.front();
+      //ValueContextPair P = worklist.front();
+      ValueContextPair P = worklist.pop_back_val();
       const Value* V = P.first;
       Context* C = P.second;
-      worklist.pop_front();
+      //worklist.pop_front();
 
       DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: " << stringifyValue(V) << "\n");
       DEBUG(dbgs() << "state[C][V]: " << stringifyFact(state[C][V]) << "\n");
@@ -258,7 +261,7 @@ namespace soaap {
           propagateToAggregate(V, C, call->getArgOperand(0), worklist, M);
         }
         else {
-          dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
+          //dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
         }
       }
       else if (SelectInst* select = dyn_cast<SelectInst>(Agg)) {
@@ -271,17 +274,23 @@ namespace soaap {
         }
       }
       else {
-        dbgs() << "WARNING: unexpected instruction: " << *Agg << "\n";
+        //dbgs() << "WARNING: unexpected value: " << *Agg << "\n";
+        //dbgs() << "Value type: " << Agg->getValueID() << "\n";
       }
+    }
+    // propagate to this Value*
+    if (propagateToValue(V, Agg, C, C, M)) { 
+      addToWorklist(Agg, C, worklist);
     }
   }
 
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist) {
     ValueContextPair P = make_pair(V, C);
-    if (find(worklist.begin(), worklist.end(), P) == worklist.end()) {
+    worklist.insert(P);
+    /*if (find(worklist.begin(), worklist.end(), P) == worklist.end()) {
       worklist.push_back(P);
-    }
+    }*/
   }
 
   template <typename FactType>
@@ -305,78 +314,76 @@ namespace soaap {
     DEBUG(dbgs() << "Call instruction: " << *CI << "\n");
     DEBUG(dbgs() << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
 
-
     FunctionSet callees = CallGraphUtils::getCallees(CI, M);
     DEBUG(dbgs() << INDENT_5 << "callees: " << CallGraphUtils::stringifyFunctionSet(callees) << "\n");
 
-    for (Function* callee : callees) {
-      DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
-      Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
-      DEBUG(dbgs() << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
-      Function::ArgumentListType& params = callee->getArgumentList();
-
-      // To be sound, we need to take the meet of all values passed in for each
-      // parameter that we are propagating to (i.e. from all other call sites and
-      // not only CI). Otherwise, must analyses will lead to incorrect results.
-      CallInstSet callers = CallGraphUtils::getCallers(callee, M);
-
-      // NOTE: no way to index a function's list of parameters
-      // NOTE2: If this is a variadic parmaeter, then propagate to callee's va_list
-      int argIdx = 0;
-      for (Function::const_arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI!=AE; AI++, argIdx++) {
-        if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
-          DEBUG(dbgs() << INDENT_6 << "Propagating to " << stringifyValue(AI));
-          // Take meet of all argument values passed in at argIdx by 
-          // all callers in context C. This makes our analysis sound
-          // when our meet operator is intersection.
-          DEBUG(dbgs() << INDENT_6 << "Taking meet of all arg idx " << argIdx << " values from all callers\n");
-          bool change = false;
-          for (CallInst* caller : callers) { // CI will be in callers
-            if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
-              DEBUG(dbgs() << INDENT_6 << "Caller: " << *caller << " (enclosing func: " << caller->getParent()->getParent()->getName() << ")\n");
-              Value* V2 = caller->getArgOperand(argIdx);
-              if (propagateToValue(V2, AI, C, C2, M)) { // propagate
-                change = true;
-              }
-            }
-          }
-          if (change) {
-            DEBUG(dbgs() << "Adding (AI,C2) to worklist\n");
-            DEBUG(dbgs() << "state[C2][AI]: " << stringifyFact(state[C2][AI]) << "\n");
-            addToWorklist(AI, C2, worklist);
-          }
-        }
-      }
-      // check var args (if any)
-      if (callee->isVarArg()) {
-        // find va_list var, it will have type [1 x %struct.__va_list_tag]*
-        BasicBlock& EntryBB = callee->getEntryBlock();
-        Value* VarArgPtr = NULL;
-        
-        for (BasicBlock::iterator I = EntryBB.begin(), E = EntryBB.end(); I != E; I++) {
-          if (AllocaInst* Alloca = dyn_cast<AllocaInst>(I)) {
-            if (ArrayType* AT = dyn_cast<ArrayType>(Alloca->getAllocatedType())) {
-              if (StructType* ST = dyn_cast<StructType>(AT->getElementType())) {
-                DEBUG(dbgs() << "Struct type has name: " << ST->getName() << "\n");
-                if (ST->getName() == "struct.__va_list_tag") {
-                  VarArgPtr = Alloca;
-                  break;
+    for (int argIdx=0; argIdx<CI->getNumArgOperands(); argIdx++) {
+      if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
+        const Value* V2 = NULL;
+        for (Function* callee : callees) {
+          DEBUG(dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n");
+          Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
+          DEBUG(dbgs() << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
+          Function::ArgumentListType& params = callee->getArgumentList();
+          
+          // check if value being propagated is a var arg, and propagate
+          // accordingly
+          if (argIdx >= callee->getFunctionType()->getNumParams()) { // var arg
+            BasicBlock& EntryBB = callee->getEntryBlock();
+            
+            // find va_list var, it will have type [1 x %struct.__va_list_tag]*
+            for (BasicBlock::iterator I = EntryBB.begin(), E = EntryBB.end(); I != E; I++) {
+              if (AllocaInst* Alloca = dyn_cast<AllocaInst>(I)) {
+                if (ArrayType* AT = dyn_cast<ArrayType>(Alloca->getAllocatedType())) {
+                  if (StructType* ST = dyn_cast<StructType>(AT->getElementType())) {
+                    DEBUG(dbgs() << "Struct type has name: " << ST->getName() << "\n");
+                    if (ST->getName() == "struct.__va_list_tag") {
+                      V2 = Alloca;
+                      break;
+                    }
+                  }
                 }
               }
             }
           }
-        }
-        if (VarArgPtr == NULL) {
-          dbgs() << "SOAAP ERROR: Could not find var arg pointer in " << callee->getName() << "\n";
-        }
-        else {
-          for (; argIdx < CI->getNumArgOperands(); argIdx++) {
-            if (CI->getArgOperand(argIdx) == V) {
-              DEBUG(dbgs() << INDENT_6 << "Propagating to VarArgPtr");
-              if (propagateToValue(V, VarArgPtr, C, C2, M)) { // propagate
-                DEBUG(dbgs() << "Adding VarArgPtr to worklist: " << stringifyValue(VarArgPtr));
-                addToWorklist(VarArgPtr, C2, worklist);
+          else {
+            // NOTE: no way to index a function's list of parameters
+            Function::const_arg_iterator AI = callee->arg_begin();
+            int i = 0;
+            while (i++ < argIdx) { AI++; }
+            V2 = AI;
+          }
+
+          if (V2 != NULL) {
+            DEBUG(dbgs() << INDENT_6 << "Propagating to " << stringifyValue(V2));
+            
+            // if this is a must analysis, take meet of all argument values
+            // passed in at argIdx by all callers in context C. This makes our 
+            // analysis sound when our meet operator is intersection
+            bool change = false;
+            if (mustAnalysis) {
+              // To be sound, we need to take the meet of all values passed in for each
+              // parameter that we are propagating to (i.e. from all other call sites and
+              // not only CI). Otherwise, must analyses will lead to incorrect results.
+              CallInstSet callers = CallGraphUtils::getCallers(callee, M);
+              DEBUG(dbgs() << INDENT_6 << "Taking meet of all arg idx " << argIdx << " values from all callers\n");
+              for (CallInst* caller : callers) { // CI will be in callers
+                if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
+                  DEBUG(dbgs() << INDENT_6 << "Caller: " << *caller << " (enclosing func: " << caller->getParent()->getParent()->getName() << ")\n");
+                  Value* V3 = caller->getArgOperand(argIdx);
+                  if (propagateToValue(V3, V2, C, C2, M)) { // propagate
+                    change = true;
+                  }
+                }
               }
+            }
+            else {
+              change = propagateToValue(V, V2, C, C2, M);
+            }
+            if (change) {
+              DEBUG(dbgs() << "Adding (V2,C2) to worklist\n");
+              DEBUG(dbgs() << "state[C2][V2]: " << stringifyFact(state[C2][V2]) << "\n");
+              addToWorklist(V2, C2, worklist);
             }
           }
         }

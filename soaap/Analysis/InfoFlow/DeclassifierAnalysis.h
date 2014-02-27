@@ -13,7 +13,7 @@ namespace soaap {
 
   class DeclassifierAnalysis: public InfoFlowAnalysis<bool> {
     public:
-      DeclassifierAnalysis() : InfoFlowAnalysis<bool>(true) { }
+      DeclassifierAnalysis() : InfoFlowAnalysis<bool>(true, true) { }
       virtual bool isDeclassified(const Value* V);
 
     protected:
