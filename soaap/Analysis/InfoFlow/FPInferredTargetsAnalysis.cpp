@@ -9,19 +9,65 @@
 
 using namespace soaap;
 
-void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
-  //llvm::DebugFlag = true;
-  DEBUG(dbgs() << "Running FP inferred targets analysis\n");
-  FPTargetsAnalysis::initialise(worklist, M, sandboxes);
-  //CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-  // find all assignments of functions and propagate them!
-  long numFuncs = 0;
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
-    numFuncs++;
-  }
-  DEBUG(dbgs() << "Num of funcs: " << numFuncs << "\n");
+FunctionSet fpTargetsUniv; // all possible fp targets in the program
 
+void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
+  FPTargetsAnalysis::initialise(worklist, M, sandboxes);
+
+  DEBUG(dbgs() << "Running FP inferred targets analysis\n");
+
+  bool debug = false;
+  DEBUG(debug = true);
+  if (debug) {
+    dbgs() << "Program statistics:\n";
+
+    //CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+    // find all assignments of functions and propagate them!
+    long numFuncs = 0;
+    long numFPFuncs = 0;
+    long numFPcalls = 0;
+    long numInsts = 0;
+    long numAddFuncs = 0;
+    long loadInsts = 0;
+    long storeInsts = 0;
+    long intrinsInsts = 0;
+    for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
+      if (F->isDeclaration()) continue;
+      if (F->hasAddressTaken()) numAddFuncs++;
+      bool hasFPcall = false;
+      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; I++) {
+        numInsts++;
+        if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(&*I)) {
+          intrinsInsts++;
+        }
+        else if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          if (CallGraphUtils::isIndirectCall(C)) {
+            hasFPcall = true;
+            numFPcalls++;
+          }
+        }
+        else if (LoadInst* L = dyn_cast<LoadInst>(&*I)) {
+          loadInsts++;
+        }
+        else if (StoreInst* S = dyn_cast<StoreInst>(&*I)) {
+          storeInsts++;
+        }
+      }
+      if (hasFPcall) {
+        numFPFuncs++;
+      }
+      numFuncs++;
+    }
+    dbgs() << "Num of funcs (total): " << numFuncs << "\n";
+    dbgs() << "Num of funcs (w/ fp calls): " << numFPFuncs << "\n";
+    dbgs() << "Num of funcs (addr. taken): " << numAddFuncs << "\n";
+    dbgs() << "Num of fp calls: " << numFPcalls << "\n";
+    dbgs() << "Num of instructions: " << numInsts << "\n";
+    dbgs() << INDENT_1 << "loads: " << loadInsts << "\n";
+    dbgs() << INDENT_1 << "stores: " << storeInsts << "\n";
+    dbgs() << INDENT_1 << "intrinsics: " << intrinsInsts << "\n";
+  }
+  
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
     DEBUG(dbgs() << F->getName() << "\n");
@@ -31,44 +77,23 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
         Value* Rval = S->getValueOperand()->stripInBoundsConstantOffsets();
         if (Function* T = dyn_cast<Function>(Rval)) {
           if (!T->isDeclaration()) {
+            fpTargetsUniv.insert(T);
             // we are assigning a function
-            Value* Lvar = S->getPointerOperand()->stripInBoundsOffsets();
-            //DEBUG(dbgs() << INDENT_1 << "Adding " << *Lvar << " to worklist\n");
-            // if lvalue is an annotated struct field, then Lvar will be
-            // an intrinsic call to llvm.ptr.annotation.p0i8(%struct, ....), we
-            // need to extract %struct in that case
-            if (const IntrinsicInst* II = dyn_cast<const IntrinsicInst>(Lvar)) {
-              if (II->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
-                Lvar = II->getArgOperand(0)->stripInBoundsOffsets();
-                DEBUG(dbgs() << "Pushing through intrinsic call, now adding " << *Lvar << "\n");
-              }
-            }
-            // propagate it all the way back to either an alloca or global var
-            // because if we are assigning to a field of a struct, the assignment
-            // may get lost at lower optimisation levels because the alloca will
-            // be reloaded from for subsequent dereferences.
-            DEBUG(dbgs() << "Rewinding back to alloca\n");
-            while (!(isa<AllocaInst>(Lvar) || isa<GlobalVariable>(Lvar))) {
-              if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Lvar)) {
-                Lvar = gep->getPointerOperand();
-              }
-              else if (LoadInst* load = dyn_cast<LoadInst>(Lvar)) {
-                Lvar = load->getPointerOperand();
-              }
-              else {
-                dbgs() << "WARNING: unexpected instruction: " << *Lvar << "\n";
-              }
-              Lvar = Lvar->stripInBoundsOffsets();
-            }
-            DEBUG(dbgs() << *Lvar << " = " << T->getName() << "()\n");
-            state[ContextUtils::SINGLE_CONTEXT][Lvar].insert(T);
+            Value* Lvar = S->getPointerOperand()->stripInBoundsConstantOffsets();
+            setBitVector(state[ContextUtils::SINGLE_CONTEXT][Lvar], T);
             addToWorklist(Lvar, ContextUtils::SINGLE_CONTEXT, worklist);
+
+            if (isa<GetElementPtrInst>(Lvar)) {
+              DEBUG(dbgs() << "Rewinding back to alloca\n");
+              ValueSet visited;
+              propagateToAggregate(Lvar, ContextUtils::SINGLE_CONTEXT, Lvar, visited, worklist, M);
+            }
 
             // if Lvar is a struct parameter, then it probably outlives this function and
             // so we should propagate the targets of function pointers it contains to the 
             // calling context (i.e. to the corresponding caller's arg value)
             //TODO: how do we know A is specifically a struct parameter?
-            if (AllocaInst* A = dyn_cast<AllocaInst>(Lvar)) {
+            /*if (AllocaInst* A = dyn_cast<AllocaInst>(Lvar)) {
               string name = A->getName().str();
               int suffixIdx = name.find(".addr");
               if (suffixIdx != -1) {
@@ -96,18 +121,24 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
                   }
                 }
               }
-            }
+            } */
           }
         }
       }
       else if (SelectInst* S = dyn_cast<SelectInst>(&*I)) {
         if (Function* F = dyn_cast<Function>(S->getTrueValue()->stripPointerCasts())) {
-          state[ContextUtils::SINGLE_CONTEXT][S].insert(F);
-          addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+          if (!F->isDeclaration()) {
+            fpTargetsUniv.insert(F);
+            setBitVector(state[ContextUtils::SINGLE_CONTEXT][S], F);
+            addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+          }
         }
         if (Function* F = dyn_cast<Function>(S->getFalseValue()->stripPointerCasts())) {
-          state[ContextUtils::SINGLE_CONTEXT][S].insert(F);
-          addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+          if (!F->isDeclaration()) {
+            fpTargetsUniv.insert(F);
+            setBitVector(state[ContextUtils::SINGLE_CONTEXT][S], F);
+            addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+          }
         }
       }
       else if (CallInst* C = dyn_cast<CallInst>(&*I)) { // passing functions as params
@@ -118,11 +149,8 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
             Value* Param = &*AI;
             if (Function* T = dyn_cast<Function>(Arg)) {
               if (!T->isDeclaration()) {
-                // we are assigning a function
-                //Arg->dump();
-                //dbgs() << *Lvar << " = " << T->getName() << "()\n";
-                //DEBUG(dbgs() << "Adding param " << *Param << " to worklist\n");
-                state[ContextUtils::SINGLE_CONTEXT][Param].insert(T);
+                fpTargetsUniv.insert(T);
+                setBitVector(state[ContextUtils::SINGLE_CONTEXT][Param], T);
                 addToWorklist(Param, ContextUtils::SINGLE_CONTEXT, worklist);
               }
             }
@@ -139,7 +167,11 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
   for (Module::global_iterator G = M.global_begin(), E = M.global_end(); G != E; ++G) {
     findAllFunctionPointersInValue(G, worklist, visited);
   }
-  
+
+  if (debug) {
+    dbgs() << "num of fp targets: " << fpTargetsUniv.size() << "\n";
+  }
+
 }
 
 void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueContextPairList& worklist, ValueSet& visited) {
@@ -159,9 +191,12 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
       }
     }
     else if (Function* F = dyn_cast<Function>(V)) {
-      DEBUG(dbgs() << INDENT_1 << "Func: " << F->getName() << "\n");
-      state[ContextUtils::SINGLE_CONTEXT][V].insert(F);
-      addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
+      if (!F->isDeclaration()) {
+        fpTargetsUniv.insert(F);
+        DEBUG(dbgs() << INDENT_1 << "Func: " << F->getName() << "\n");
+        setBitVector(state[ContextUtils::SINGLE_CONTEXT][V], F);
+        addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
+      }
     }
     else if (ConstantStruct* S = dyn_cast<ConstantStruct>(V)) {
       DEBUG(dbgs() << INDENT_1 << "Struct, num of fields: " << S->getNumOperands() << "\n");
@@ -174,5 +209,4 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
 }
 
 void FPInferredTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  //llvm::DebugFlag = false;
 }

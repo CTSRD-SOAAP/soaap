@@ -37,7 +37,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
               callees.insert(callee);
             }
           }
-          state[ContextUtils::SINGLE_CONTEXT][annotatedVar] = callees;
+          state[ContextUtils::SINGLE_CONTEXT][annotatedVar] = convertFunctionSetToBitVector(callees);
           addToWorklist(annotatedVar, ContextUtils::SINGLE_CONTEXT, worklist);
         }
       }
@@ -72,7 +72,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
               callees.insert(callee);
             }
           }
-          state[ContextUtils::SINGLE_CONTEXT][annotateCall] = callees;
+          state[ContextUtils::SINGLE_CONTEXT][annotateCall] = convertFunctionSetToBitVector(callees);
           addToWorklist(annotateCall, ContextUtils::SINGLE_CONTEXT, worklist);
         }
       }

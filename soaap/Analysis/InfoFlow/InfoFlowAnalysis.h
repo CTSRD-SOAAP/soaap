@@ -17,6 +17,7 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/Debug.h"
 
+#include "ADT/QueueSet.h"
 #include "Analysis/Analysis.h"
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"
 #include "Util/CallGraphUtils.h"
@@ -38,7 +39,7 @@ namespace soaap {
     public:
       typedef map<const Value*, FactType> DataflowFacts;
       typedef pair<const Value*, Context*> ValueContextPair;
-      typedef SetVector<ValueContextPair> ValueContextPairList;
+      typedef QueueSet<ValueContextPair> ValueContextPairList;
       InfoFlowAnalysis(bool c = false, bool m = false) : contextInsensitive(c), mustAnalysis(m) { }
       virtual void doAnalysis(Module& M, SandboxVector& sandboxes);
 
@@ -60,7 +61,7 @@ namespace soaap {
       virtual string stringifyFact(FactType f) = 0;
       virtual string stringifyValue(const Value* V);
       virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState);
-      virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueContextPairList& worklist, Module& M);
+      virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, Module& M);
   };
 
   template <class FactType>
@@ -92,8 +93,8 @@ namespace soaap {
 
     // perform propagation until fixed point is reached
     while (!worklist.empty()) {
-      //ValueContextPair P = worklist.front();
-      ValueContextPair P = worklist.pop_back_val();
+      ValueContextPair P = worklist.dequeue();
+      //ValueContextPair P = worklist.pop_back_val();
       const Value* V = P.first;
       Context* C = P.second;
       //worklist.pop_front();
@@ -101,13 +102,6 @@ namespace soaap {
       DEBUG(dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: " << ContextUtils::stringifyContext(C) << ", value dump: " << stringifyValue(V) << "\n");
       DEBUG(dbgs() << "state[C][V]: " << stringifyFact(state[C][V]) << "\n");
       
-      // special case for GEP (propagate to the aggregate)
-      if (GetElementPtrInst* GEP = dyn_cast<GetElementPtrInst>((Value*)V)) {
-        DEBUG(dbgs() << INDENT_2 << "GEP\n");
-        // rewind to the aggregate and propagate
-        propagateToAggregate(GEP, C, GEP, worklist, M);
-      }
-
       DEBUG(dbgs() << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n");
       for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
         User* U = dyn_cast<User>(UI.getUse().getUser());
@@ -198,6 +192,7 @@ namespace soaap {
               }
             }
             else {
+              //dbgs() << "Unaccounted-for instruction: " << *I << "\n";
               V2 = I; // this covers gep instructions
             }
             if (V2 != NULL && propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
@@ -205,6 +200,14 @@ namespace soaap {
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2));
               DEBUG(dbgs() << ", " << ContextUtils::stringifyContext(C) << ")\n");
               addToWorklist(V2, C, worklist);
+
+              // special case for GEP (propagate to the aggregate, if we stored to it)
+              if (isa<StoreInst>(U) && isa<GetElementPtrInst>(V2)) {
+                DEBUG(dbgs() << INDENT_2 << "storing to GEP\n");
+                // rewind to the aggregate and propagate
+                ValueSet visited;
+                propagateToAggregate(V2, C, (Value*)V2, visited, worklist, M);
+              }
             }
           }
         }
@@ -228,77 +231,85 @@ namespace soaap {
   }
 
   template<typename FactType>
-  void InfoFlowAnalysis<FactType>::propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueContextPairList& worklist, Module& M) {
+  void InfoFlowAnalysis<FactType>::propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, Module& M) {
+    //dbgs() << "Agg: " << *Agg << "\n";
     Agg = Agg->stripInBoundsOffsets();
-    if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg)) {
-      if (propagateToValue(V, Agg, C, C, M)) { 
-        DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
-        addToWorklist(Agg, C, worklist);
-      }
-    }
-    else {
-      if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
-        propagateToAggregate(V, C, gep->getPointerOperand(), worklist, M);
-      }
-      else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
-        propagateToAggregate(V, C, load->getPointerOperand(), worklist, M);
-      }
-      else if (IntrinsicInst* intrins = dyn_cast<IntrinsicInst>(Agg)) {
-        if (intrins->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
-          propagateToAggregate(V, C, intrins->getArgOperand(0), worklist, M);
-        }
-        else {
-          dbgs() << "WARNING: unexpected intrinsic instruction: " << *Agg << "\n";
-        }
-      }
-      else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
-        // in this case, we need to rewind back to the local/global Value*
-        // that flows to the return value of call's callee. This would
-        // involve doing more information flow analysis. However, for now
-        // we hardcode the specific cases:
-        //TODO: replace!
-        if (call->getCalledFunction()->getName() == "buffer_ptr") {
-          propagateToAggregate(V, C, call->getArgOperand(0), worklist, M);
-        }
-        else {
-          //dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
-        }
-      }
-      else if (SelectInst* select = dyn_cast<SelectInst>(Agg)) {
-        propagateToAggregate(V, C, select->getTrueValue(), worklist, M);
-        propagateToAggregate(V, C, select->getFalseValue(), worklist, M);
-      }
-      else if (PHINode* phi = dyn_cast<PHINode>(Agg)) {
-        for (int i=0; i<phi->getNumIncomingValues(); i++) {
-          propagateToAggregate(V, C, phi->getIncomingValue(i), worklist, M);
+    if (visited.count(Agg) == 0) {
+      visited.insert(Agg);
+      if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg)) {
+        if (propagateToValue(V, Agg, C, C, M)) { 
+          DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
+          addToWorklist(Agg, C, worklist);
         }
       }
       else {
-        //dbgs() << "WARNING: unexpected value: " << *Agg << "\n";
-        //dbgs() << "Value type: " << Agg->getValueID() << "\n";
+        if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
+          propagateToAggregate(V, C, gep->getPointerOperand(), visited, worklist, M);
+        }
+        else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
+          propagateToAggregate(V, C, load->getPointerOperand(), visited, worklist, M);
+        }
+        else if (IntrinsicInst* intrins = dyn_cast<IntrinsicInst>(Agg)) {
+          if (intrins->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
+            propagateToAggregate(V, C, intrins->getArgOperand(0), visited, worklist, M);
+          }
+          else {
+            dbgs() << "WARNING: unexpected intrinsic instruction: " << *Agg << "\n";
+          }
+        }
+        else if (CallInst* call = dyn_cast<CallInst>(Agg)) {
+          // in this case, we need to rewind back to the local/global Value*
+          // that flows to the return value of call's callee. This would
+          // involve doing more information flow analysis. However, for now
+          // we hardcode the specific cases:
+          //TODO: replace!
+          if (Function* F = call->getCalledFunction()) {
+            if (F->getName() == "buffer_ptr") {
+              propagateToAggregate(V, C, call->getArgOperand(0), visited, worklist, M);
+            }
+          }
+          else {
+            //dbgs() << "WARNING: unexpected call instruction: " << *Agg << "\n";
+          }
+        }
+        else if (SelectInst* select = dyn_cast<SelectInst>(Agg)) {
+          propagateToAggregate(V, C, select->getTrueValue(), visited, worklist, M);
+          propagateToAggregate(V, C, select->getFalseValue(), visited, worklist, M);
+        }
+        else if (PHINode* phi = dyn_cast<PHINode>(Agg)) {
+          for (int i=0; i<phi->getNumIncomingValues(); i++) {
+            propagateToAggregate(V, C, phi->getIncomingValue(i), visited, worklist, M);
+          }
+        }
+        else {
+          //dbgs() << "WARNING: unexpected value: " << *Agg << "\n";
+          //dbgs() << "Value type: " << Agg->getValueID() << "\n";
+        }
       }
-    }
-    // propagate to this Value*
-    if (propagateToValue(V, Agg, C, C, M)) { 
-      addToWorklist(Agg, C, worklist);
+      // propagate to this Value*
+      if (propagateToValue(V, Agg, C, C, M)) { 
+        addToWorklist(Agg, C, worklist);
+      }
     }
   }
 
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::addToWorklist(const Value* V, Context* C, ValueContextPairList& worklist) {
     ValueContextPair P = make_pair(V, C);
-    worklist.insert(P);
+    //worklist.insert(P);
     /*if (find(worklist.begin(), worklist.end(), P) == worklist.end()) {
       worklist.push_back(P);
     }*/
+    worklist.enqueue(P);
+    //dbgs() << "worklist size: " << worklist.size() << "\n";
   }
 
   template <typename FactType>
   bool InfoFlowAnalysis<FactType>::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
     if (state[cTo].find(to) == state[cTo].end()) {
       state[cTo][to] = state[cFrom][from];
-      return true; // return true to allow sandbox names to propagate through
-                   // regardless of whether the value was non-zero
+      return true; // return true to allow state to propagate through
+                   // regardless of whether the value was non-bottom
     }                   
     else {
       //FactType old = state[cTo][to];
@@ -448,7 +459,6 @@ namespace soaap {
   template<typename FactType>
   void InfoFlowAnalysis<FactType>::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState) {
   }
-
 }
 
 #endif
