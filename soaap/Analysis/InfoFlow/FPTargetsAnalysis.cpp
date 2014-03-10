@@ -99,6 +99,7 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
     }
     for (Function* F : kill) {
       newFuncs.erase(F);
+      newState.reset(funcToIdx[F]);
     }
   }
   else {
