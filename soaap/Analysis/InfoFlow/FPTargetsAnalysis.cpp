@@ -87,24 +87,23 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
       FT = dyn_cast<FunctionType>(PT->getElementType());
     }
   }
-
-  FunctionSet newFuncs = convertBitVectorToFunctionSet(newState);
-
+  
   if (FT != NULL) {
-    FunctionSet kill;
-    for (Function* F : newFuncs) {
+    BitVector killVector;
+    int idx;
+    for (int i=0; i<newState.count(); i++) {
+      idx = (i == 0) ? newState.find_first() : newState.find_next(idx);
+      Function* F = idxToFunc[idx];
       if (F->getFunctionType() != FT || F->isDeclaration()) {
-        kill.insert(F);
+        killVector.set(idx);
       }
     }
-    for (Function* F : kill) {
-      newFuncs.erase(F);
-      newState.reset(funcToIdx[F]);
-    }
+    newState.reset(killVector);
   }
   else {
     dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
   }
 
+  FunctionSet newFuncs = convertBitVectorToFunctionSet(newState);
   CallGraphUtils::addCallees(CI, newFuncs);
 }
