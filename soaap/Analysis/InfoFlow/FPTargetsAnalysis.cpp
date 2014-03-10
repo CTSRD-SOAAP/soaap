@@ -89,16 +89,15 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
   }
   
   if (FT != NULL) {
-    BitVector killVector;
     int idx;
-    for (int i=0; i<newState.count(); i++) {
+    int numSetBits = newState.count();
+    for (int i=0; i<numSetBits; i++) {
       idx = (i == 0) ? newState.find_first() : newState.find_next(idx);
       Function* F = idxToFunc[idx];
       if (F->getFunctionType() != FT || F->isDeclaration()) {
-        killVector.set(idx);
+        newState.reset(idx);
       }
     }
-    newState.reset(killVector);
   }
   else {
     dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
