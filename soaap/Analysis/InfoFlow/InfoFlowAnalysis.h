@@ -16,6 +16,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 #include "ADT/QueueSet.h"
 #include "Analysis/Analysis.h"
@@ -61,7 +62,7 @@ namespace soaap {
       virtual string stringifyFact(FactType f) = 0;
       virtual string stringifyValue(const Value* V);
       virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState);
-      virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, Module& M);
+      virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
   };
 
   template <class FactType>
@@ -206,7 +207,7 @@ namespace soaap {
                 DEBUG(dbgs() << INDENT_2 << "storing to GEP\n");
                 // rewind to the aggregate and propagate
                 ValueSet visited;
-                propagateToAggregate(V2, C, (Value*)V2, visited, worklist, M);
+                propagateToAggregate(V2, C, (Value*)V2, visited, worklist, sandboxes, M);
               }
             }
           }
@@ -231,12 +232,12 @@ namespace soaap {
   }
 
   template<typename FactType>
-  void InfoFlowAnalysis<FactType>::propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, Module& M) {
+  void InfoFlowAnalysis<FactType>::propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
     //dbgs() << "Agg: " << *Agg << "\n";
     Agg = Agg->stripInBoundsOffsets();
     if (visited.count(Agg) == 0) {
       visited.insert(Agg);
-      if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg)) {
+      if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg) || isa<Argument>(Agg)) {
         if (propagateToValue(V, Agg, C, C, M)) { 
           DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
           addToWorklist(Agg, C, worklist);
@@ -244,14 +245,14 @@ namespace soaap {
       }
       else {
         if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(Agg)) {
-          propagateToAggregate(V, C, gep->getPointerOperand(), visited, worklist, M);
+          propagateToAggregate(V, C, gep->getPointerOperand(), visited, worklist, sandboxes, M);
         }
         else if (LoadInst* load = dyn_cast<LoadInst>(Agg)) {
-          propagateToAggregate(V, C, load->getPointerOperand(), visited, worklist, M);
+          propagateToAggregate(V, C, load->getPointerOperand(), visited, worklist, sandboxes, M);
         }
         else if (IntrinsicInst* intrins = dyn_cast<IntrinsicInst>(Agg)) {
           if (intrins->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
-            propagateToAggregate(V, C, intrins->getArgOperand(0), visited, worklist, M);
+            propagateToAggregate(V, C, intrins->getArgOperand(0), visited, worklist, sandboxes, M);
           }
           else {
             dbgs() << "WARNING: unexpected intrinsic instruction: " << *Agg << "\n";
@@ -265,7 +266,10 @@ namespace soaap {
           //TODO: replace!
           if (Function* F = call->getCalledFunction()) {
             if (F->getName() == "buffer_ptr") {
-              propagateToAggregate(V, C, call->getArgOperand(0), visited, worklist, M);
+              propagateToAggregate(V, C, call->getArgOperand(0), visited, worklist, sandboxes, M);
+            }
+            else if (F->getName() == "g_ptr_array_add") {
+              propagateToAggregate(V, C, call->getArgOperand(0), visited, worklist, sandboxes, M);
             }
           }
           else {
@@ -273,22 +277,65 @@ namespace soaap {
           }
         }
         else if (SelectInst* select = dyn_cast<SelectInst>(Agg)) {
-          propagateToAggregate(V, C, select->getTrueValue(), visited, worklist, M);
-          propagateToAggregate(V, C, select->getFalseValue(), visited, worklist, M);
+          propagateToAggregate(V, C, select->getTrueValue(), visited, worklist, sandboxes, M);
+          propagateToAggregate(V, C, select->getFalseValue(), visited, worklist, sandboxes, M);
         }
         else if (PHINode* phi = dyn_cast<PHINode>(Agg)) {
           for (int i=0; i<phi->getNumIncomingValues(); i++) {
-            propagateToAggregate(V, C, phi->getIncomingValue(i), visited, worklist, M);
+            propagateToAggregate(V, C, phi->getIncomingValue(i), visited, worklist, sandboxes, M);
           }
         }
         else {
           //dbgs() << "WARNING: unexpected value: " << *Agg << "\n";
           //dbgs() << "Value type: " << Agg->getValueID() << "\n";
         }
+        // propagate to this Value*
+        if (propagateToValue(V, Agg, C, C, M)) { 
+          addToWorklist(Agg, C, worklist);
+        }
       }
-      // propagate to this Value*
-      if (propagateToValue(V, Agg, C, C, M)) { 
-        addToWorklist(Agg, C, worklist);
+      
+      // if Agg is a struct parameter, then it probably outlives this function and
+      // so we should propagate the targets of function pointers it contains to the 
+      // calling context (i.e. to the corresponding caller's arg value)
+      //TODO: how do we know A is specifically a struct parameter?
+      Argument* A = dyn_cast<Argument>(Agg);
+      Function* enclosingFunc = (A == NULL) ? NULL : A->getParent();
+      if (A == NULL) { // if Agg is an AllocaInst then obtain the corresponding 
+        if (AllocaInst* AI = dyn_cast<AllocaInst>(Agg)) {
+          if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(AI)) {
+            enclosingFunc = AI->getParent()->getParent();
+            DIVariable varDbg(dbgDecl->getVariable());
+            int argNum = varDbg.getArgNumber(); // arg nums start from 1
+            if (argNum > 0) {
+              // Agg is a param 
+              string argName = varDbg.getName().str();
+              for (Argument &arg : enclosingFunc->getArgumentList()) {
+                if (arg.getName().str() == argName) {
+                  A = &arg;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (A != NULL) {
+        // we found the param index, propagate back to all caller args
+        int argIdx = A->getArgNo();
+        for (CallInst* caller : CallGraphUtils::getCallers(enclosingFunc, M)) {
+          Function* callerFunc = caller->getParent()->getParent();
+          ContextVector callerContexts = ContextUtils::getContextsForMethod(callerFunc, contextInsensitive, sandboxes, M);
+          Value* arg = caller->getArgOperand(argIdx);
+          //dbgs() << "Propagating arg " << *A << " to caller " << callerFunc->getName() << "\n";
+          DEBUG(dbgs() << INDENT_2 << "Adding arg " << *arg << " to worklist\n");
+          for (Context* C2 : callerContexts) {
+            if (propagateToValue(V, arg, C, C2, M)) {
+              addToWorklist(arg, C2, worklist);
+            }
+            propagateToAggregate(arg, C2, arg, visited, worklist, sandboxes, M);
+          }
+        }
       }
     }
   }
@@ -436,6 +483,15 @@ namespace soaap {
       if (CI->getArgOperand(0) != V) { // V is not dst, so it must be src
         return CI->getArgOperand(0);
       }
+    }
+    /*else if (funcName == "g_ptr_array_add") {
+      CI->dump();
+      if (CI->getArgOperand(1) == V) {
+        return CI->getArgOperand(0);
+      }
+    }*/
+    else {
+      dbgs() << "SOAAP ERROR: Propagation has reached extern function call: " << *CI << "\n";
     }
     DEBUG(dbgs() << "Returning NULL\n");
     return NULL;

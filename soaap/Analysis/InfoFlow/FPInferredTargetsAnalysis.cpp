@@ -86,42 +86,8 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
             if (isa<GetElementPtrInst>(Lvar)) {
               DEBUG(dbgs() << "Rewinding back to alloca\n");
               ValueSet visited;
-              propagateToAggregate(Lvar, ContextUtils::SINGLE_CONTEXT, Lvar, visited, worklist, M);
+              propagateToAggregate(Lvar, ContextUtils::SINGLE_CONTEXT, Lvar, visited, worklist, sandboxes, M);
             }
-
-            // if Lvar is a struct parameter, then it probably outlives this function and
-            // so we should propagate the targets of function pointers it contains to the 
-            // calling context (i.e. to the corresponding caller's arg value)
-            //TODO: how do we know A is specifically a struct parameter?
-            /*if (AllocaInst* A = dyn_cast<AllocaInst>(Lvar)) {
-              string name = A->getName().str();
-              int suffixIdx = name.find(".addr");
-              if (suffixIdx != -1) {
-                // it's an alloca for a param, now we find which one
-                //dbgs() << "Name with suffix: " << name << "\n";
-                name = name.substr(0, suffixIdx);
-                //dbgs() << "Name without suffix: " << name << "\n";
-                // find if there is an arg with the same name
-                int i=0;
-                for (Function::arg_iterator I = T->arg_begin(), E = T->arg_end(); I != E; I++) {
-                  Argument* A2 = dyn_cast<Argument>(*&I);
-                  if (A2->getName() == name) {
-                    DEBUG(dbgs() << INDENT_1 << "Arg " << i << " has name " << A2->getName() << " (" << name << ")" << "\n");
-                    break;
-                  }
-                  i++;
-                }
-                if (i < T->arg_size()) {
-                  // we found the param index, propagate back to all caller args
-                  for (CallInst* caller : CallGraphUtils::getCallers(T, M)) {
-                    Value* arg = caller->getArgOperand(i);
-                    DEBUG(dbgs() << INDENT_2 << "Adding arg " << *arg << " to worklist\n");
-                    state[ContextUtils::SINGLE_CONTEXT][arg].insert(T);
-                    addToWorklist(arg, ContextUtils::SINGLE_CONTEXT, worklist);
-                  }
-                }
-              }
-            } */
           }
         }
       }
