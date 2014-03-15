@@ -237,7 +237,7 @@ namespace soaap {
     Agg = Agg->stripInBoundsOffsets();
     if (visited.count(Agg) == 0) {
       visited.insert(Agg);
-      if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg) || isa<Argument>(Agg)) {
+      if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg)/* || isa<Argument>(Agg)*/) {
         if (propagateToValue(V, Agg, C, C, M)) { 
           DEBUG(dbgs() << INDENT_3 << "propagating to aggregate\n");
           addToWorklist(Agg, C, worklist);
@@ -266,9 +266,6 @@ namespace soaap {
           //TODO: replace!
           if (Function* F = call->getCalledFunction()) {
             if (F->getName() == "buffer_ptr") {
-              propagateToAggregate(V, C, call->getArgOperand(0), visited, worklist, sandboxes, M);
-            }
-            else if (F->getName() == "g_ptr_array_add") {
               propagateToAggregate(V, C, call->getArgOperand(0), visited, worklist, sandboxes, M);
             }
           }
@@ -467,31 +464,31 @@ namespace soaap {
   Value* InfoFlowAnalysis<FactType>::propagateForExternCall(CallInst* CI, const Value* V) {
     // propagate dataflow value of relevant arg(s) (if happen to be V) to
     // the return value of the call CI
-    Function* F = CI->getCalledFunction();
-    DEBUG(dbgs() << "Extern call, f=" << F->getName() << "\n");
-    string funcName = F->getName();
-    if (funcName == "strdup") {
-      return CI;
-    }
-    else if (funcName == "asprintf" || funcName == "vasprintf") { 
-      // if V is not the format string or the out param, then propagate to out param
-      if (CI->getArgOperand(0) != V && CI->getArgOperand(1) != V) {
-        return CI->getArgOperand(0);
+    if (Function* F = CallGraphUtils::getDirectCallee(CI)) {
+      DEBUG(dbgs() << "Extern call, f=" << F->getName() << "\n");
+      string funcName = F->getName();
+      if (funcName == "strdup") {
+        return CI;
       }
-    }
-    else if (funcName == "strcpy") {
-      if (CI->getArgOperand(0) != V) { // V is not dst, so it must be src
-        return CI->getArgOperand(0);
+      else if (funcName == "asprintf" || funcName == "vasprintf") { 
+        // if V is not the format string or the out param, then propagate to out param
+        if (CI->getArgOperand(0) != V && CI->getArgOperand(1) != V) {
+          return CI->getArgOperand(0);
+        }
       }
-    }
-    /*else if (funcName == "g_ptr_array_add") {
-      CI->dump();
-      if (CI->getArgOperand(1) == V) {
-        return CI->getArgOperand(0);
+      else if (funcName == "strcpy") {
+        if (CI->getArgOperand(0) != V) { // V is not dst, so it must be src
+          return CI->getArgOperand(0);
+        }
       }
-    }*/
-    else {
-      dbgs() << "SOAAP ERROR: Propagation has reached extern function call: " << *CI << "\n";
+      /*else if (funcName == "g_ptr_array_add") {
+        if (CI->getArgOperand(1) == V) {
+          return CI->getArgOperand(0);
+        }
+      }*/
+      else {
+        //dbgs() << "SOAAP ERROR: Propagation has reached unknown extern function call to " << funcName << "\n";
+      }
     }
     DEBUG(dbgs() << "Returning NULL\n");
     return NULL;
