@@ -323,11 +323,8 @@ Function* CallGraphUtils::getDirectCallee(CallInst* C) {
 }
 
 bool CallGraphUtils::isExternCall(CallInst* C) {
-  FunctionSet& callees = callToCallees[C];
-  if (callees.size() == 1) {
-    for (Function* callee : callees) {
-      return callee->isDeclaration();
-    }
+  if (Function* F = getDirectCallee(C)) {
+    return F->empty(); // an extern func is one that has no basic blocks
   }
   return false;
 }
