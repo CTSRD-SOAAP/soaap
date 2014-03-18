@@ -49,3 +49,15 @@ bool CmdLineOpts::Pedantic;
 static cl::opt<bool, true> ClPedantic("soaap-pedantic",
        cl::desc("Output all warnings"),
        cl::location(CmdLineOpts::Pedantic));
+
+#ifndef NDEBUG
+string CmdLineOpts::DebugModule;
+static cl::opt<string, true> ClDebugModule("soaap-debug-module",
+       cl::desc("Output debug info for the specified SOAAP module"),
+       cl::location(CmdLineOpts::DebugModule));
+
+int CmdLineOpts::DebugVerbosity;
+static cl::opt<int, true> ClDebugVerbosity("soaap-debug-verbosity",
+       cl::desc("Level of debug verbosity"),
+       cl::location(CmdLineOpts::DebugVerbosity));
+#endif
