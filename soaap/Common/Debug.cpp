@@ -18,7 +18,7 @@ bool soaap::debugging() {
 }
 
 bool soaap::debugging(StringRef Name, int Verbosity) {
-  if (!debugging() || Verbosity < CmdLineOpts::DebugVerbosity) {
+  if (!debugging() || Verbosity > CmdLineOpts::DebugVerbosity) {
     return false;
   }
   // Let e.g. 'soaap.infoflow' match 'soaap.infoflow.anything'.
