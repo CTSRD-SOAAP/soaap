@@ -22,7 +22,7 @@ bool soaap::debugging(StringRef Name, int Verbosity) {
     return false;
   }
   // Let e.g. 'soaap.infoflow' match 'soaap.infoflow.anything'.
-  string debugModule = CmdLineOpts::Debug;
+  string debugModule = CmdLineOpts::DebugModule;
   if (Name.size() > debugModule.length()
       and Name.startswith(debugModule)
       and Name[debugModule.length()] == '.')
@@ -35,7 +35,7 @@ bool soaap::debugging(StringRef Name, int Verbosity) {
 
 raw_ostream& soaap::debugs(StringRef DebugModuleName, int VerbosityLevel) {
 #ifndef NDEBUG
-  if (debugging(DebugModuleName) && VerbosityLevel >= CmdLineOpts::DebugVerbosity) {
+  if (debugging(DebugModuleName, VerbosityLevel)) {
     static raw_ostream& ErrStream = llvm::errs();
     return ErrStream;
   }
@@ -44,19 +44,3 @@ raw_ostream& soaap::debugs(StringRef DebugModuleName, int VerbosityLevel) {
   static raw_null_ostream NullStream;
   return NullStream;
 }
-
-#ifndef NDEBUG
-#include <llvm/Support/Signals.h>
-
-namespace {
-
-class StaticDebugInit {
-public:
-  StaticDebugInit() {
-    sys::PrintStackTraceOnErrorSignal();
-  }
-
-} DebugInit;
-
-}
-#endif
