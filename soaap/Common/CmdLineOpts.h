@@ -20,10 +20,8 @@ namespace soaap {
       static bool ListFPTargets;
       static bool ListAllFuncs;
       static bool Pedantic;
-#ifndef NDEBUG
       static string DebugModule;
       static int DebugVerbosity;
-#endif
   };
 }
 
