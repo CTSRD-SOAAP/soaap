@@ -3,8 +3,8 @@
 #include "Util/SandboxUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "soaap.h"
-#include "llvm/DebugInfo.h"
-#include "llvm/Support/CFG.h"
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Regex.h"
@@ -137,7 +137,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   // Handle sandboxe code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
   if (Function* SboxStart = M.getFunction("llvm.annotation.i32")) {
     for (Value::use_iterator UI = SboxStart->use_begin(), UE = SboxStart->use_end(); UI != UE; ++UI) {
-      User* U = UI.getUse().getUser();
+      User* U = UI->getUser();
       if (isa<IntrinsicInst>(U)) {
         IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());

@@ -6,9 +6,9 @@
 #include "Util/SandboxUtils.h"
 #include "Common/CmdLineOpts.h"
 #include "Common/Sandbox.h"
-#include "llvm/DebugInfo.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 

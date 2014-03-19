@@ -1,8 +1,8 @@
 #include "Analysis/InfoFlow/FPTargetsAnalysis.h"
 #include "Util/DebugUtils.h"
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Support/InstIterator.h"
-#include "llvm/DebugInfo.h"
 #include "soaap.h"
 
 #include <sstream>

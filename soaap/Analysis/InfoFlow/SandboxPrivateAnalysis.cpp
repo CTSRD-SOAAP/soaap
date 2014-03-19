@@ -3,7 +3,7 @@
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/DebugInfo.h"
+#include "llvm/IR/DebugInfo.h"
 #include "soaap.h"
 
 using namespace soaap;
@@ -15,7 +15,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
     for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-      User* user = u.getUse().getUser();
+      User* user = u->getUser();
       if (isa<IntrinsicInst>(user)) {
         IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
@@ -41,7 +41,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
   
   if (Function* F = M.getFunction("llvm.var.annotation")) {
     for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-      User* user = u.getUse().getUser();
+      User* user = u->getUser();
       if (isa<IntrinsicInst>(user)) {
         IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());

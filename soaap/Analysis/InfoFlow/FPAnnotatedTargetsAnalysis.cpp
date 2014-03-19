@@ -1,8 +1,8 @@
 #include "Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.h"
 #include "Util/DebugUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Support/InstIterator.h"
-#include "llvm/DebugInfo.h"
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/InstIterator.h"
 #include "soaap.h"
 
 #include <sstream>
@@ -14,7 +14,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   if (Function* F = M.getFunction("llvm.var.annotation")) {
     for (User::use_iterator UI = F->use_begin(), UE = F->use_end(); UI != UE; UI++) {
-      User* user = UI.getUse().getUser();
+      User* user = UI->getUser();
       if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user)) {
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
@@ -46,7 +46,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
 
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
     for (User::use_iterator UI = F->use_begin(), UE = F->use_end(); UI != UE; UI++) {
-      User* user = UI.getUse().getUser();
+      User* user = UI->getUser();
       if (isa<IntrinsicInst>(user)) {
         IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());

@@ -15,7 +15,7 @@ exec_program(${CMAKE_LLVM_CONFIG} ARGS --libdir   OUTPUT_VARIABLE LLVM_LIBDIR)
 exec_program(${CMAKE_LLVM_CONFIG} ARGS --src-root OUTPUT_VARIABLE LLVM_SRCDIR)
 exec_program(${CMAKE_LLVM_CONFIG} ARGS --obj-root OUTPUT_VARIABLE LLVM_OBJDIR)
 
-set(CMAKE_MODULE_PATH "${LLVM_SRCDIR}/cmake/modules")
+set(CMAKE_MODULE_PATH "${LLVM_OBJDIR}/cmake/modules")
 
 find_package(LLVM REQUIRED)
 
@@ -31,7 +31,7 @@ if(NOT DEFINED CMAKE_CXX_COMPILER)
 endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -Wno-c++11-extensions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11 -stdlib=libc++")
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/bin)

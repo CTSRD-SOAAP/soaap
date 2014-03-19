@@ -4,10 +4,10 @@
 #include <map>
 #include <list>
 
-#include "llvm/DebugInfo.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Pass.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
@@ -106,7 +106,7 @@ namespace soaap {
               << "state[C][V]: " << stringifyFact(state[C][V]) << "\n" 
               << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n")
       for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
-        User* U = dyn_cast<User>(UI.getUse().getUser());
+        User* U = dyn_cast<User>(UI->getUser());
         SDEBUG("soaap.infoflow" ,4, dbgs() << INDENT_3 << "Use: " << stringifyValue(U) << "\n")
         const Value* V2 = NULL;
         if (Constant* CS = dyn_cast<Constant>(U)) {
@@ -119,7 +119,7 @@ namespace soaap {
             addToWorklist(V2, C, worklist);
           }
         }
-        else if (Instruction* I = dyn_cast<Instruction>(UI.getUse().getUser())) {
+        else if (Instruction* I = dyn_cast<Instruction>(UI->getUser())) {
           if (C == ContextUtils::NO_CONTEXT) {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);

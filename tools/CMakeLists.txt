@@ -3,21 +3,22 @@ add_llvm_executable(soaap
 )
 
 llvm_map_components_to_libraries(LLVM_LIBS
-  Analysis                                                                                                    
-  BitWriter                                                                                                   
-  Core                                                                                                        
-  IPA                                                                                                         
-  IPO                                                                                                         
-  IRReader                                                                                                    
-  InstCombine                                                                                                 
-  Instrumentation                                                                                             
-  MC                                                                                                          
-  ObjCARCOpts                                                                                                 
-  ScalarOpts                                                                                                  
-  Support                                                                                                     
-  Target                                                                                                      
-  TransformUtils                                                                                              
+  Analysis
+  BitWriter
+  Codegen
+  Core
+  IPA
+  IPO
+  IRReader
+  InstCombine
+  Instrumentation
+  MC
+  ObjCARCOpts
+  ScalarOpts
+  Support
+  Target
+  TransformUtils
   Vectorize
 )                                                                                                   
 
-target_link_libraries(soaap ${LLVM_LIBS} libsoaap)
+target_link_libraries(soaap ${LLVM_LIBS} SOAAP)

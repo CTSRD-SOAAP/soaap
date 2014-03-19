@@ -1,8 +1,8 @@
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Util/ClassifiedUtils.h"
 #include "Util/DebugUtils.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/DebugInfo.h"
 #include "soaap.h"
 
 using namespace soaap;
@@ -12,7 +12,7 @@ void ClassifiedAnalysis::initialise(ValueContextPairList& worklist, Module& M, S
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
     for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-      User* user = u.getUse().getUser();
+      User* user = u->getUser();
       if (isa<IntrinsicInst>(user)) {
         IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());

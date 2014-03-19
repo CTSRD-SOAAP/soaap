@@ -1,7 +1,7 @@
 #include "Util/PrettyPrinters.h"
 #include "Util/LLVMAnalyses.h"
 #include "llvm/Analysis/CallGraph.h"
-#include "llvm/DebugInfo.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace soaap;

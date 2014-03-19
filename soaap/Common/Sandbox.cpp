@@ -6,8 +6,8 @@
 #include "Util/SandboxUtils.h"
 #include "soaap.h"
 
-#include "llvm/DebugInfo.h"
-#include "llvm/Support/CFG.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -238,7 +238,7 @@ void Sandbox::findCallgates() {
       dbgs() << INDENT_3 << "Sandbox name: " << sandboxName << "\n";
       if (sandboxName == name) {
         for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
-          User* user = u.getUse().getUser();
+          User* user = u->getUser();
           if (isa<CallInst>(user)) {
             CallInst* annotateCallgatesCall = dyn_cast<CallInst>(user);
             /*
@@ -336,7 +336,7 @@ void Sandbox::findCreationPoints() {
   // look for calls to __builtin_annotation(SOAAP_PERSISTENT_SANDBOX_CREATE_<NAME_OF_SANDBOX>)
   if (Function* AnnotFunc = module.getFunction("llvm.annotation.i32")) {
     for (Value::use_iterator UI = AnnotFunc->use_begin(), UE = AnnotFunc->use_end(); UI != UE; ++UI) {
-      User* U = UI.getUse().getUser();
+      User* U = UI->getUser();
       if (isa<IntrinsicInst>(U)) {
         IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());

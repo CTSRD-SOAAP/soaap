@@ -39,7 +39,7 @@
 
 // past vulnerabilities
 #define PAST_VULNERABILITY "PAST_VULNERABILITY"
-#define __soaap_vuln_fn(CVE) __attribute__((annotate(PAST_VULNERABILITY"_"CVE))) __attribute__((noinline))
+#define __soaap_vuln_fn(CVE) __attribute__((annotate(PAST_VULNERABILITY "_" CVE))) __attribute__((noinline))
 #define __soaap_vuln_pt(CVE) __soaap_past_vulnerability_at_point(CVE);
 __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* cve) {
   int result;
@@ -58,41 +58,41 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_provenance(X) \
   static char* __attribute__((used)) __soaap_provenance_var = X;
 
-#define __soaap_sandbox_persistent(N) __attribute__((annotate(SANDBOX_PERSISTENT"_"N))) __attribute__((noinline))
-#define __soaap_sandbox_ephemeral(N) __attribute__((annotate(SANDBOX_EPHEMERAL"_"N))) __attribute__((noinline))
-#define __soaap_var_read(N) __attribute__((annotate(VAR_READ"_"N)))
-#define __soaap_var_write(N) __attribute__((annotate(VAR_WRITE"_"N)))
+#define __soaap_sandbox_persistent(N) __attribute__((annotate(SANDBOX_PERSISTENT "_" N))) __attribute__((noinline))
+#define __soaap_sandbox_ephemeral(N) __attribute__((annotate(SANDBOX_EPHEMERAL "_" N))) __attribute__((noinline))
+#define __soaap_var_read(N) __attribute__((annotate(VAR_READ "_" N)))
+#define __soaap_var_write(N) __attribute__((annotate(VAR_WRITE "_" N)))
 #define __soaap_fd_read __attribute__((annotate(FD_READ)))
 #define __soaap_fd_write __attribute__((annotate(FD_WRITE)))
-#define __soaap_indirect_fd_read(F) __attribute__((annotate(F##"_"##FD_READ)))
-#define __soaap_indirect_fd_write(F) __attribute__((annotate(F##"_"##FD_WRITE)))
+#define __soaap_indirect_fd_read(F) __attribute__((annotate(F "_" FD_READ)))
+#define __soaap_indirect_fd_write(F) __attribute__((annotate(F "_" FD_WRITE)))
 /*#define __soaap_callgates(fns...) \
   void __soaap_declare_callgates_helper(int unused, ...) { } \
 	void __soaap_declare_callgates() { \
 		__soaap_declare_callgates_helper(0, fns); \
 	}*/
 
-#define __soaap_classify(L) __attribute__((annotate(CLASSIFY"_"L)))
-#define __soaap_clearance(L) __attribute__((annotate(CLEARANCE"_"L)))
-#define __soaap_private(N) __attribute__((annotate(SANDBOX_PRIVATE"_"N)))
+#define __soaap_classify(L) __attribute__((annotate(CLASSIFY "_" L)))
+#define __soaap_clearance(L) __attribute__((annotate(CLEARANCE "_" L)))
+#define __soaap_private(N) __attribute__((annotate(SANDBOX_PRIVATE "_" N)))
 __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 
 #define __soaap_sync_data(N)
 
 #define SOAAP_EPHEMERAL_SANDBOX_CREATE "SOAAP_EPHEMERAL_SANDBOX_CREATE"
 #define SOAAP_EPHEMERAL_SANDBOX_KILL "SOAAP_EPHEMERAL_SANDBOX_KILL"
-#define __soaap_create_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_CREATE"_"N)
-#define __soaap_kill_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_KILL"_"N)
+#define __soaap_create_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_CREATE "_" N)
+#define __soaap_kill_ephemeral_sandbox(N) __builtin_annotation(0, SOAAP_EPHEMERAL_SANDBOX_KILL "_" N)
 
 #define SOAAP_PERSISTENT_SANDBOX_CREATE "SOAAP_PERSISTENT_SANDBOX_CREATE"
 #define SOAAP_PERSISTENT_SANDBOX_KILL "SOAAP_PERSISTENT_SANDBOX_KILL"
-#define __soaap_create_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_CREATE"_"N)
-#define __soaap_kill_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_KILL"_"N)
+#define __soaap_create_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_CREATE "_" N)
+#define __soaap_kill_persistent_sandbox(N) __builtin_annotation(0, SOAAP_PERSISTENT_SANDBOX_KILL "_" N)
 
 #define SOAAP_SANDBOX_REGION_START "SOAAP_SANDBOX_REGION_START"
 #define SOAAP_SANDBOX_REGION_END "SOAAP_SANDBOX_REGION_END"
-#define __soaap_sandboxed_region_start(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_START"_"N);
-#define __soaap_sandboxed_region_end(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_END"_"N); 
+#define __soaap_sandboxed_region_start(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_START "_" N);
+#define __soaap_sandboxed_region_end(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_END "_" N); 
 
 #define __soaap_callgates(N, fns...) \
   void __soaap_declare_callgates_helper_##N(int unused, ...) { } \
@@ -104,7 +104,7 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define __soaap_privileged __attribute__((annotate(SOAAP_PRIVILEGED)))
 
 #define SOAAP_FP "SOAAP_FP"
-#define __soaap_fp(fns...) __attribute__((annotate(SOAAP_FP"_"#fns)))
+#define __soaap_fp(fns...) __attribute__((annotate(SOAAP_FP "_" #fns)))
 
 #define SOAAP_DANGEROUS "SOAAP_DANGEROUS"
 #define __soaap_dangerous __attribute__((annotate(SOAAP_DANGEROUS)))
