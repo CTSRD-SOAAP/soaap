@@ -52,8 +52,13 @@ static cl::opt<bool, true> ClPedantic("soaap-pedantic",
 
 string CmdLineOpts::DebugModule;
 static cl::opt<string, true> ClDebugModule("soaap-debug-module",
-       cl::desc("Output debug info for the specified SOAAP module"),
+       cl::desc("Output debug info for the specified SOAAP module pattern"),
        cl::location(CmdLineOpts::DebugModule));
+
+string CmdLineOpts::DebugFunction;
+static cl::opt<string, true> ClDebugFunction("soaap-debug-function",
+       cl::desc("Only output debug info for the specified SOAAP function pattern"),
+       cl::location(CmdLineOpts::DebugFunction));
 
 int CmdLineOpts::DebugVerbosity;
 static cl::opt<int, true> ClDebugVerbosity("soaap-debug-verbosity",

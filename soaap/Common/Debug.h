@@ -7,8 +7,10 @@
 #define SDEBUG(NAME,VERBOSITY,X)
 #else
 #define SDEBUG(NAME,VERBOSITY,X)  \
-  if (debugging(NAME,VERBOSITY)) { \
-    do { X; } while (0); \
+  if (debugging(NAME,VERBOSITY,__FUNCTION__)) { \
+    do { dbgs() << "[" << __FUNCTION__ << "] "; \
+         X; \
+       } while (0); \
   }
 #endif
 
@@ -16,7 +18,8 @@ using namespace llvm;
 
 namespace soaap {
 #ifndef NDEBUG  
-  bool debugging(StringRef name, int verbosity);
+  bool debugging(StringRef ModuleName, int Verbosity, StringRef FunctionName);
+  bool matches(StringRef pattern, StringRef name);
 #endif
 }
 

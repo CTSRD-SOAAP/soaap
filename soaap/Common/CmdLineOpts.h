@@ -21,6 +21,7 @@ namespace soaap {
       static bool ListAllFuncs;
       static bool Pedantic;
       static string DebugModule;
+      static string DebugFunction;
       static int DebugVerbosity;
   };
 }
