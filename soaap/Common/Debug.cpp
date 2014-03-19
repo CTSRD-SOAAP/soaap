@@ -19,8 +19,8 @@ bool soaap::debugging(StringRef Name, int Verbosity) {
   // Let e.g. 'soaap.infoflow' match 'soaap.infoflow.anything'.
   string debugModule = CmdLineOpts::DebugModule;
   if (Name.size() > debugModule.length()
-      and Name.startswith(debugModule)
-      and Name[debugModule.length()] == '.')
+      && Name.startswith(debugModule)
+      && Name[debugModule.length()] == '.')
     return true;
 
   // Use fnmatch()'s normal wildcard expansion.
