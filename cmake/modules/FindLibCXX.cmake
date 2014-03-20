@@ -10,8 +10,6 @@
 find_library(LIBCXX_LIBRARY c++)
 set(LIBCXX_LIBRARIES "${LIBCXX_LIBRARY}")
 
-# On Mac OS X, the headers are in a slightly unusual place (e.g. /usr/lib/c++).
-
 find_path(LIBCXX_PREFIX c++/v1/string REQUIRED
   DOC "container for versioned libc++ include directories"
   PATHS ${CMAKE_SYSTEM_PREFIX_PATH}
