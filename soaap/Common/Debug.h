@@ -8,7 +8,10 @@
 #else
 #define SDEBUG(NAME,VERBOSITY,X)  \
   if (debugging(NAME,VERBOSITY,__FUNCTION__)) { \
-    do { dbgs() << "[" << __FUNCTION__ << "] "; \
+    do { \
+         errs().changeColor(raw_ostream::Colors::GREEN); \
+         errs() << "[" << __FUNCTION__ << "]\n"; \
+         errs().resetColor(); \
          X; \
        } while (0); \
   }
