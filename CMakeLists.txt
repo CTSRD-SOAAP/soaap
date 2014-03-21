@@ -32,6 +32,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 find_package(LibCXX)
 if (LIBCXX_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+  include_directories(${LIBCXX_INCLUDE_DIRS})
+  link_directories(${LIBCXX_LIBRARIES})
 endif()
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
