@@ -20,14 +20,7 @@ if (LIBCXX_PREFIX)
     CACHE STRING "Include directory for libc++ headers")
 endif ()
 
-set(LIBCXX_INCLUDE_DIRS "${LIBCXX_INCLUDE_DIR}")
-
-# if using a local build of libc++ then the
-# include directory containing cxxabi.h may be
-# different to LIBCXX_INCLUDE_DIR
-if(EXISTS "${LIBCXX_PREFIX}/include")
-  set(LIBCXX_INCLUDE_DIRS ${LIBCXX_INCLUDE_DIRS} "${LIBCXX_PREFIX}/include")
-endif()
+set(LIBCXX_INCLUDE_DIRS "${LIBCXX_INCLUDE_DIR}" "${LIBCXX_PREFIX}")
 
 include (FindPackageHandleStandardArgs)
 find_package_handle_standard_args(LIBCXX DEFAULT_MSG
