@@ -25,14 +25,6 @@ endforeach()
 include(AddLLVM)
 add_definitions(${LLVM_DEFINITIONS})
 
-if(NOT DEFINED CMAKE_C_COMPILER)
-	set(CMAKE_C_COMPILER ${LLVM_BINARY_DIR}/bin/clang)
-endif()
-
-if(NOT DEFINED CMAKE_CXX_COMPILER)
-	set(CMAKE_CXX_COMPILER ${LLVM_BINARY_DIR}/bin/clang++)
-endif()
-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 
