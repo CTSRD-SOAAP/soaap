@@ -26,7 +26,7 @@ set(LIBCXX_INCLUDE_DIRS "${LIBCXX_INCLUDE_DIR}")
 # include directory containing cxxabi.h may be
 # different to LIBCXX_INCLUDE_DIR
 if(IS_DIRECTORY "${LIBCXX_PREFIX}/include")
-  set(LIBCXX_INCLUDE_DIRS "${LIBCXX_PREFIX}/include")
+  set(LIBCXX_INCLUDE_DIRS ${LIBCXX_INCLUDE_DIRS} "${LIBCXX_PREFIX}/include")
 endif()
 
 include (FindPackageHandleStandardArgs)
