@@ -14,10 +14,8 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
   
   // initialise with pointers to annotated fields and uses of annotated global variables
   if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
-    for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-      User* user = u->getUser();
-      if (isa<IntrinsicInst>(user)) {
-        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+    for (User* U : F->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
 
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
@@ -40,10 +38,8 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
   }
   
   if (Function* F = M.getFunction("llvm.var.annotation")) {
-    for (User::use_iterator u = F->use_begin(), e = F->use_end(); e!=u; u++) {
-      User* user = u->getUser();
-      if (isa<IntrinsicInst>(user)) {
-        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(user);
+    for (User* U : F->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
 
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());

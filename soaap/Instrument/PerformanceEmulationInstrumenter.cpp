@@ -46,12 +46,9 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
      * functions.
      */
     if (FVA) {
-      for (User::use_iterator u = FVA->use_begin(),
-        e = FVA->use_end(); e!=u; u++) {
-        User* user = u->getUser();
-        if (isa<IntrinsicInst>(user)) {
-          IntrinsicInst* annotateCall
-            = dyn_cast<IntrinsicInst>(user);
+      for (User* U : FVA->users()) {
+        if (IntrinsicInst* annotateCall
+            = dyn_cast<IntrinsicInst>(U)) {
 
           /* Get the enclosing function */
           Function* enclosingFunc

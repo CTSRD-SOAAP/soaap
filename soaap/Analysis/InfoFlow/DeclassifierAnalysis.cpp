@@ -18,8 +18,8 @@ void DeclassifierAnalysis::initialise(ValueContextPairList& worklist, Module& M,
   for (Function& F : M.getFunctionList()) {
     if (F.getName().startswith(declassifyFuncBaseName)) {
       DEBUG(dbgs() << "   Found " << F.getName() << " function\n");
-      for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
-        if (CallInst* call = dyn_cast<CallInst>(u->getUser())) {
+      for (User* U : F.users()) {
+        if (CallInst* call = dyn_cast<CallInst>(U)) {
           //call->dump();
           if (LoadInst* declassifiedLoad = dyn_cast<LoadInst>(call->getArgOperand(0)->stripPointerCasts())) {
             // at the moment we only handle allocas and not fields

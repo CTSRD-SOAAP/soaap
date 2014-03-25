@@ -20,6 +20,7 @@ namespace soaap {
       static int assignBitIdxToSandboxName(string sandboxName);
       static int getBitIdxFromSandboxName(string sandboxName);
       static string stringifySandboxNames(int sandboxNames);
+      static string stringifySandboxVector(SandboxVector& sandboxes);
       static bool isSandboxEntryPoint(Module& M, Function* F);
       static FunctionVector getPrivilegedMethods(Module& M);
       static bool isPrivilegedMethod(Function* F, Module& M);

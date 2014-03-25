@@ -105,8 +105,7 @@ namespace soaap {
               << ContextUtils::stringifyContext(C) << ", value dump: " << stringifyValue(V) << "\n"
               << "state[C][V]: " << stringifyFact(state[C][V]) << "\n" 
               << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n")
-      for (Value::const_use_iterator UI=V->use_begin(), UE=V->use_end(); UI != UE; UI++) {
-        User* U = dyn_cast<User>(UI->getUser());
+      for (User* U : ((Value*)V)->users()) {
         SDEBUG("soaap.infoflow" ,4, dbgs() << INDENT_3 << "Use: " << stringifyValue(U) << "\n")
         const Value* V2 = NULL;
         if (Constant* CS = dyn_cast<Constant>(U)) {
@@ -119,7 +118,7 @@ namespace soaap {
             addToWorklist(V2, C, worklist);
           }
         }
-        else if (Instruction* I = dyn_cast<Instruction>(UI->getUser())) {
+        else if (Instruction* I = dyn_cast<Instruction>(U)) {
           if (C == ContextUtils::NO_CONTEXT) {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);

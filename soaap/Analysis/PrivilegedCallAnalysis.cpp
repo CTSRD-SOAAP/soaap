@@ -33,8 +33,8 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
 
   // now check calls within sandboxes
   for (Function* privilegedFunc : privAnnotFuncs) {
-    for (Value::use_iterator I = privilegedFunc->use_begin(), E = privilegedFunc->use_end(); I != E; I++) {
-      if (CallInst* C = dyn_cast<CallInst>(*I)) {
+    for (User* U : privilegedFunc->users()) {
+      if (CallInst* C = dyn_cast<CallInst>(U)) {
         Function* enclosingFunc = C->getParent()->getParent();
         for (Sandbox* S : sandboxes) {
           if (!S->hasCallgate(privilegedFunc) && S->containsFunction(enclosingFunc)) {

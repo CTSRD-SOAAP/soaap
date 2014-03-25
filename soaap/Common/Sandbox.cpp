@@ -237,10 +237,8 @@ void Sandbox::findCallgates() {
       StringRef sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
       dbgs() << INDENT_3 << "Sandbox name: " << sandboxName << "\n";
       if (sandboxName == name) {
-        for (User::use_iterator u = F.use_begin(), e = F.use_end(); e!=u; u++) {
-          User* user = u->getUser();
-          if (isa<CallInst>(user)) {
-            CallInst* annotateCallgatesCall = dyn_cast<CallInst>(user);
+        for (User* U : F.users()) {
+          if (CallInst* annotateCallgatesCall = dyn_cast<CallInst>(U)) {
             /*
              * Start at 1 because we skip the first unused argument
              * (The C language requires that there be at least one
@@ -335,10 +333,8 @@ void Sandbox::findCapabilities() {
 void Sandbox::findCreationPoints() {
   // look for calls to __builtin_annotation(SOAAP_PERSISTENT_SANDBOX_CREATE_<NAME_OF_SANDBOX>)
   if (Function* AnnotFunc = module.getFunction("llvm.annotation.i32")) {
-    for (Value::use_iterator UI = AnnotFunc->use_begin(), UE = AnnotFunc->use_end(); UI != UE; ++UI) {
-      User* U = UI->getUser();
-      if (isa<IntrinsicInst>(U)) {
-        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
+    for (User* U : AnnotFunc->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
         ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
         StringRef annotationStrValCString = annotationStrValArray->getAsCString();

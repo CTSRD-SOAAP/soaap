@@ -28,11 +28,26 @@ string SandboxUtils::stringifySandboxNames(int sandboxNames) {
   for (currIdx=0; currIdx<=31; currIdx++) {
     if (sandboxNames & (1 << currIdx)) {
       string sandboxName = bitIdxToSandboxName[currIdx];
-      if (!first) 
+      if (!first) {
         sandboxNamesStr += ",";
+      }
       sandboxNamesStr += sandboxName;
       first = false;
     }
+  }
+  sandboxNamesStr += "]";
+  return sandboxNamesStr;
+}
+
+string SandboxUtils::stringifySandboxVector(SandboxVector& sandboxes) {
+  string sandboxNamesStr = "[";
+  bool first = true;
+  for (Sandbox* S : sandboxes) {
+    if (!first) {
+      sandboxNamesStr += ",";
+    }
+    sandboxNamesStr += S->getName();
+    first = false;
   }
   sandboxNamesStr += "]";
   return sandboxNamesStr;
@@ -136,10 +151,8 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
 
   // Handle sandboxe code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
   if (Function* SboxStart = M.getFunction("llvm.annotation.i32")) {
-    for (Value::use_iterator UI = SboxStart->use_begin(), UE = SboxStart->use_end(); UI != UE; ++UI) {
-      User* U = UI->getUser();
-      if (isa<IntrinsicInst>(U)) {
-        IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
+    for (User* U : SboxStart->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
         ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
         StringRef annotationStrValCString = annotationStrValArray->getAsCString();
