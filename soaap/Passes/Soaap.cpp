@@ -109,7 +109,7 @@ bool Soaap::runOnModule(Module& M) {
 void Soaap::processCmdLineArgs(Module& M) {
   // process ClVulnerableVendors
   for (StringRef vendor : CmdLineOpts::VulnerableVendors) {
-    DEBUG(dbgs() << "Vulnerable vendor: " << vendor << "\n");
+    SDEBUG("soaap", 3, dbgs() << "Vulnerable vendor: " << vendor << "\n");
     vulnerableVendors.push_back(vendor);
   }
 }

@@ -22,7 +22,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
         if (annotationStrValStr.startswith(SOAAP_FP)) {
           FunctionSet callees;
           string funcListCsv = annotationStrValStr.substr(strlen(SOAAP_FP)+1); //+1 because of _
-          DEBUG(dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
+          SDEBUG("soaap.analysis.infoflow.fp.annotate", 3, dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
           istringstream ss(funcListCsv);
           string func;
           while(getline(ss, func, ',')) {
@@ -30,9 +30,9 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
             size_t start = func.find_first_not_of(" ");
             size_t end = func.find_last_not_of(" ");
             func = func.substr(start, end-start+1);
-            DEBUG(dbgs() << INDENT_2 << "Function: " << func << "\n");
+            SDEBUG("soaap.analysis.infoflow.fp.annotate", 3, dbgs() << INDENT_2 << "Function: " << func << "\n");
             if (Function* callee = M.getFunction(func)) {
-              DEBUG(dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
+              SDEBUG("soaap.analysis.infoflow.fp.annotate", 3, dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
               callees.insert(callee);
             }
           }
@@ -55,7 +55,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
       if (annotationStrValStr.startswith(SOAAP_FP)) {
         FunctionSet callees;
         string funcListCsv = annotationStrValStr.substr(strlen(SOAAP_FP)+1); //+1 because of _
-        DEBUG(dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
+        SDEBUG("soaap.analysis.infoflow.fp.annotate", 3, dbgs() << INDENT_1 << "FP annotation " << annotationStrValStr << " found: " << *annotatedVar << ", funcList: " << funcListCsv << "\n");
         istringstream ss(funcListCsv);
         string func;
         while(getline(ss, func, ',')) {
@@ -63,9 +63,9 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
           size_t start = func.find_first_not_of(" ");
           size_t end = func.find_last_not_of(" ");
           func = func.substr(start, end-start+1);
-          DEBUG(dbgs() << INDENT_2 << "Function: " << func << "\n");
+          SDEBUG("soaap.analysis.infoflow.fp.annotate", 3, dbgs() << INDENT_2 << "Function: " << func << "\n");
           if (Function* callee = M.getFunction(func)) {
-            DEBUG(dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
+            SDEBUG("soaap.analysis.infoflow.fp.annotate", 3, dbgs() << INDENT_3 << "Adding " << callee->getName() << "\n");
             callees.insert(callee);
           }
         }

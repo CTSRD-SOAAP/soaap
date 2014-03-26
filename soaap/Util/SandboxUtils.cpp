@@ -1,3 +1,4 @@
+#include "Common/Debug.h"
 #include "Util/ClassifiedUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
@@ -144,9 +145,9 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     int overhead = funcToOverhead[entryPoint];
     int clearances = funcToClearances[entryPoint];
     bool persistent = find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), entryPoint) == ephemeralSandboxes.end();
-		DEBUG(dbgs() << INDENT_2 << "Creating new Sandbox instance\n");
+		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Creating new Sandbox instance\n");
     sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, persistent, M, overhead, clearances));
-		DEBUG(dbgs() << INDENT_2 << "Created new Sandbox instance\n");
+		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Created new Sandbox instance\n");
   }
 
   // Handle sandboxe code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
@@ -159,7 +160,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
         
         if (annotationStrValCString.startswith(SOAAP_SANDBOX_REGION_START)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_REGION_START)+1); //+1 because of _
-          DEBUG(dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotateCall->dump(););
+          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotateCall->dump(););
           InstVector sandboxedInsts;
           findAllSandboxedInstructions(annotateCall, sandboxName, sandboxedInsts);
           int idx = assignBitIdxToSandboxName(sandboxName);
@@ -169,7 +170,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     }
   }
 
-	DEBUG(dbgs() << INDENT_1 << "Returning sandboxes vector\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Returning sandboxes vector\n");
   return sandboxes;
 }
 
@@ -183,7 +184,7 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSand
   for (BasicBlock::iterator BE = BB->end(); BI != BE; BI++) {
     // If I is the end_sandboxed_code() annotation then we stop
     I = &*BI;
-    DEBUG(I->dump());
+    SDEBUG("soaap.util.sandbox", 3, I->dump());
     insts.push_back(I);
     if (isa<IntrinsicInst>(I)) {
       GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(I->getOperand(1)->stripPointerCasts());
@@ -192,7 +193,7 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSand
       
       if (annotationStrValCString.startswith(SOAAP_SANDBOX_REGION_END)) {
         StringRef endSandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_REGION_END)+1); //+1 because of _
-        DEBUG(dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump());
+        SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump());
         if (endSandboxName == startSandboxName) {
           // we have found the end of the region
           return;
@@ -222,7 +223,7 @@ FunctionVector SandboxUtils::getSandboxedMethods(SandboxVector& sandboxes) {
 
 void SandboxUtils::calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods) {
   Function* F = node->getFunction();
-  DEBUG(dbgs() << "Visiting " << F->getName() << "\n");
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << "Visiting " << F->getName() << "\n");
    
   if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
     // cycle detected
@@ -238,7 +239,7 @@ void SandboxUtils::calculateSandboxedMethods(CallGraphNode* node, int sandboxNam
     if (Function* calleeFunc = calleeNode->getFunction()) {
       //TODO: If an entry point, update sandboxName and entryPoint
       /*if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
-        DEBUG(dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
+        SDEBUG("soaap.util.sandbox", 3, dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
         sandboxName = sandboxEntryPointToName[calleeFunc];
         entryPoint = calleeFunc;
       }*/
@@ -268,7 +269,7 @@ void SandboxUtils::calculatePrivilegedMethods(Module& M, CallGraphNode* Node) {
     if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
       return;
 
-    DEBUG(dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
+    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
     privilegedMethods.push_back(F);
 
     // recurse on callees

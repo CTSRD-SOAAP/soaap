@@ -33,10 +33,10 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
       for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           for (const Function* F2 : PI->getDynamicCallees(C)) {
-            DEBUG(dbgs() << "F2: " << F2->getName() << "\n");
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << "F2: " << F2->getName() << "\n");
             CallGraphNode* F1Node = CG->getOrInsertFunction(F1);
             CallGraphNode* F2Node = CG->getOrInsertFunction(F2);
-            DEBUG(dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << "loadDynamicCallEdges: adding " << F1->getName() << " -> " << F2->getName() << "\n");
             F1Node->addCalledFunction(CallSite(C), F2Node);
           }
         }
@@ -61,12 +61,12 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
               DILocation loc(N);
               if (!displayedFuncName) {
                 // only display function on first function-pointer call
-                DEBUG(dbgs() << F->getName() << "\n");
+                SDEBUG("soaap.util.callgraph", 3, dbgs() << F->getName() << "\n");
                 string funcName = F->getName();
-                DEBUG(dbgs() << "got func name\n");
+                SDEBUG("soaap.util.callgraph", 3, dbgs() << "got func name\n");
                 int status = -4;
                 char* demangled = abi::__cxa_demangle(funcName.c_str(), 0, 0, &status);
-                DEBUG(dbgs() << "demangled, status=" << status << "\n");
+                SDEBUG("soaap.util.callgraph", 3, dbgs() << "demangled, status=" << status << "\n");
                 string sandboxed = SandboxUtils::isSandboxedFunction(F, sandboxes) ? " (sandboxed) " : "";
                 outs() << INDENT_1 << (status == 0 ? demangled : funcName) << sandboxed << ":\n";
                 displayedFuncName = true;
@@ -136,7 +136,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
 
   // for each fp-call, add annotated edges to the call graph
-  DEBUG(dbgs() << INDENT_1 << "Finding all fp calls\n");
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Finding all fp calls\n");
   if (fpInferredTargetsAnalysis.hasTargets() || fpAnnotatedTargetsAnalysis.hasTargets()) {
     CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
@@ -147,23 +147,23 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
           if (CallInst* C = dyn_cast<CallInst>(&*I)) {
             if (isIndirectCall(C)) {
               Value* FP = C->getCalledValue();
-              DEBUG(dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
-              DEBUG(dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
-              DEBUG(dbgs() << INDENT_3 << "FP: " << *FP << "\n");
-              DEBUG(dbgs() << INDENT_3 << "Inferred Targets: ";);
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "FP: " << *FP << "\n");
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Inferred Targets: ";);
               for (Function* T : fpInferredTargetsAnalysis.getTargets(FP)) {
-                DEBUG(dbgs() << " " << T->getName());
+                SDEBUG("soaap.util.callgraph", 3, dbgs() << " " << T->getName());
                 CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
                 callerNode->addCalledFunction(CallSite(C), calleeNode);
               }
-              DEBUG(dbgs() << "\n");
-              DEBUG(dbgs() << INDENT_3 << "Annotated Targets: ";);
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << "\n");
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Annotated Targets: ";);
               for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-                DEBUG(dbgs() << " " << T->getName());
+                SDEBUG("soaap.util.callgraph", 3, dbgs() << " " << T->getName());
                 CallGraphNode* calleeNode = CG->getOrInsertFunction(T);
                 callerNode->addCalledFunction(CallSite(C), calleeNode);
               }
-              DEBUG(dbgs() << "\n");
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << "\n");
             }
           }
         }
@@ -178,12 +178,12 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
 }
 
 FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {
-  DEBUG(dbgs() << INDENT_5 << "Getting callees for " << *C << "\n");
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_5 << "Getting callees for " << *C << "\n");
   if (callToCallees.empty() || !caching) {
     populateCallCalleeCaches(M);
   }
   bool debug = false;
-  DEBUG(debug = true);
+  SDEBUG("soaap.util.callgraph", 3, debug = true);
   if (debug) {
     dbgs() << INDENT_5 << "Callees: ";
     for (Function* F : callToCallees[C]) {
@@ -195,7 +195,7 @@ FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {
 }
 
 CallInstSet CallGraphUtils::getCallers(const Function* F, Module& M) {
-  DEBUG(dbgs() << INDENT_5 << "Getting callers for " << F->getName() << "\n");
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_5 << "Getting callers for " << F->getName() << "\n");
   if (calleeToCalls.empty() || !caching) {
     populateCallCalleeCaches(M);
   }
@@ -203,8 +203,8 @@ CallInstSet CallGraphUtils::getCallers(const Function* F, Module& M) {
 }
 
 void CallGraphUtils::populateCallCalleeCaches(Module& M) {
-  DEBUG(dbgs() << "-----------------------------------------------------------------\n");
-  DEBUG(dbgs() << INDENT_1 << "Populating call -> callees and callee -> calls cache\n");
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << "-----------------------------------------------------------------\n");
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Populating call -> callees and callee -> calls cache\n");
   map<int,int> calleeCountToFrequencies;
   long numIndCalls = 0;
   long numIndCallees = 0;
@@ -220,42 +220,42 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     CallGraphNode* F1Node = CG->getOrInsertFunction(F1);
-    DEBUG(dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
+    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
     for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         FunctionSet callees;
         if (Function* callee = getDirectCallee(C)) {
           if (!callee->isIntrinsic()) {
-            DEBUG(dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
             callees.insert(callee);
-            DEBUG(numDirectCallees++);
+            SDEBUG("soaap.util.callgraph", 3, numDirectCallees++);
           }
         }
         else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // dynamic/annotated callees/c++ virtual funcs
           bool isVCall = C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL;
           /*if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
             for (const Function* callee : PI->getDynamicCallees(C)) {
-              DEBUG(dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
               callees.insert((Function*)callee);
             }
           }*/
           for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
-            DEBUG(dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
             callees.insert(callee);
           }
           for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-            DEBUG(dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
             callees.insert(callee);
           }
           for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
-            DEBUG(dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
             callees.insert(callee);
           }
-          DEBUG(numIndCalls++);
-          DEBUG(numIndCallees += callees.size());
+          SDEBUG("soaap.util.callgraph", 3, numIndCalls++);
+          SDEBUG("soaap.util.callgraph", 3, numIndCallees += callees.size());
           if (isVCall) {
-            DEBUG(calleeCountToFrequencies[callees.size()]++);
-            DEBUG(numVCalls++);
+            SDEBUG("soaap.util.callgraph", 3, calleeCountToFrequencies[callees.size()]++);
+            SDEBUG("soaap.util.callgraph", 3, numVCalls++);
             /*if (callees.size() == 529) {
               for (Function* callee : callees) {
                 dbgs() << " " << callee->getName() << "\n";
@@ -276,7 +276,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
           callees.erase(F);
         }
 
-        DEBUG(numCallees += callees.size());
+        SDEBUG("soaap.util.callgraph", 3, numCallees += callees.size());
         callToCallees[C] = callees;
         for (Function* callee : callees) {
           calleeToCalls[callee].insert(C); // we process each C exactly once, so no dups!
@@ -287,8 +287,8 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
     }
   }
   bool outputStats = false;
-  DEBUG(outputStats = true);
-  DEBUG(dbgs() << "Direct callees: " << numDirectCallees << ", indirect calls: " << numIndCalls << ", indirect callees: " << numIndCallees << ", numCallees: " << numCallees << "\n");
+  SDEBUG("soaap.util.callgraph", 3, outputStats = true);
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << "Direct callees: " << numDirectCallees << ", indirect calls: " << numIndCalls << ", indirect callees: " << numIndCallees << ", numCallees: " << numCallees << "\n");
   if (outputStats) {
     dbgs() << "-----------------------------------------------------------------\n";
     dbgs() << "Outputting callee-count frequencies... (" << numIndCalls << " ind calls, " << numVCalls << " v calls, " <<  numIndCallees << " callees)\n";

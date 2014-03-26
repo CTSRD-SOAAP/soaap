@@ -26,7 +26,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
-          DEBUG(dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M);
           for (Context* C : Cs) {
             addToWorklist(annotateCall, C, worklist);
@@ -49,7 +49,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
           int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
         
-          DEBUG(dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
           for (Context* C : Cs) {
             state[C][annotatedVar] |= (1 << bitIdx);
@@ -77,7 +77,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
           if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
             StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
-            DEBUG(dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
+            SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
             state[ContextUtils::NO_CONTEXT][annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
             addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
           }
@@ -94,14 +94,14 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   for (Function* F : privilegedMethods) {
     for (BasicBlock& BB : F->getBasicBlockList()) {
       for (Instruction& I : BB.getInstList()) {
-        DEBUG(dbgs() << "   Instruction:\n");
-        DEBUG(I.dump());
+        SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "   Instruction:\n");
+        SDEBUG("soaap.analysis.infoflow.private", 3, I.dump());
         LoadInst* load2 = dyn_cast<LoadInst>(&I);
         if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
           Value* v = load->getPointerOperand()->stripPointerCasts();
-          DEBUG(dbgs() << "      Value:\n");
-          DEBUG(v->dump());
-          DEBUG(dbgs() << "      Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value:\n");
+          SDEBUG("soaap.analysis.infoflow.private", 3, v->dump());
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
           if (state[v] != 0) {
             outs() << " *** Privileged method " << F->getName() << " read data value private to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << "\n";
             if (MDNode *N = I.getMetadata("dbg")) {
@@ -124,15 +124,15 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
     Function* entryPoint = S->getEntryPoint();
     sandboxEntryPointToName[entryPoint] = name;
     for (Function* F : sandboxedFuncs) {
-      DEBUG(dbgs() << INDENT_1 << "Function: " << F->getName() << "\n");
+      SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Function: " << F->getName() << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
-          DEBUG(dbgs() << INDENT_2 << "Instruction: "; I.dump(););
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_2 << "Instruction: "; I.dump(););
           LoadInst* load2 = dyn_cast<LoadInst>(&I);
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand()->stripPointerCasts();
-            DEBUG(dbgs() << INDENT_3 << "Value: "; v->dump(););
-            DEBUG(dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
+            SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value: "; v->dump(););
+            SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
             if (!(state[S][v] == 0 || (state[S][v] & name) == state[S][v])) {
               outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[S][v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
@@ -162,11 +162,11 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
     FunctionVector callgates = S->getCallgates();
     int name = 1 << S->getNameIdx();
     for (Function* F : sandboxedFuncs) {
-      DEBUG(dbgs() << INDENT_1 << "Function: " << F->getName());
-      DEBUG(dbgs() << ", sandbox names: " << SandboxUtils::stringifySandboxNames(name) << "\n");
+      SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Function: " << F->getName());
+      SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << ", sandbox names: " << SandboxUtils::stringifySandboxNames(name) << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
-          DEBUG(dbgs() << INDENT_2 << "Instruction: "; I.dump(););
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_2 << "Instruction: "; I.dump(););
           // if assignment to a global variable, then check taint of value
           // being assigned
           if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
@@ -208,7 +208,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               }
               else if (Callee->getBasicBlockList().empty()) {
                 // extern function
-                DEBUG(dbgs() << "Extern callee: " << Callee->getName() << "\n");
+                SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "Extern callee: " << Callee->getName() << "\n");
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
                   if (state[S][arg] & name) {

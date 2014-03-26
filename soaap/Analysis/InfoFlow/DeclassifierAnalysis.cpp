@@ -11,13 +11,13 @@ using namespace soaap;
 
 void DeclassifierAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
 
-  DEBUG(dbgs() << "Starting declassifier analysis\n");
+  SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "Starting declassifier analysis\n");
 
   // initialise with pointers to annotated fields and uses of annotated global variables
   string declassifyFuncBaseName = "__soaap_declassify";
   for (Function& F : M.getFunctionList()) {
     if (F.getName().startswith(declassifyFuncBaseName)) {
-      DEBUG(dbgs() << "   Found " << F.getName() << " function\n");
+      SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "   Found " << F.getName() << " function\n");
       for (User* U : F.users()) {
         if (CallInst* call = dyn_cast<CallInst>(U)) {
           //call->dump();
@@ -29,12 +29,12 @@ void DeclassifierAnalysis::initialise(ValueContextPairList& worklist, Module& M,
               // mark all loaded values of alloca within the declassified region
               // as being declassified (this will then propagate throughout the 
               // program)
-              DEBUG(dbgs() << "Declassified code region\n");
+              SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "Declassified code region\n");
               for (Instruction* I : valueToDeclassifiedRegion[alloca]) {
-                DEBUG(dbgs() << "I: " << *I << "\n");
+                SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "I: " << *I << "\n");
                 if (LoadInst* L = dyn_cast<LoadInst>(I)) {
                   if (L->getPointerOperand() == alloca) {
-                    DEBUG(dbgs() << "Adding " << *L << " to worklist\n");
+                    SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "Adding " << *L << " to worklist\n");
                     state[ContextUtils::NO_CONTEXT][L] = true;
                     addToWorklist(L, ContextUtils::NO_CONTEXT, worklist);
                   }
@@ -61,7 +61,7 @@ void DeclassifierAnalysis::findAllFollowingInstructions(Instruction* I, Value* V
 
   for (BasicBlock::iterator BE = BB->end(); BI != BE; BI++) {
     I = &*BI;
-    DEBUG(I->dump());
+    SDEBUG("soaap.analysis.infoflow.declassify", 3, I->dump());
     valueToDeclassifiedRegion[V].push_back(I);
   }
 
@@ -73,7 +73,7 @@ void DeclassifierAnalysis::findAllFollowingInstructions(Instruction* I, Value* V
 }
 
 void DeclassifierAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  DEBUG(dbgs() << "Finished declassifier analysis\n");
+  SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "Finished declassifier analysis\n");
 }
 
 bool DeclassifierAnalysis::performMeet(bool from, bool& to) {

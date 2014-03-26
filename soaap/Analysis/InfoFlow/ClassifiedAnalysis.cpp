@@ -65,18 +65,18 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
   // validate that classified data is never accessed inside sandboxed contexts that
   // don't have clearance for its class.
   for (Sandbox* S : sandboxes) {
-    DEBUG(dbgs() << INDENT_1 << "Sandbox: " << S->getName() << "\n");
+    SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_1 << "Sandbox: " << S->getName() << "\n");
     FunctionVector sandboxedFuncs = S->getFunctions();
     int clearances = S->getClearances();
     for (Function* F : sandboxedFuncs) {
-      DEBUG(dbgs() << INDENT_1 << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
+      SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_1 << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
         for (Instruction& I : BB.getInstList()) {
-          DEBUG(dbgs() << INDENT_2 << "Instruction: "; I.dump(););
+          SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_2 << "Instruction: "; I.dump(););
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand();
-            DEBUG(dbgs() << INDENT_3 << "Value dump: "; v->dump(););
-            DEBUG(dbgs() << INDENT_3 << "Value classes: " << state[S][v] << ", " << ClassifiedUtils::stringifyClassNames(state[S][v]) << "\n");
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value dump: "; v->dump(););
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value classes: " << state[S][v] << ", " << ClassifiedUtils::stringifyClassNames(state[S][v]) << "\n");
             if (!(state[S][v] == 0 || (state[S][v] & clearances) == state[S][v])) {
               outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[S][v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {
@@ -88,8 +88,8 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
           }
           else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
             Value* v = store->getValueOperand();
-            DEBUG(dbgs() << INDENT_3 << "Value dump: "; v->dump(););
-            DEBUG(dbgs() << INDENT_3 << "Value classes: " << state[S][v] << ", " << ClassifiedUtils::stringifyClassNames(state[S][v]) << "\n");
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value dump: "; v->dump(););
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value classes: " << state[S][v] << ", " << ClassifiedUtils::stringifyClassNames(state[S][v]) << "\n");
             if (!(state[S][v] == 0 || (state[S][v] & clearances) == state[S][v])) {
               outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value of class: " << ClassifiedUtils::stringifyClassNames(state[S][v]) << " but only has clearances for: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n";
               if (MDNode *N = I.getMetadata("dbg")) {

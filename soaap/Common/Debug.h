@@ -10,7 +10,7 @@
   if (debugging(NAME,VERBOSITY,__FUNCTION__)) { \
     do { \
          errs().changeColor(raw_ostream::Colors::GREEN); \
-         errs() << "[" << __FUNCTION__ << "]\n"; \
+         errs() << "[" << __FUNCTION__ << " (" << NAME << ")]\n"; \
          errs().resetColor(); \
          X; \
        } while (0); \

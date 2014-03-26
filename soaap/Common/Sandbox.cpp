@@ -1,3 +1,4 @@
+#include "Common/Debug.h"
 #include "Common/Sandbox.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
@@ -17,29 +18,29 @@ using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
-	DEBUG(dbgs() << INDENT_2 << "Finding sandboxed functions\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed functions\n");
   findSandboxedFunctions();
-	DEBUG(dbgs() << INDENT_2 << "Finding shared global variables\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding shared global variables\n");
   findSharedGlobalVariables();
-	DEBUG(dbgs() << INDENT_2 << "Finding callgates\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
   findCallgates();
-	DEBUG(dbgs() << INDENT_2 << "Finding capabilities\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding capabilities\n");
   findCapabilities();
-  DEBUG(dbgs() << INDENT_2 << "Finding creation points\n");
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
   findCreationPoints();
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
-	DEBUG(dbgs() << INDENT_2 << "Finding sandboxed functions\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed functions\n");
   findSandboxedFunctions();
-	DEBUG(dbgs() << INDENT_2 << "Finding shared global variables\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding shared global variables\n");
   findSharedGlobalVariables();
-	DEBUG(dbgs() << INDENT_2 << "Finding callgates\n");
+	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
   findCallgates();
-	//DEBUG(dbgs() << INDENT_2 << "Finding capabilities\n");
+	//SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding capabilities\n");
   //findCapabilities();
-  DEBUG(dbgs() << INDENT_2 << "Finding creation points\n");
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
   findCreationPoints();
 }
 
@@ -125,13 +126,13 @@ void Sandbox::findSandboxedFunctions() {
     CallGraphNode* node = CG->getOrInsertFunction(F);
     findSandboxedFunctionsHelper(node);
   }
-  DEBUG(dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
 }
 
 
 void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
   Function* F = node->getFunction();
-  DEBUG(dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
    
   // check for cycle
   if (functionsSet.find(F) != functionsSet.end()) {
@@ -233,7 +234,7 @@ void Sandbox::findCallgates() {
    */
   for (Function& F : module.getFunctionList()) {
     if (F.getName().startswith("__soaap_declare_callgates_helper_")) {
-      DEBUG(dbgs() << INDENT_3 << "Found __soaap_declare_callgates_helper_\n");
+      SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found __soaap_declare_callgates_helper_\n");
       StringRef sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
       dbgs() << INDENT_3 << "Sandbox name: " << sandboxName << "\n";
       if (sandboxName == name) {
@@ -292,7 +293,7 @@ void Sandbox::findCapabilities() {
             ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
             StringRef annotationStrValCString = annotationStrValArray->getAsCString();
 
-            DEBUG(dbgs() << INDENT_3 << "Annotation: " << annotationStrValCString << "\n");
+            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Annotation: " << annotationStrValCString << "\n");
 
             /*
              * Find out the enclosing function and record which
@@ -320,7 +321,7 @@ void Sandbox::findCapabilities() {
                 else if (annotationStrValCString == FD_WRITE) {
                   caps[annotatedArg] |= FD_WRITE_MASK;
                 }
-                DEBUG(dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
+                SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
               }
             }
           }
@@ -342,7 +343,7 @@ void Sandbox::findCreationPoints() {
         if (annotationStrValCString.startswith(SOAAP_PERSISTENT_SANDBOX_CREATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_PERSISTENT_SANDBOX_CREATE)+1); //+1 because of _
           if (sandboxName == name) {
-            DEBUG(dbgs() << INDENT_3 << "Found persistent creation point: "; annotateCall->dump(););
+            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found persistent creation point: "; annotateCall->dump(););
             creationPoints.push_back(annotateCall);
             persistent = true;
           }
@@ -350,7 +351,7 @@ void Sandbox::findCreationPoints() {
         else if (annotationStrValCString.startswith(SOAAP_EPHEMERAL_SANDBOX_CREATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_EPHEMERAL_SANDBOX_CREATE)+1); //+1 because of _
           if (sandboxName == name) {
-            DEBUG(dbgs() << INDENT_3 << "Found ephemeral creation point: "; annotateCall->dump(););
+            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found ephemeral creation point: "; annotateCall->dump(););
             creationPoints.push_back(annotateCall);
             persistent = false;
           }

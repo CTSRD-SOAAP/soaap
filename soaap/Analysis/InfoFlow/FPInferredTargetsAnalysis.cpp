@@ -14,10 +14,10 @@ FunctionSet fpTargetsUniv; // all possible fp targets in the program
 void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
   FPTargetsAnalysis::initialise(worklist, M, sandboxes);
 
-  DEBUG(dbgs() << "Running FP inferred targets analysis\n");
+  SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Running FP inferred targets analysis\n");
 
   bool debug = false;
-  DEBUG(debug = true);
+  SDEBUG("soaap.analysis.infoflow.fp.infer", 3, debug = true);
   if (debug) {
     dbgs() << "Program statistics:\n";
 
@@ -70,10 +70,10 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
   
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
-    DEBUG(dbgs() << F->getName() << "\n");
+    SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F->getName() << "\n");
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (StoreInst* S = dyn_cast<StoreInst>(&*I)) { // assignments
-        //DEBUG(dbgs() << F->getName() << ": " << *S);
+        //SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F->getName() << ": " << *S);
         Value* Rval = S->getValueOperand()->stripInBoundsConstantOffsets();
         if (Function* T = dyn_cast<Function>(Rval)) {
           if (!T->isDeclaration()) {
@@ -84,7 +84,7 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
             addToWorklist(Lvar, ContextUtils::SINGLE_CONTEXT, worklist);
 
             if (isa<GetElementPtrInst>(Lvar)) {
-              DEBUG(dbgs() << "Rewinding back to alloca\n");
+              SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Rewinding back to alloca\n");
               ValueSet visited;
               propagateToAggregate(Lvar, ContextUtils::SINGLE_CONTEXT, Lvar, visited, worklist, sandboxes, M);
             }
@@ -126,7 +126,7 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
     }
   }
 
-  DEBUG(dbgs() << "Globals:\n");
+  SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Globals:\n");
   // In some applications, functions are stored within globals aggregates like arrays
   // We search for such arrays conflating any structure contained within
   ValueSet visited;
@@ -144,13 +144,13 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
   if (!visited.count(V)) {
     visited.insert(V);
     if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
-      DEBUG(dbgs() << INDENT_1 << "Global var: " << G->getName() << "\n");
+      SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << INDENT_1 << "Global var: " << G->getName() << "\n");
       if (G->hasInitializer()) {
         findAllFunctionPointersInValue(G->getInitializer(), worklist, visited);
       }
     }
     else if (ConstantArray* CA = dyn_cast<ConstantArray>(V)) {
-      DEBUG(dbgs() << INDENT_1 << "Constant array, num of operands: " << CA->getNumOperands() << "\n");
+      SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << INDENT_1 << "Constant array, num of operands: " << CA->getNumOperands() << "\n");
       for (int i=0; i<CA->getNumOperands(); i++) {
         Value* V2 = CA->getOperand(i)->stripInBoundsOffsets();
         findAllFunctionPointersInValue(V2, worklist, visited);
@@ -159,13 +159,13 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
     else if (Function* F = dyn_cast<Function>(V)) {
       if (!F->isDeclaration()) {
         fpTargetsUniv.insert(F);
-        DEBUG(dbgs() << INDENT_1 << "Func: " << F->getName() << "\n");
+        SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << INDENT_1 << "Func: " << F->getName() << "\n");
         setBitVector(state[ContextUtils::SINGLE_CONTEXT][V], F);
         addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
       }
     }
     else if (ConstantStruct* S = dyn_cast<ConstantStruct>(V)) {
-      DEBUG(dbgs() << INDENT_1 << "Struct, num of fields: " << S->getNumOperands() << "\n");
+      SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << INDENT_1 << "Struct, num of fields: " << S->getNumOperands() << "\n");
       for (int j=0; j<S->getNumOperands(); j++) {
         Value* V2 = S->getOperand(j)->stripInBoundsOffsets();
         findAllFunctionPointersInValue(V2, worklist, visited);

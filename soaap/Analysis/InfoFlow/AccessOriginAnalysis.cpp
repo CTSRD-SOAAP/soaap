@@ -3,6 +3,7 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/raw_ostream.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
+#include "Common/Debug.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
@@ -67,7 +68,7 @@ void AccessOriginAnalysis::ppPrivilegedPathToInstruction(Instruction* I, Module&
     outs() << "  Possible causes\n";
     for (CallInst* C : untrustedSources) {
       Function* Via = C->getParent()->getParent();
-      DEBUG(outs() << MainFn->getName() << " -> " << Via->getName() << " -> " << Target->getName() << "\n");
+      SDEBUG("soaap.analysis.infoflow.accessorigin", 3, outs() << MainFn->getName() << " -> " << Via->getName() << " -> " << Target->getName() << "\n");
       list<Instruction*> trace1 = PrettyPrinters::findPathToFunc(MainFn, Via, NULL, -1);
       list<Instruction*> trace2 = PrettyPrinters::findPathToFunc(Via, Target, &state[ContextUtils::PRIV_CONTEXT], ORIGIN_SANDBOX);
       // check that we have successfully been able to find a full trace!
