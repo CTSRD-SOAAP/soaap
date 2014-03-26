@@ -20,7 +20,7 @@ bool soaap::debugging(StringRef ModuleName, int Verbosity, StringRef FunctionNam
       && (CmdLineOpts::DebugFunction.empty() || matches(FunctionName, CmdLineOpts::DebugFunction));
 }
 
-bool soaap::matches(StringRef pattern, StringRef name) {
+bool soaap::matches(StringRef name, StringRef pattern) {
   // Let e.g. 'soaap.infoflow' match 'soaap.infoflow.anything'.
   if (name.size() > pattern.size()
       && name.startswith(pattern)

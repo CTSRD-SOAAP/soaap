@@ -22,7 +22,7 @@ using namespace llvm;
 namespace soaap {
 #ifndef NDEBUG  
   bool debugging(StringRef ModuleName, int Verbosity, StringRef FunctionName);
-  bool matches(StringRef pattern, StringRef name);
+  bool matches(StringRef name, StringRef pattern);
 #endif
 }
 
