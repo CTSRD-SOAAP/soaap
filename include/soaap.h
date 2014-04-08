@@ -109,4 +109,29 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define SOAAP_DANGEROUS "SOAAP_DANGEROUS"
 #define __soaap_dangerous __attribute__((annotate(SOAAP_DANGEROUS)))
 
+/**
+ * Limit the system calls that can be performed from this point on in the
+ * current execution process (sandbox or regular process).
+ *
+ * This is a mechanism-description annotation that should eventually be
+ * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
+ */
+#define __SOAAP_SYSCALLS "SOAAP_SYSCALLS"
+#define __soaap_limit_syscalls(syscalls...) \
+	__attribute__((annotate(__SOAAP_SYSCALLS "_" #syscalls)))
+
+/**
+ * Limit the system calls that can be called with respect to a file descriptor.
+ *
+ * This mask of allowable system calls should be combined with the global
+ * syscall mask (if any) when determining whether or not a system call will
+ * be permitted by the sandboxing mechanism.
+ *
+ * This is a mechanism-description annotation that should eventually be
+ * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
+ */
+#define __SOAAP_FD_SYSCALLS "SOAAP_FD_SYSCALLS"
+#define __soaap_limit_fd_syscalls(fd, syscalls...) \
+	__builtin_annotation(fd, __SOAAP_FD_SYSCALLS "_" #syscalls)
+
 #endif /* SOAAP_H */
