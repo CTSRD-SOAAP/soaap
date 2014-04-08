@@ -23,6 +23,7 @@ namespace soaap {
       static string DebugModule;
       static string DebugFunction;
       static int DebugVerbosity;
+      static int SummariseTraces;
   };
 }
 

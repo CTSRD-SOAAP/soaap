@@ -64,3 +64,8 @@ int CmdLineOpts::DebugVerbosity;
 static cl::opt<int, true> ClDebugVerbosity("soaap-debug-verbosity",
        cl::desc("Level of debug verbosity"),
        cl::location(CmdLineOpts::DebugVerbosity));
+
+int CmdLineOpts::SummariseTraces;
+static cl::opt<int, true> ClSummariseTraces("soaap-summarise-traces",
+       cl::desc("Summarise stack traces so that atmost the specified number of calls are shown from the top and the same number from the bottom of the trace"),
+       cl::location(CmdLineOpts::SummariseTraces));

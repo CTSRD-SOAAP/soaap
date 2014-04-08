@@ -1,4 +1,5 @@
 #include "ADT/QueueSet.h"
+#include "Common/CmdLineOpts.h"
 #include "Common/Debug.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/LLVMAnalyses.h"
@@ -148,22 +149,40 @@ void PrettyPrinters::ppTaintSource(CallInst* C) {
 }
 
 void PrettyPrinters::ppTrace(InstTrace& trace) {
-  for (Instruction* I : trace) {
-    if (I == NULL) {
-      dbgs() << "I is null\n";
+  bool summariseTrace = CmdLineOpts::SummariseTraces != 0 && (CmdLineOpts::SummariseTraces*2 < trace.size());
+  if (summariseTrace) {
+    InstTrace::iterator I=trace.begin();
+    int i=0;
+    for (; i<CmdLineOpts::SummariseTraces; I++, i++) {
+      ppInstruction(*I);
     }
+    outs() << "      ...\n";
+    outs() << "      ...\n";
+    outs() << "      ...\n";
+    // fast forward to the end
+    while (trace.size()-i > CmdLineOpts::SummariseTraces) {
+      i++;
+      I++;
+    }
+    for (; i<trace.size(); I++, i++) {
+      ppInstruction(*I);
+    }
+  }
+  else {
+    for (Instruction* I : trace) {
+      ppInstruction(I);
+    }
+  }
+}
+
+void PrettyPrinters::ppInstruction(Instruction* I) {
+  if (MDNode *N = I->getMetadata("dbg")) {
+    DILocation Loc(N);
     Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
-    if (EnclosingFunc == NULL) {
-      dbgs() << "EnclosingFunc is NULL\n";
-      I->dump();
-    }
-    if (MDNode *N = I->getMetadata("dbg")) {
-      DILocation Loc(N);
-      unsigned Line = Loc.getLineNumber();
-      StringRef File = Loc.getFilename();
-      unsigned FileOnlyIdx = File.find_last_of("/");
-      StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-      outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
-    }
+    unsigned Line = Loc.getLineNumber();
+    StringRef File = Loc.getFilename();
+    unsigned FileOnlyIdx = File.find_last_of("/");
+    StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+    outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
   }
 }

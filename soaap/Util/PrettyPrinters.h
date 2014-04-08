@@ -21,6 +21,7 @@ namespace soaap {
     private:
       static map<Function*,InstTrace> shortestCallPathsFromMain;
       static void calculateShortestCallPathsFromMain(Module& M);
+      static void ppInstruction(Instruction* I);
   };
 }
 
