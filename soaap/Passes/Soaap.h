@@ -41,7 +41,7 @@ namespace soaap {
 
     private:
       SandboxVector sandboxes;
-      FunctionVector privilegedMethods;
+      FunctionSet privilegedMethods;
       StringVector vulnerableVendors;
       void processCmdLineArgs(Module& M);
       void checkPrivilegedCalls(Module& M);

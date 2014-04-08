@@ -19,7 +19,7 @@ using namespace llvm;
 int SandboxUtils::nextSandboxNameBitIdx = 0;
 map<string,int> SandboxUtils::sandboxNameToBitIdx;
 map<int,string> SandboxUtils::bitIdxToSandboxName;
-FunctionVector SandboxUtils::privilegedMethods;
+FunctionSet SandboxUtils::privilegedMethods;
 SmallSet<Function*,16> SandboxUtils::sandboxEntryPoints;
 
 string SandboxUtils::stringifySandboxNames(int sandboxNames) {
@@ -248,7 +248,7 @@ void SandboxUtils::calculateSandboxedMethods(CallGraphNode* node, int sandboxNam
   }
 }
 
-FunctionVector SandboxUtils::getPrivilegedMethods(Module& M) {
+FunctionSet SandboxUtils::getPrivilegedMethods(Module& M) {
   if (privilegedMethods.empty()) {
     CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     if (Function* MainFunc = M.getFunction("main")) {
@@ -266,11 +266,11 @@ void SandboxUtils::calculatePrivilegedMethods(Module& M, CallGraphNode* Node) {
       return;
     
     // if already visited this function, then ignore as cycle detected
-    if (find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end())
+    if (privilegedMethods.count(F) > 0)
       return;
 
     SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
-    privilegedMethods.push_back(F);
+    privilegedMethods.insert(F);
 
     // recurse on callees
     for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
@@ -283,7 +283,7 @@ bool SandboxUtils::isPrivilegedMethod(Function* F, Module& M) {
   if (privilegedMethods.empty()) {
     getPrivilegedMethods(M); // force calculation
   }
-  return find(privilegedMethods.begin(), privilegedMethods.end(), F) != privilegedMethods.end();
+  return privilegedMethods.count(F) > 0;
 }
 
 Sandbox* SandboxUtils::getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes) {

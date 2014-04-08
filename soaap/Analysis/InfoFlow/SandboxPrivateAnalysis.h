@@ -11,7 +11,7 @@ namespace soaap {
 
   class SandboxPrivateAnalysis : public InfoFlowAnalysis<int> {
     public:
-      SandboxPrivateAnalysis(bool contextInsensitive, FunctionVector& privMethods) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privMethods) { }
+      SandboxPrivateAnalysis(bool contextInsensitive, FunctionSet& privMethods) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privMethods) { }
     
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
@@ -22,7 +22,7 @@ namespace soaap {
       virtual string stringifyFact(int fact);
 
     private:
-      FunctionVector privilegedMethods;
+      FunctionSet privilegedMethods;
       DeclassifierAnalysis declassifierAnalysis;
   };
 }

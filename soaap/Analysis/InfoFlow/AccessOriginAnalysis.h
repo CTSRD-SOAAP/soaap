@@ -12,7 +12,7 @@ namespace soaap {
     static const int ORIGIN_SANDBOX = 1;
 
     public:
-      AccessOriginAnalysis(bool contextInsensitive, FunctionVector& privileged) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privileged) { }
+      AccessOriginAnalysis(bool contextInsensitive, FunctionSet& privileged) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privileged) { }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
@@ -22,7 +22,7 @@ namespace soaap {
       virtual string stringifyFact(int fact);
 
     private:
-      FunctionVector privilegedMethods;
+      FunctionSet privilegedMethods;
       CallInstVector untrustedSources;
 
       void ppPrivilegedPathToInstruction(Instruction* I, Module& M);

@@ -22,7 +22,7 @@ namespace soaap {
       static string stringifySandboxNames(int sandboxNames);
       static string stringifySandboxVector(SandboxVector& sandboxes);
       static bool isSandboxEntryPoint(Module& M, Function* F);
-      static FunctionVector getPrivilegedMethods(Module& M);
+      static FunctionSet getPrivilegedMethods(Module& M);
       static bool isPrivilegedMethod(Function* F, Module& M);
       static Sandbox* getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes);
@@ -33,7 +33,7 @@ namespace soaap {
       static map<string,int> sandboxNameToBitIdx;
       static map<int,string> bitIdxToSandboxName;
       static int nextSandboxNameBitIdx;
-      static FunctionVector privilegedMethods;
+      static FunctionSet privilegedMethods;
       static SmallSet<Function*,16> sandboxEntryPoints;
       static void calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
       static void calculatePrivilegedMethods(Module& M, CallGraphNode* Node);
