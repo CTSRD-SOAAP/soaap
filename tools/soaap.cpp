@@ -110,12 +110,14 @@ int main(int argc, char **argv) {
 
   // Figure out what stream we are supposed to write to...
   OwningPtr<tool_output_file> Out;
-  std::string ErrorInfo;
-  Out.reset(new tool_output_file(OutputFilename.c_str(), ErrorInfo,
-                                 sys::fs::F_None));
-  if (!ErrorInfo.empty()) {
-    errs() << ErrorInfo << '\n';
-    return 1;
+  if (!OutputFilename.empty()) {
+    std::string ErrorInfo;
+    Out.reset(new tool_output_file(OutputFilename.c_str(), ErrorInfo,
+                                   sys::fs::F_None));
+    if (!ErrorInfo.empty()) {
+      errs() << ErrorInfo << '\n';
+      return 1;
+    }
   }
 
   // Create a PassManager to hold and optimize the collection of passes we are
@@ -125,20 +127,24 @@ int main(int argc, char **argv) {
   Passes.add(new soaap::Soaap);
 
   // Check that the module is well formed on completion of optimization
-  if (Verify)
-    Passes.add(createVerifierPass());
+  if (!OutputFilename.empty()) {
+    if (Verify)
+      Passes.add(createVerifierPass());
 
-  // Pass to create output
-  if (OutputAssembly)
-    Passes.add(createPrintModulePass(Out->os()));                                                      
-  else                                                                                                  
-    Passes.add(createBitcodeWriterPass(Out->os()));                                                     
+    // Pass to create output
+    if (OutputAssembly)
+      Passes.add(createPrintModulePass(Out->os()));                                                      
+    else                                                                                                  
+      Passes.add(createBitcodeWriterPass(Out->os()));                                                     
+  }
 
   // Now that we have all of the passes ready, run them.
   Passes.run(*M.get());
 
   // Declare success.
-  Out->keep();
+  if (!OutputFilename.empty()) {
+    Out->keep();
+  }
 
   return 0;
 }
