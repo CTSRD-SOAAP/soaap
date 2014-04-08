@@ -1,3 +1,5 @@
+#include "ADT/QueueSet.h"
+#include "Common/Debug.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/LLVMAnalyses.h"
 #include "llvm/Analysis/CallGraph.h"
@@ -5,6 +7,73 @@
 #include "llvm/Support/raw_ostream.h"
 
 using namespace soaap;
+
+map<Function*,InstTrace> PrettyPrinters::shortestCallPathsFromMain;
+
+void PrettyPrinters::calculateShortestCallPathsFromMain(Module& M) {
+  // we use Dijkstra's algorithm
+  if (Function* MainFn = M.getFunction("main")) {
+    SDEBUG("soaap.pp", 3, dbgs() << INDENT_1 << "calculating shortest paths from main cache\n")
+    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+    CallGraphNode* MainNode = (*CG)[MainFn];
+
+    // Find privileged path to instruction I, via a function that calls a sandboxed callee
+    QueueSet<CallGraphNode*> worklist;
+    map<CallGraphNode*,int> distanceFromMain;
+    map<CallGraphNode*,CallGraphNode*> pred;
+    map<CallGraphNode*,CallInst*> call;
+
+    worklist.enqueue(MainNode);
+    distanceFromMain[MainNode] = 0;
+    pred[MainNode] = NULL;
+    call[MainNode] = NULL;
+
+    SDEBUG("soaap.pp", 3, dbgs() << INDENT_1 << "setting all distances from main to INT_MAX\n")
+    for (CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
+      CallGraphNode* N = I->second;
+      if (N != MainNode) {
+        distanceFromMain[N] = INT_MAX;
+      }
+    }
+
+    SDEBUG("soaap.pp", 3, dbgs() << INDENT_1 << "computing dijkstra's algorithm\n")
+    while (!worklist.empty()) {
+      CallGraphNode* N = worklist.dequeue();
+      SDEBUG("soaap.pp", 4, dbgs() << INDENT_2 << "Current func: " << N->getFunction()->getName() << "\n")
+      for (CallGraphNode::iterator I=N->begin(), E=N->end(); I!=E; I++) {
+        CallGraphNode* SuccN = I->second;
+        if (Function* SuccFunc = SuccN->getFunction()) {
+          SDEBUG("soaap.pp", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
+          if (distanceFromMain[SuccN] > distanceFromMain[N]+1) {
+            distanceFromMain[SuccN] = distanceFromMain[N]+1;
+            pred[SuccN] = N;
+            SDEBUG("soaap.pp", 4, dbgs() << INDENT_3 << "Call inst: " << *(I->first))
+            call[SuccN] = dyn_cast<CallInst>(I->first);
+            worklist.enqueue(SuccN);
+          }
+        }
+      }
+    }
+
+    // cache shortest paths for each function
+    SDEBUG("soaap.pp", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
+    for (CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
+      CallGraphNode* N = I->second;
+      if (distanceFromMain[N] < INT_MAX) { // N is reachable from main
+        InstTrace path;
+        CallGraphNode* CurrN = N;
+        while (CurrN != MainNode) {
+          path.push_back(call[CurrN]);
+          CurrN = pred[CurrN];
+        }
+        shortestCallPathsFromMain[N->getFunction()] = path;
+        SDEBUG("soaap.pp", 3, dbgs() << INDENT_1 << "Paths from main() to " << N->getFunction()->getName() << ": " << path.size() << "\n")
+      }
+    }
+
+    dbgs() << "completed calculating shortest paths from main cache\n";
+  }
+}
 
 bool findPathToFuncHelper(CallGraphNode* CurrNode, CallGraphNode* FinalNode, InstTrace& trace, list<CallGraphNode*>& visited, ValueIntMap* shadow, int taint) {
   if (CurrNode == FinalNode)
@@ -51,12 +120,16 @@ InstTrace PrettyPrinters::findPathToFunc(Function* From, Function* To, ValueIntM
 }
 
 void PrettyPrinters::ppPrivilegedPathToFunction(Function* Target, Module& M) {
+
+  if (shortestCallPathsFromMain.empty()) {
+    calculateShortestCallPathsFromMain(M);
+  }
+
   if (Function* MainFn = M.getFunction("main")) {
     // Find privileged path to instruction I, via a function that calls a sandboxed callee
     CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-    CallGraphNode* TargetNode = (*CG)[Target];
-    InstTrace trace = findPathToFunc(MainFn, Target, NULL, -1);
-    ppTrace(trace);
+    InstTrace& callStack = shortestCallPathsFromMain[Target];
+    ppTrace(callStack);
     outs() << "\n";
   }
 }
@@ -76,7 +149,14 @@ void PrettyPrinters::ppTaintSource(CallInst* C) {
 
 void PrettyPrinters::ppTrace(InstTrace& trace) {
   for (Instruction* I : trace) {
+    if (I == NULL) {
+      dbgs() << "I is null\n";
+    }
     Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
+    if (EnclosingFunc == NULL) {
+      dbgs() << "EnclosingFunc is NULL\n";
+      I->dump();
+    }
     if (MDNode *N = I->getMetadata("dbg")) {
       DILocation Loc(N);
       unsigned Line = Loc.getLineNumber();

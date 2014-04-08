@@ -17,6 +17,10 @@ namespace soaap {
       static void ppTaintSource(CallInst* C);
       static void ppTrace(InstTrace& trace);
       static InstTrace findPathToFunc(Function* From, Function* To, ValueIntMap* shadow, int taint);
+    
+    private:
+      static map<Function*,InstTrace> shortestCallPathsFromMain;
+      static void calculateShortestCallPathsFromMain(Module& M);
   };
 }
 
