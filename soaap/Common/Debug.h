@@ -1,7 +1,10 @@
 #ifndef SOAAP_COMMON_DEBUG_H
 #define SOAAP_COMMON_DEBUG_H
 
-#include <llvm/ADT/StringRef.h>
+#include "Util/DebugUtils.h"
+
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Debug.h"
 
 #ifdef NDEBUG
 #define SDEBUG(NAME,VERBOSITY,X)
