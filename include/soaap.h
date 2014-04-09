@@ -118,7 +118,7 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  */
 #define __SOAAP_SYSCALLS "SOAAP_SYSCALLS"
 #define __soaap_limit_syscalls(syscalls...) \
-	__attribute__((annotate(__SOAAP_SYSCALLS "_" #syscalls)))
+	__builtin_annotation(0, __SOAAP_SYSCALLS "_" #syscalls)
 
 /**
  * Limit the system calls that can be called with respect to a file descriptor.
