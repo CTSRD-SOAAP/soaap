@@ -131,8 +131,10 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   SandboxVector dummyVector;
   //fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
   if (CmdLineOpts::InferFPTargets) {
+    SDEBUG("soaap.util.callgraph", 3, dbgs() << "performing fp target inference\n")
     fpInferredTargetsAnalysis.doAnalysis(M, dummyVector);
   }
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding annotated fp targets\n")
   fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
 
   // for each fp-call, add annotated edges to the call graph
@@ -239,17 +241,23 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
               callees.insert((Function*)callee);
             }
           }*/
-          for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
-            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
-            callees.insert(callee);
+          if (isVCall) {
+            for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
+              callees.insert(callee);
+            }
           }
-          for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
-            callees.insert(callee);
+          if (fpInferredTargetsAnalysis.hasTargets()) {
+            for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
+              callees.insert(callee);
+            }
           }
-          for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
-            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
-            callees.insert(callee);
+          if (fpAnnotatedTargetsAnalysis.hasTargets()) {
+            for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
+              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
+              callees.insert(callee);
+            }
           }
           SDEBUG("soaap.util.callgraph", 3, numIndCalls++);
           SDEBUG("soaap.util.callgraph", 3, numIndCallees += callees.size());

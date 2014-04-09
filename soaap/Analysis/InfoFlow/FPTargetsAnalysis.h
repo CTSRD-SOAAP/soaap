@@ -13,7 +13,7 @@ namespace soaap {
     public:
       FPTargetsAnalysis() : InfoFlowAnalysis<BitVector>(true, false) { }
       virtual FunctionSet getTargets(Value* FP);
-      virtual bool hasTargets() { return !state.empty(); }
+      virtual bool hasTargets() { return !state[ContextUtils::SINGLE_CONTEXT].empty(); }
 
     protected:
       static map<Function*,int> funcToIdx;
