@@ -50,6 +50,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/soaap)
 link_directories(${LLVM_LIBRARY_DIR})
 
+add_subdirectory(include)
 add_subdirectory(soaap)
 add_subdirectory(tests)
 add_subdirectory(tools)
