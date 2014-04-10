@@ -357,14 +357,19 @@ namespace soaap {
 
   template <typename FactType>
   bool InfoFlowAnalysis<FactType>::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
-    if (state[cTo].find(to) == state[cTo].end()) {
-      state[cTo][to] = state[cFrom][from];
-      return true; // return true to allow state to propagate through
-                   // regardless of whether the value was non-bottom
-    }                   
+    if (mustAnalysis) {
+      if (state[cTo].find(to) == state[cTo].end()) {
+        state[cTo][to] = state[cFrom][from];
+        return true; // return true to allow state to propagate through
+                     // regardless of whether the value was non-bottom
+      }                   
+      else {
+        //FactType old = state[cTo][to];
+        //state[cTo][to] = performMeet(state[cFrom][from], old);
+        return performMeet(state[cFrom][from], state[cTo][to]);
+      }
+    }
     else {
-      //FactType old = state[cTo][to];
-      //state[cTo][to] = performMeet(state[cFrom][from], old);
       return performMeet(state[cFrom][from], state[cTo][to]);
     }
   }
