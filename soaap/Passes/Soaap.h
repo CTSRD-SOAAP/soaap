@@ -10,9 +10,9 @@
 
 #include "Common/Typedefs.h"
 #include "Common/Sandbox.h"
-#include "Analysis/GlobalVariableAnalysis.h"
 #include "Analysis/VulnerabilityAnalysis.h"
 #include "Analysis/PrivilegedCallAnalysis.h"
+#include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"

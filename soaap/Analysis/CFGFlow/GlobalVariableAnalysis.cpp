@@ -1,4 +1,4 @@
-#include "Analysis/GlobalVariableAnalysis.h"
+#include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
 
 #include "soaap.h"
 #include "Common/CmdLineOpts.h"

@@ -4,9 +4,9 @@ add_llvm_library(SOAAP
   Common/CmdLineOpts.cpp
   Common/Debug.cpp
   Common/Sandbox.cpp
-  Analysis/GlobalVariableAnalysis.cpp
   Analysis/VulnerabilityAnalysis.cpp
   Analysis/PrivilegedCallAnalysis.cpp
+  Analysis/CFGFlow/GlobalVariableAnalysis.cpp
   Analysis/InfoFlow/AccessOriginAnalysis.cpp
   Analysis/InfoFlow/SandboxPrivateAnalysis.cpp
   Analysis/InfoFlow/ClassifiedAnalysis.cpp
