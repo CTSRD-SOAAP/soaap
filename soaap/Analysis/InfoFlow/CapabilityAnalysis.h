@@ -12,7 +12,7 @@ namespace soaap {
 
   class CapabilityAnalysis : public InfoFlowAnalysis<int> {
     public:
-      CapabilityAnalysis(bool contextInsensitive) : InfoFlowAnalysis<int>(contextInsensitive) { }
+      CapabilityAnalysis(bool contextInsensitive) : InfoFlowAnalysis<int>(contextInsensitive, true) { }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
