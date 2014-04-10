@@ -17,7 +17,21 @@
 
 using namespace soaap;
 
-void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
+void GlobalVariableAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, SandboxVector& sandboxes) {
+  // Initialise worklist with basic blocks that contain creation points.
+  for (Sandbox* S : sandboxes) {
+    CallInstVector CV = S->getCreationPoints();
+    SDEBUG("soaap.analysis.globals", 3, dbgs() << "Total number of sandboxed functions: " << S->getFunctions().size() << "\n");
+    for (CallInst* C : CV) {
+      state[C] = (1 << S->getNameIdx()); // each creation point creates one sandbox
+      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_3 << "Added BB for creation point " << *C << "\n");
+      BasicBlock* BB = C->getParent();
+      worklist.enqueue(BB);
+    }
+  }
+}
+
+void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // reverse map of shared global var to sandbox for later
   map<GlobalVariable*,SandboxVector> varToSandboxes;
   
@@ -92,7 +106,6 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   // Look for writes to shared global variables in privileged methods
   // that are performed after a sandbox is created and thus will not 
   // be seen by the sandbox.
-  checkSharedGlobalWrites(M, sandboxes, varToSandboxes);
 
   /*
   for (Function* F : privilegedMethods) {
@@ -131,139 +144,6 @@ void GlobalVariableAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
     }
   }
   */
-}
-
-string GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
-  if (NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu")) {
-    ostringstream ss;
-    for (int i=0; i<NMD->getNumOperands(); i++) {
-      DICompileUnit CU(NMD->getOperand(i));
-      DIArray globals = CU.getGlobalVariables();
-      for (int j=0; j<globals.getNumElements(); j++) {
-        DIGlobalVariable GV(globals.getElement(j));
-        if (GV.getGlobal() == G) {
-          ss << "(" << GV.getFilename().str() << ":" << GV.getLineNumber() << ") ";
-          return ss.str();
-        }
-      }
-    }
-  }
-  return "";
-}
-
-// Check for writes that occur in the privileged parent after sandboxes have
-// been forked. A sandbox is considered to be forked at the point where a 
-// __soaap_create_persistent_sandbox annotation occurs.
-void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& sandboxes, map<GlobalVariable*,SandboxVector>& varToSandboxes) {
-  // At the point of a shared global variable write in the privileged parent, we
-  // essentially need to see which __create annotations reach the write
-  // instruction. 
-  
-  // Thus, the first thing to do is calculate the reaching __create annotations
-  // at each program point. We do not need to propagate into a sandbox
-  // entrypoint function. The existing taint analysis framework follows use-def
-  // chains where here we follow control flow.
-
-  SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_1 << "Calculating reaching sandbox creations\n");
-
-  // Analysis state and worklist
-  // reachingCreations is the combination of entry and exit dataflow information.
-  // (We don't need to distinguish between them because a global variable access  and
-  // a sandbox_create() annotation can never be in the same instruction).
-  map<Instruction*,int> reachingCreations;
-  SetVector<BasicBlock*> worklist;
-
-  SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_2 << "Initialising worklist with BBs containing creation annotations\n");
-  
-  SDEBUG("soaap.analysis.globals", 3, dbgs() << "Total number of functions: " << M.getFunctionList().size() << "\n");
-  SDEBUG("soaap.analysis.globals", 3, dbgs() << "Total number of privileged functions: " << privilegedMethods.size() << "\n");
-
-  // Initialise worklist with basic blocks that contain creation points.
-  for (Sandbox* S : sandboxes) {
-    CallInstVector CV = S->getCreationPoints();
-    SDEBUG("soaap.analysis.globals", 3, dbgs() << "Total number of sandboxed functions: " << S->getFunctions().size() << "\n");
-    for (CallInst* C : CV) {
-      reachingCreations[C] = (1 << S->getNameIdx()); // each creation point creates one sandbox
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_3 << "Added BB for creation point " << *C << "\n");
-      BasicBlock* BB = C->getParent();
-      worklist.insert(BB);
-    }
-  }
-
-
-  SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_2 << "Worklist contains " << worklist.size() << " BBs\n");
-  SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_2 << "Computing fixed point\n");
-
-  while (!worklist.empty()) {
-    BasicBlock* BB = worklist.pop_back_val();
-
-    SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_3 << "BB: " << *BB << "\n");
-    SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Computing entry\n");
-
-    // First, calculate join of predetcessor blocks
-    int reachingCreationsPredBB = 0;
-    for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
-      BasicBlock* PredBB = *PI;
-      TerminatorInst* T = PredBB->getTerminator();
-      reachingCreationsPredBB |= reachingCreations[T];
-    }
-
-    SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Computed entry: " << SandboxUtils::stringifySandboxNames(reachingCreationsPredBB) << "\n");
-    SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Propagating through current BB (" << BB->getParent()->getName() << ")\n");
-
-    // Second, process the current basic block
-    TerminatorInst* T = BB->getTerminator();
-    int oldTerminatorState = reachingCreations[T];
-    Instruction* predI;
-    for (Instruction& II : *BB) {
-      Instruction* I = &II;
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_5 << "Instruction: " << *I << "\n");
-      reachingCreations[I] |= (predI == NULL ? reachingCreationsPredBB : reachingCreations[predI]);
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "reachingCreations: " << SandboxUtils::stringifySandboxNames(reachingCreations[I]) << "\n");
-
-      if (CallInst* CI = dyn_cast<CallInst>(I)) {
-        if (!isa<IntrinsicInst>(CI)) {
-          SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Call to non-intrinsic\n");
-          FunctionSet callees = CallGraphUtils::getCallees(CI, M);
-          for (Function* callee : callees) {
-            if (!SandboxUtils::isSandboxEntryPoint(M, callee) && !callee->isDeclaration()) {
-              SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Propagating to callee " << callee->getName() << "\n");
-              // propagate to the entry block, and propagate back from the return blocks
-              BasicBlock& calleeEntryBB = callee->getEntryBlock();
-              Instruction& calleeFirstI = *calleeEntryBB.begin();
-              updateReachingCreationsStateAndPropagate(reachingCreations, &calleeFirstI, reachingCreations[I], worklist);
-              SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "New state: " << SandboxUtils::stringifySandboxNames(reachingCreations[&calleeFirstI]) << "\n");
-            }
-          }
-        }
-      }
-      else if (ReturnInst* RI = dyn_cast<ReturnInst>(I)) {
-        // propagate to callers
-        SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Return\n");
-        Function* callee = RI->getParent()->getParent();
-        CallInstSet callers = CallGraphUtils::getCallers(callee, M);
-        for (CallInst* CI : callers) {
-          SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Propagating to caller " << *CI << "\n");
-          updateReachingCreationsStateAndPropagate(reachingCreations, CI, reachingCreations[RI], worklist);
-          SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "New state: " << SandboxUtils::stringifySandboxNames(reachingCreations[CI]) << "\n");
-        }
-      }
-      predI = I;
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << "\n");
-    }
-
-    SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Propagating to successor BBs\n");
-
-    // Thirdly, propagate to successor blocks (if terminator's state changed)
-    if (reachingCreations[T] != oldTerminatorState) {
-      for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; ++SI) {
-        BasicBlock* SuccBB = *SI;
-        worklist.insert(SuccBB); 
-      }
-    }
-
-    //dbgs() << "Worklist size: " << worklist.size() << "\n";
-  }
 
   // Now check for each privileged write, whether it may be preceded by a sandbox-creation
   // annotation.
@@ -283,11 +163,11 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
                 readerSandboxNames |= (1 << S->getNameIdx());
               }
             }
-            int possInconsSandboxes = readerSandboxNames & reachingCreations[store];
+            int possInconsSandboxes = readerSandboxNames & state[store];
             if (possInconsSandboxes) {
               // check that this store is preceded by a sandbox_create annotation
               SDEBUG("soaap.analysis.globals", 3, dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
-              SDEBUG("soaap.analysis.globals", 3, dbgs() << "   readerSandboxNames: " << SandboxUtils::stringifySandboxNames(readerSandboxNames) << ", reachingCreations: " << SandboxUtils::stringifySandboxNames(reachingCreations[store]) << ", possInconsSandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << "\n");
+              SDEBUG("soaap.analysis.globals", 3, dbgs() << "   readerSandboxNames: " << SandboxUtils::stringifySandboxNames(readerSandboxNames) << ", reaching creations: " << SandboxUtils::stringifySandboxNames(state[store]) << ", possInconsSandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << "\n");
               if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
                 outs() << " *** Write to shared variable \"" << gv->getName() << "\" " << findGlobalDeclaration(M, gv) << "outside sandbox in method \"" << F->getName() << "\" will not be seen by the sandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << ". Synchronisation is needed to to propagate this update to the sandbox.\n";
                 if (MDNode *N = I.getMetadata("dbg")) {
@@ -303,13 +183,23 @@ void GlobalVariableAnalysis::checkSharedGlobalWrites(Module& M, SandboxVector& s
       }
     }
   }
+
 }
 
-void GlobalVariableAnalysis::updateReachingCreationsStateAndPropagate(map<Instruction*,int>& state, Instruction* I, int val, SetVector<BasicBlock*>& worklist) {
-  int oldState = state[I];
-  state[I] |= val;
-  if (state[I] != oldState) {
-    BasicBlock* BB = I->getParent();
-    worklist.insert(BB);
+string GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
+  if (NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu")) {
+    ostringstream ss;
+    for (int i=0; i<NMD->getNumOperands(); i++) {
+      DICompileUnit CU(NMD->getOperand(i));
+      DIArray globals = CU.getGlobalVariables();
+      for (int j=0; j<globals.getNumElements(); j++) {
+        DIGlobalVariable GV(globals.getElement(j));
+        if (GV.getGlobal() == G) {
+          ss << "(" << GV.getFilename().str() << ":" << GV.getLineNumber() << ") ";
+          return ss.str();
+        }
+      }
+    }
   }
+  return "";
 }
