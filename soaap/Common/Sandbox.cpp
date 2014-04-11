@@ -14,6 +14,8 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Transforms/Utils/Local.h"
 
+#include <sstream>
+
 using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
@@ -28,6 +30,8 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   findCapabilities();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
   findCreationPoints();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
+  findAllowedSysCalls();
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
@@ -42,6 +46,8 @@ Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m)
   //findCapabilities();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
   findCreationPoints();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
+  findAllowedSysCalls();
 }
 
 Function* Sandbox::getEntryPoint() {
@@ -362,6 +368,62 @@ void Sandbox::findCreationPoints() {
 
   validateEntryPointCalls();
 }
+
+void Sandbox::findAllowedSysCalls() {
+  // look for calls to __builtin_annotation(SOAAP_SYSCALLS_<LIST OF ALLOWED SYSCALLS>)
+  if (Function* AnnotFunc = module.getFunction("llvm.annotation.i32")) {
+    for (User* U : AnnotFunc->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        
+        if (annotationStrValCString.startswith(SOAAP_SYSCALLS)) {
+          // is this annotate call within this sandbox?
+          bool inThisSandbox = false;
+          if (entryPoint == NULL) {
+            // first scan the code region for annotateCall
+            for (Instruction* I : region) {
+              if (I == annotateCall) {
+                inThisSandbox = true;
+                break;
+              }
+            }
+          }
+          if (!inThisSandbox) {
+            // check called functions
+            Function* enclosingFunc = annotateCall->getParent()->getParent();
+            inThisSandbox = functionsSet.count(enclosingFunc) > 0;
+          }
+
+          if (inThisSandbox) {
+            StringRef sysCallsListCsv = annotationStrValCString.substr(strlen(SOAAP_SYSCALLS)+1); //+1 because of _
+            istringstream ss(sysCallsListCsv);
+            string sysCall;
+            while(getline(ss, sysCall, ',')) {
+              // trim leading and trailing spaces
+              size_t start = sysCall.find_first_not_of(" ");
+              size_t end = sysCall.find_last_not_of(" ");
+              sysCall = sysCall.substr(start, end-start+1);
+              SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "SysCall: " << sysCall << "\n");
+              if (Function* sysCallFn = module.getFunction(sysCall)) {
+                SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding Function* " << sysCallFn->getName() << "\n");
+                allowedSysCalls.insert(sysCallFn);
+              }
+              else {
+                SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Module doesn't call this syscall, so ignoring\n")
+              }
+            }
+
+          }
+        }
+      }
+    }
+  }
+
+  validateEntryPointCalls();
+}
+
 
 // check that all entrypoint calls are dominated by a creation call
 void Sandbox::validateEntryPointCalls() {

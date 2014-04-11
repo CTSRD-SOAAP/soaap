@@ -46,12 +46,14 @@ namespace soaap {
       GlobalVariableIntMap sharedVarToPerms;
       ValueIntMap caps;
       int overhead;
+      FunctionSet allowedSysCalls;
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
       void findSharedGlobalVariables();
       void findCallgates();
       void findCapabilities();
+      void findAllowedSysCalls();
       void findCreationPoints();
       void validateEntryPointCalls();
       bool validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace);
