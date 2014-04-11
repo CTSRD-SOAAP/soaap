@@ -45,6 +45,7 @@ namespace soaap {
       virtual void performDataFlowAnalysis(QueueSet<BasicBlock*>&, SandboxVector& sandboxes, Module& M);
       virtual void updateStateAndPropagate(Instruction* I, FactType val, QueueSet<BasicBlock*>& worklist);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
+      virtual FactType bottomValue() = 0;
   };
 
   template <class FactType>
@@ -64,7 +65,7 @@ namespace soaap {
       SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Computing entry\n");
 
       // First, calculate join of predecessor blocks
-      int entryBB = 0;
+      FactType entryBB = bottomValue();
       for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
         BasicBlock* PredBB = *PI;
         TerminatorInst* T = PredBB->getTerminator();
@@ -76,7 +77,7 @@ namespace soaap {
 
       // Second, process the current basic block
       TerminatorInst* T = BB->getTerminator();
-      int oldTerminatorState = state[T];
+      FactType oldTerminatorState = state[T];
       Instruction* predI;
       for (Instruction& II : *BB) {
         Instruction* I = &II;

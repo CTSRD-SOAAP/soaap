@@ -12,6 +12,7 @@ namespace soaap {
     protected:
       virtual void initialise(QueueSet<BasicBlock*>& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
+      virtual int bottomValue() { return 0; }
 
     private:
       FunctionSet privilegedMethods;
