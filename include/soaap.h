@@ -116,9 +116,9 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  * This is a mechanism-description annotation that should eventually be
  * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
  */
-#define __SOAAP_SYSCALLS "SOAAP_SYSCALLS"
+#define SOAAP_SYSCALLS "SOAAP_SYSCALLS"
 #define __soaap_limit_syscalls(syscalls...) \
-	__builtin_annotation(0, __SOAAP_SYSCALLS "_" #syscalls)
+	__builtin_annotation(0, SOAAP_SYSCALLS "_" #syscalls)
 
 /**
  * Limit the system calls that can be called with respect to a file descriptor.
@@ -130,8 +130,8 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  * This is a mechanism-description annotation that should eventually be
  * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
  */
-#define __SOAAP_FD_SYSCALLS "SOAAP_FD_SYSCALLS"
+#define SOAAP_FD_SYSCALLS "SOAAP_FD_SYSCALLS"
 #define __soaap_limit_fd_syscalls(fd, syscalls...) \
-	__builtin_annotation(fd, __SOAAP_FD_SYSCALLS "_" #syscalls)
+	__builtin_annotation(fd, SOAAP_FD_SYSCALLS "_" #syscalls)
 
 #endif /* SOAAP_H */
