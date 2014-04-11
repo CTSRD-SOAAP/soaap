@@ -46,6 +46,7 @@ namespace soaap {
       virtual void updateStateAndPropagate(Instruction* I, FactType val, QueueSet<BasicBlock*>& worklist);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) = 0;
       virtual FactType bottomValue() = 0;
+      virtual string stringifyFact(FactType& f) = 0;
   };
 
   template <class FactType>
@@ -61,8 +62,8 @@ namespace soaap {
     while (!worklist.empty()) {
       BasicBlock* BB = worklist.dequeue();
 
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_3 << "BB: " << *BB << "\n");
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Computing entry\n");
+      SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_3 << "BB: " << *BB << "\n");
+      SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_4 << "Computing entry\n");
 
       // First, calculate join of predecessor blocks
       FactType entryBB = bottomValue();
@@ -72,8 +73,8 @@ namespace soaap {
         entryBB |= state[T];
       }
 
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Computed entry: " << SandboxUtils::stringifySandboxNames(entryBB) << "\n");
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Propagating through current BB (" << BB->getParent()->getName() << ")\n");
+      SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_4 << "Computed entry: " << stringifyFact(entryBB) << "\n");
+      SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_4 << "Propagating through current BB (" << BB->getParent()->getName() << ")\n");
 
       // Second, process the current basic block
       TerminatorInst* T = BB->getTerminator();
@@ -81,42 +82,42 @@ namespace soaap {
       Instruction* predI;
       for (Instruction& II : *BB) {
         Instruction* I = &II;
-        SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_5 << "Instruction: " << *I << "\n");
+        SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_5 << "Instruction: " << *I << "\n");
         state[I] |= (predI == NULL ? entryBB : state[predI]);
-        SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "state: " << SandboxUtils::stringifySandboxNames(state[I]) << "\n");
+        SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "state: " << stringifyFact(state[I]) << "\n");
 
         if (CallInst* CI = dyn_cast<CallInst>(I)) {
           if (!isa<IntrinsicInst>(CI)) {
-            SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Call to non-intrinsic\n");
+            SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Call to non-intrinsic\n");
             FunctionSet callees = CallGraphUtils::getCallees(CI, M);
             for (Function* callee : callees) {
               if (!SandboxUtils::isSandboxEntryPoint(M, callee) && !callee->isDeclaration()) {
-                SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Propagating to callee " << callee->getName() << "\n");
+                SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Propagating to callee " << callee->getName() << "\n");
                 // propagate to the entry block, and propagate back from the return blocks
                 BasicBlock& calleeEntryBB = callee->getEntryBlock();
                 Instruction& calleeFirstI = *calleeEntryBB.begin();
                 updateStateAndPropagate(&calleeFirstI, state[I], worklist);
-                SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "New state: " << SandboxUtils::stringifySandboxNames(state[&calleeFirstI]) << "\n");
+                SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "New state: " << stringifyFact(state[&calleeFirstI]) << "\n");
               }
             }
           }
         }
         else if (ReturnInst* RI = dyn_cast<ReturnInst>(I)) {
           // propagate to callers
-          SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Return\n");
+          SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Return\n");
           Function* callee = RI->getParent()->getParent();
           CallInstSet callers = CallGraphUtils::getCallers(callee, M);
           for (CallInst* CI : callers) {
-            SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "Propagating to caller " << *CI << "\n");
+            SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Propagating to caller " << *CI << "\n");
             updateStateAndPropagate(CI, state[RI], worklist);
-            SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_6 << "New state: " << SandboxUtils::stringifySandboxNames(state[CI]) << "\n");
+            SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "New state: " << stringifyFact(state[CI]) << "\n");
           }
         }
         predI = I;
-        SDEBUG("soaap.analysis.globals", 3, dbgs() << "\n");
+        SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << "\n");
       }
 
-      SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_4 << "Propagating to successor BBs\n");
+      SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_4 << "Propagating to successor BBs\n");
 
       // Thirdly, propagate to successor blocks (if terminator's state changed)
       if (state[T] != oldTerminatorState) {
