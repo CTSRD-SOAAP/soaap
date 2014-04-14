@@ -274,7 +274,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
         }
         
         // remove declaration-only functions
-        FunctionSet kill;
+        /*FunctionSet kill;
         for (Function* F : callees) {
           if (F->isDeclaration()) {
             kill.insert(F);
@@ -282,7 +282,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
         }
         for (Function* F : kill) {
           callees.erase(F);
-        }
+        }*/
 
         SDEBUG("soaap.util.callgraph", 3, numCallees += callees.size());
         callToCallees[C] = callees;

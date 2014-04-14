@@ -117,6 +117,7 @@ void Sandbox::findSandboxedFunctions() {
     for (Instruction* I : region) {
       if (CallInst* C  = dyn_cast<CallInst>(I)) {
         for (Function* F : CallGraphUtils::getCallees(C, module)) {
+          if (F->isDeclaration()) continue;
           if (find(initialFuncs.begin(), initialFuncs.end(), F) == initialFuncs.end()) {
             initialFuncs.push_back(F);
           }
@@ -458,6 +459,7 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
         trace.push_front(CI);
         FunctionSet callees = CallGraphUtils::getCallees(CI, module);
         for (Function* callee : callees) {
+          if (callee->isDeclaration()) continue;
           if (callee == entryPoint) {
             // error
             outs() << "\n";

@@ -388,6 +388,7 @@ namespace soaap {
       if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
         const Value* V2 = NULL;
         for (Function* callee : callees) {
+          if (callee->isDeclaration()) continue;
           Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
           SDEBUG("soaap.infoflow", 4, dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n"
                     << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
