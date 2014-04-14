@@ -102,6 +102,14 @@ CallInstVector Sandbox::getCreationPoints() {
   return creationPoints;
 }
 
+CallInstVector Sandbox::getSysCallLimitPoints() {
+  return sysCallLimitPoints;
+}
+
+FunctionSet Sandbox::getAllowedSysCalls(CallInst* sysCallLimitPoint) {
+  return sysCallLimitPointToAllowedSysCalls[sysCallLimitPoint];
+}
+
 bool Sandbox::containsFunction(Function* F) {
   return functionsSet.find(F) != functionsSet.end();
 }
@@ -398,6 +406,8 @@ void Sandbox::findAllowedSysCalls() {
           }
 
           if (inThisSandbox) {
+            sysCallLimitPoints.push_back(annotateCall);
+            FunctionSet allowedSysCalls;
             StringRef sysCallsListCsv = annotationStrValCString.substr(strlen(SOAAP_SYSCALLS)+1); //+1 because of _
             istringstream ss(sysCallsListCsv);
             string sysCall;
@@ -415,7 +425,7 @@ void Sandbox::findAllowedSysCalls() {
                 SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Module doesn't call this syscall, so ignoring\n")
               }
             }
-
+            sysCallLimitPointToAllowedSysCalls[annotateCall] = allowedSysCalls;
           }
         }
       }

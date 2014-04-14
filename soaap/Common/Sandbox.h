@@ -27,6 +27,8 @@ namespace soaap {
       int getOverhead();
       bool isPersistent();
       CallInstVector getCreationPoints();
+      CallInstVector getSysCallLimitPoints();
+      FunctionSet getAllowedSysCalls(CallInst* sysCallLimitPoint);
       bool containsFunction(Function* F);
       bool hasCallgate(Function* F);
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
@@ -43,10 +45,11 @@ namespace soaap {
       FunctionVector functionsVec;
       DenseSet<Function*> functionsSet;
       CallInstVector creationPoints;
+      CallInstVector sysCallLimitPoints;
+      map<CallInst*,FunctionSet> sysCallLimitPointToAllowedSysCalls;
       GlobalVariableIntMap sharedVarToPerms;
       ValueIntMap caps;
       int overhead;
-      FunctionSet allowedSysCalls;
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
