@@ -51,6 +51,7 @@ namespace soaap {
       void checkPropagationOfSandboxPrivateData(Module& M);
       void checkPropagationOfClassifiedData(Module& M);
       void checkFileDescriptors(Module& M);
+      void checkSysCalls(Module& M);
       void calculatePrivilegedMethods(Module& M);
       void checkGlobalVariables(Module& M);
       void instrumentPerfEmul(Module& M);

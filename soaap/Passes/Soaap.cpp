@@ -12,6 +12,7 @@
 #include "Analysis/VulnerabilityAnalysis.h"
 #include "Analysis/PrivilegedCallAnalysis.h"
 #include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
+#include "Analysis/CFGFlow/SysCallsAnalysis.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
@@ -87,6 +88,9 @@ bool Soaap::runOnModule(Module& M) {
     outs() << "* Checking file descriptor accesses\n";
     checkFileDescriptors(M);
 
+    outs() << "* Checking system calls\n";
+    checkSysCalls(M);
+
     outs() << "* Checking propagation of data from sandboxes to privileged components\n";
     checkOriginOfAccesses(M);
     
@@ -145,6 +149,11 @@ void Soaap::checkPropagationOfClassifiedData(Module& M) {
 
 void Soaap::checkFileDescriptors(Module& M) {
   CapabilityAnalysis analysis(CmdLineOpts::ContextInsens);
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void Soaap::checkSysCalls(Module& M) {
+  SysCallsAnalysis analysis;
   analysis.doAnalysis(M, sandboxes);
 }
 
