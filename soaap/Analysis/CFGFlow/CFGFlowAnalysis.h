@@ -79,18 +79,20 @@ namespace soaap {
       // Second, process the current basic block
       TerminatorInst* T = BB->getTerminator();
       FactType oldTerminatorState = state[T];
-      Instruction* predI;
+      Instruction* predI = NULL;
       for (Instruction& II : *BB) {
         Instruction* I = &II;
         SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_5 << "Instruction: " << *I << "\n");
+        SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "State (before): " << stringifyFact(state[I]) << "\n")
         state[I] |= (predI == NULL ? entryBB : state[predI]);
-        SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "state: " << stringifyFact(state[I]) << "\n");
+        SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "State (after): " << stringifyFact(state[I]) << "\n");
 
         if (CallInst* CI = dyn_cast<CallInst>(I)) {
           if (!isa<IntrinsicInst>(CI)) {
             SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Call to non-intrinsic\n");
             FunctionSet callees = CallGraphUtils::getCallees(CI, M);
             for (Function* callee : callees) {
+              if (callee->isDeclaration()) continue;
               if (!SandboxUtils::isSandboxEntryPoint(M, callee) && !callee->isDeclaration()) {
                 SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Propagating to callee " << callee->getName() << "\n");
                 // propagate to the entry block, and propagate back from the return blocks
