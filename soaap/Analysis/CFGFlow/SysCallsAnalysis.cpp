@@ -81,7 +81,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
 }
 
 void SysCallsAnalysis::initFreeBSDSysCalls() {
-  int numSysCalls = sizeof(freebsd10_syscalls)/sizeof(void*);
+  int numSysCalls = sizeof(freebsd10_syscalls)/sizeof(freebsd10_syscalls[0]);
   SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "Num of sys calls: " << numSysCalls << "\n")
   for (int i=0; i<numSysCalls; i++) {
     string sysCall = freebsd10_syscalls[i];
