@@ -4,7 +4,6 @@
 #include "Common/CmdLineOpts.h"
 #include "Common/Debug.h"
 #include "Common/Sandbox.h"
-#include "OS/FreeBSD/syscalls.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
@@ -20,7 +19,7 @@
 using namespace soaap;
 
 void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, SandboxVector& sandboxes) {
-  initFreeBSDSysCalls();
+  freeBSDSysCallProvider.initSysCalls();
   for (Sandbox* S : sandboxes) {
     CallInstVector sysCallLimitPoints = S->getSysCallLimitPoints();
     for (CallInst* C : sysCallLimitPoints) {
@@ -31,7 +30,7 @@ void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, Sa
       for (Function* F : allowedSysCalls) {
         string sysCallName = F->getName();
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "setting bit for " << sysCallName << "\n")
-        int idx = sysCallToIdx[sysCallName];
+        int idx = freeBSDSysCallProvider.getIdx(sysCallName);
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "idx: " << idx << "\n")
         allowedSysCallsBitVector.resize(idx+1);
         allowedSysCallsBitVector.set(idx);
@@ -55,10 +54,10 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
           for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
             string funcName = Callee->getName();
             SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
-            if (freeBSDSysCalls.find(funcName) != freeBSDSysCalls.end()) {
+            if (freeBSDSysCallProvider.isSysCall(funcName)) {
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
               // this is a system call
-              int idx = sysCallToIdx[funcName];
+              int idx = freeBSDSysCallProvider.getIdx(funcName);
               BitVector& vector = state[C];
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
@@ -80,25 +79,13 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
   }
 }
 
-void SysCallsAnalysis::initFreeBSDSysCalls() {
-  int numSysCalls = sizeof(freebsd10_syscalls)/sizeof(freebsd10_syscalls[0]);
-  SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "Num of sys calls: " << numSysCalls << "\n")
-  for (int i=0; i<numSysCalls; i++) {
-    string sysCall = freebsd10_syscalls[i];
-    SDEBUG("soaap.analysis.cfgflow.syscalls", 4, dbgs() << "Adding " << i << ": "<< sysCall << "\n")
-    freeBSDSysCalls.insert(sysCall);
-    sysCallToIdx[sysCall] = i;
-    idxToSysCall[i] = sysCall;
-  }
-}
-
 string SysCallsAnalysis::stringifyFact(BitVector& vector) {
   stringstream ss;
   ss << "[";
   int idx = 0;
   for (int i=0; i<vector.count(); i++) {
     idx = (i == 0) ? vector.find_first() : vector.find_next(idx);
-    ss << ((i > 0) ? "," : "") << idxToSysCall[idx];
+    ss << ((i > 0) ? "," : "") << freeBSDSysCallProvider.getSysCall(idx);
   }
   ss << "]";
   return ss.str();

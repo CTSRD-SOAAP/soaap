@@ -2,6 +2,7 @@
 #define SOAAP_ANALYSIS_CFGFLOW_SYSCALLSANALYSIS_H
 
 #include "Analysis/CFGFlow/CFGFlowAnalysis.h"
+#include "OS/FreeBSDSysCallProvider.h"
 
 #include "llvm/ADT/BitVector.h"
 
@@ -15,10 +16,7 @@ namespace soaap {
       virtual string stringifyFact(BitVector& fact);
 
     private:
-      map<string,int> sysCallToIdx;
-      map<int,string> idxToSysCall;
-      set<string> freeBSDSysCalls;
-      void initFreeBSDSysCalls();
+      FreeBSDSysCallProvider freeBSDSysCallProvider;
   };
 
 }

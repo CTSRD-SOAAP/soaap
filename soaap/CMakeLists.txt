@@ -17,6 +17,8 @@ add_llvm_library(SOAAP
   Analysis/InfoFlow/FPInferredTargetsAnalysis.cpp
   Analysis/InfoFlow/FPTargetsAnalysis.cpp
   Instrument/PerformanceEmulationInstrumenter.cpp
+  OS/FreeBSDSysCallProvider.cpp
+  OS/SysCallProvider.cpp
   Util/CallGraphUtils.cpp
   Util/ClassHierarchyUtils.cpp
   Util/ContextUtils.cpp
