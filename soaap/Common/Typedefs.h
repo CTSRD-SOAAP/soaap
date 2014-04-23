@@ -1,5 +1,5 @@
-#ifndef SOAAP_TYPEDEFS_H
-#define SOAAP_TYPEDEFS_H
+#ifndef SOAAP_COMMON_TYPEDEFS_H
+#define SOAAP_COMMON_TYPEDEFS_H
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
