@@ -14,6 +14,7 @@
 #include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
 #include "Analysis/CFGFlow/SysCallsAnalysis.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
+#include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
@@ -155,6 +156,8 @@ void Soaap::checkFileDescriptors(Module& M) {
 void Soaap::checkSysCalls(Module& M) {
   SysCallsAnalysis analysis;
   analysis.doAnalysis(M, sandboxes);
+  CapabilitySysCallsAnalysis capsAnalysis(CmdLineOpts::ContextInsens);
+  capsAnalysis.doAnalysis(M, sandboxes);
 }
 
 void Soaap::calculatePrivilegedMethods(Module& M) {

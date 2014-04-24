@@ -9,6 +9,7 @@ add_llvm_library(SOAAP
   Analysis/CFGFlow/GlobalVariableAnalysis.cpp
   Analysis/CFGFlow/SysCallsAnalysis.cpp
   Analysis/InfoFlow/AccessOriginAnalysis.cpp
+  Analysis/InfoFlow/CapabilitySysCallsAnalysis.cpp
   Analysis/InfoFlow/SandboxPrivateAnalysis.cpp
   Analysis/InfoFlow/ClassifiedAnalysis.cpp
   Analysis/InfoFlow/CapabilityAnalysis.cpp
