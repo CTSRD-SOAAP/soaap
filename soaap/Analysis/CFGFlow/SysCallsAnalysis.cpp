@@ -62,7 +62,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
               if (vector.size() <= idx || !vector.test(idx)) {
-                outs() << "\n *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
+                outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
                 outs() << " but it is not allowed to,\n";
                 outs() << " *** based on the current sandboxing restrictions.\n";
                 if (MDNode *N = C->getMetadata("dbg")) {
