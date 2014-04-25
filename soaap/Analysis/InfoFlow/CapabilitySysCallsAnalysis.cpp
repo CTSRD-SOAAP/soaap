@@ -39,12 +39,17 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
               sysCalls.insert(sysCallFn);
             }
           }
-          state[ContextUtils::NO_CONTEXT][annotatedVar] = convertFunctionSetToBitVector(sysCalls);
+          BitVector sysCallsVector = convertFunctionSetToBitVector(sysCalls);
+          state[ContextUtils::NO_CONTEXT][annotatedVar] = sysCallsVector;
           SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Initial state: " << stringifyFact(state[ContextUtils::NO_CONTEXT][annotatedVar]) << "\n");
 
           addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
           ValueSet visited;
           propagateToAggregate(annotatedVar, ContextUtils::NO_CONTEXT, annotatedVar, visited, worklist, sandboxes, M);
+          if (ConstantInt* CI = dyn_cast<ConstantInt>(annotatedVar)) {
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Constant integer, val: " << CI->getSExtValue() << ", recording in intFdToAllowedSysCalls");
+            intFdToAllowedSysCalls[CI->getSExtValue()] = sysCallsVector;
+          }
         }
       }
     }
@@ -76,9 +81,13 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
               int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
               int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
               Value* fdArg = C->getArgOperand(fdArgIdx);
-              BitVector& vector = state[S][fdArg];
+              BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
               SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
               SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
+              if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
+              }
+
               SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
               if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
                 outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
