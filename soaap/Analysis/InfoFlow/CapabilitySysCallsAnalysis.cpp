@@ -22,9 +22,10 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
         ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
         StringRef annotationStrValStr = annotationStrValArray->getAsCString();
-        if (annotationStrValStr.startswith(SOAAP_FD_SYSCALLS)) {
+        if (annotationStrValStr.startswith(SOAAP_FD_SYSCALLS) || annotationStrValStr.startswith(SOAAP_FD_KEY_SYSCALLS)) {
           FunctionSet sysCalls;
-          string sysCallListCsv = annotationStrValStr.substr(strlen(SOAAP_FD_SYSCALLS)+1); //+1 because of _
+          int subStrStartIdx = (annotationStrValStr.startswith(SOAAP_FD_SYSCALLS) ? strlen(SOAAP_FD_SYSCALLS) : strlen(SOAAP_FD_KEY_SYSCALLS)) + 1; //+1 because of _
+          string sysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
           SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
           istringstream ss(sysCallListCsv);
           string sysCallName;
@@ -40,20 +41,72 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
             }
           }
           BitVector sysCallsVector = convertFunctionSetToBitVector(sysCalls);
-          state[ContextUtils::NO_CONTEXT][annotatedVar] = sysCallsVector;
-          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Initial state: " << stringifyFact(state[ContextUtils::NO_CONTEXT][annotatedVar]) << "\n");
+          if (annotationStrValStr.startswith(SOAAP_FD_KEY_SYSCALLS)) {
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_2 << "Annotated var is a fd key\n");                                                                                                      
+            if (ConstantInt* CI = dyn_cast<ConstantInt>(annotatedVar)) {
+              // currently only support constant/enum key values
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "key value is: " << CI->getSExtValue() << "\n");
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed system calls: " << stringifyFact(sysCallsVector) << "\n");
+              fdKeyToAllowedSysCalls[CI->getSExtValue()] = sysCallsVector;
+            }
+          }
+          else {
+            state[ContextUtils::NO_CONTEXT][annotatedVar] = sysCallsVector;
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Initial state: " << stringifyFact(state[ContextUtils::NO_CONTEXT][annotatedVar]) << "\n");
 
-          addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
-          ValueSet visited;
-          propagateToAggregate(annotatedVar, ContextUtils::NO_CONTEXT, annotatedVar, visited, worklist, sandboxes, M);
-          if (ConstantInt* CI = dyn_cast<ConstantInt>(annotatedVar)) {
-            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Constant integer, val: " << CI->getSExtValue() << ", recording in intFdToAllowedSysCalls");
-            intFdToAllowedSysCalls[CI->getSExtValue()] = sysCallsVector;
+            addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
+            ValueSet visited;
+            propagateToAggregate(annotatedVar, ContextUtils::NO_CONTEXT, annotatedVar, visited, worklist, sandboxes, M);
+            if (ConstantInt* CI = dyn_cast<ConstantInt>(annotatedVar)) {
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Constant integer, val: " << CI->getSExtValue() << ", recording in intFdToAllowedSysCalls");
+              intFdToAllowedSysCalls[CI->getSExtValue()] = sysCallsVector;
+            }
           }
         }
       }
     }
   }
+
+  // find all calls to fd getters
+  if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
+    ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+    for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+      ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+      // get the annotation value first
+      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+      StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+      GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+      if (Function* annotatedFunc = dyn_cast<Function>(annotatedVal)) {
+        if (annotationStrArrayCString.startswith(SOAAP_FD_GETTER)) {
+          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "Found fd getter function " << annotatedFunc->getName() << "\n");
+          // find all callers of annotatedFunc. use CallGraphUtils::getCallers because this
+          // is not an intrinsic so we also want to catch calls made via function pointer 
+          // and c++ dynamic dispatch
+          if (annotatedFunc->getReturnType()->isVoidTy()) {
+            errs() << INDENT_1 << "SOAAP ERROR: Function \"" << annotatedFunc->getName() << "\" has been annotated with __soaap_fd_getter but it's return type is void!\n"; 
+          }
+          else {
+            // initialise return values to the worklist and add to the worklist
+            int fdKeyIdx = annotatedFunc->getArgumentList().begin()->getName().equals("this") ? 1 : 0;
+            for (CallInst* C : CallGraphUtils::getCallers(annotatedFunc, M)) {
+              // get fd key value, currently only constants are supported.
+              Value* fdKeyArg = C->getArgOperand(fdKeyIdx);
+              if (ConstantInt* CI = dyn_cast<ConstantInt>(fdKeyArg)) {
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd key: " << CI->getSExtValue() << "\n")
+                BitVector allowedSysCalls = fdKeyToAllowedSysCalls[CI->getSExtValue()];
+                state[ContextUtils::NO_CONTEXT][C] = allowedSysCalls;
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Initial state: " << stringifyFact(state[ContextUtils::NO_CONTEXT][C]) << "\n");
+                addToWorklist(C, ContextUtils::NO_CONTEXT, worklist);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
 }
 
 bool CapabilitySysCallsAnalysis::performMeet(BitVector fromVal, BitVector& toVal) {

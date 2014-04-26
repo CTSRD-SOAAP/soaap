@@ -19,6 +19,7 @@ namespace soaap {
     protected:
       FreeBSDSysCallProvider freeBSDSysCallProvider;
       map<int,BitVector> intFdToAllowedSysCalls;
+      map<int,BitVector> fdKeyToAllowedSysCalls;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual bool performMeet(BitVector fromVal, BitVector& toVal);

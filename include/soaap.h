@@ -118,7 +118,7 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  */
 #define SOAAP_SYSCALLS "SOAAP_SYSCALLS"
 #define __soaap_limit_syscalls(syscalls...) \
-	__builtin_annotation(0, SOAAP_SYSCALLS "_" #syscalls)
+  __builtin_annotation(0, SOAAP_SYSCALLS "_" #syscalls)
 
 /**
  * Limit the system calls that can be called with respect to a file descriptor.
@@ -132,6 +132,33 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  */
 #define SOAAP_FD_SYSCALLS "SOAAP_FD_SYSCALLS"
 #define __soaap_limit_fd_syscalls(fd, syscalls...) \
-	__builtin_annotation(fd, SOAAP_FD_SYSCALLS "_" #syscalls)
+  __builtin_annotation(fd, SOAAP_FD_SYSCALLS "_" #syscalls)
+
+/**
+ * Limit the system calls that can be called with respect to a file descriptor
+ * that is stored within some collection and accessed using a key.
+ *
+ * This mask of allowable system calls should be combined with the global
+ * syscall mask (if any) when determining whether or not a system call will
+ * be permitted by the sandboxing mechanism.
+ *
+ * This is a mechanism-description annotation that should eventually be
+ * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
+ */
+#define SOAAP_FD_KEY_SYSCALLS "SOAAP_FD_KEY_SYSCALLS"
+#define __soaap_limit_fd_key_syscalls(fdkey, syscalls...) \
+  __builtin_annotation(fdkey, SOAAP_FD_KEY_SYSCALLS "_" #syscalls)
+
+/**
+ * The function returns the file descriptor corresponding to a supplied key.
+ */
+#define SOAAP_FD_GETTER "SOAAP_FD_GETTER"
+#define __soaap_fd_getter __attribute__((annotate(SOAAP_FD_GETTER))) __attribute__((noinline))
+
+/**
+ * The function maps key values to file descriptors.
+ */
+#define SOAAP_FD_SETTER "SOAAP_FD_SETTER"
+#define __soaap_fd_setter __attribute__((annotate(SOAAP_FD_SETTER))) __attribute__((noinline))
 
 #endif /* SOAAP_H */
