@@ -72,7 +72,7 @@ void PrettyPrinters::calculateShortestCallPathsFromMain(Module& M) {
       }
     }
 
-    dbgs() << "completed calculating shortest paths from main cache\n";
+    SDEBUG("soaap.pp", 4, dbgs() << "completed calculating shortest paths from main cache\n");
   }
 }
 
