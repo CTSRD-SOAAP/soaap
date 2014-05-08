@@ -14,10 +14,11 @@
 #include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
 #include "Analysis/CFGFlow/SysCallsAnalysis.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
-#include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
-#include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
-#include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
+#include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
+#include "Analysis/InfoFlow/ClassifiedAnalysis.h"
+#include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
+#include "Analysis/InfoFlow/RPC/RPCGraph.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
@@ -106,6 +107,9 @@ bool Soaap::runOnModule(Module& M) {
 
     outs() << "* Checking for calls to privileged functions from sandboxes\n";
     checkPrivilegedCalls(M);
+
+    outs() << "* Building RPC graph\n";
+    buildRPCGraph(M);
   }
 
   return false;
@@ -172,6 +176,14 @@ void Soaap::checkGlobalVariables(Module& M) {
 void Soaap::instrumentPerfEmul(Module& M) {
   PerformanceEmulationInstrumenter instrumenter;
   instrumenter.instrument(M, sandboxes);
+}
+
+void Soaap::buildRPCGraph(Module& M) {
+  RPCGraph G;
+  G.build(sandboxes, privilegedMethods, M);
+  if (CmdLineOpts::DumpRPCGraph) {
+    G.dump();
+  }
 }
 
 char Soaap::ID = 0;

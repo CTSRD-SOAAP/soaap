@@ -24,6 +24,7 @@ namespace soaap {
       static string DebugFunction;
       static int DebugVerbosity;
       static int SummariseTraces;
+      static bool DumpRPCGraph;
   };
 }
 

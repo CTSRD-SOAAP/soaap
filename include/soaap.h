@@ -161,4 +161,14 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define SOAAP_FD_SETTER "SOAAP_FD_SETTER"
 #define __soaap_fd_setter __attribute__((annotate(SOAAP_FD_SETTER))) __attribute__((noinline))
 
+__attribute__((noinline)) static void __soaap_rpc_send_helper(char* recipient, char* message_type,...) { }
+#define __soaap_rpc_send(RECIPIENT, MESSAGE_TYPE) \
+  __soaap_rpc_send_helper(RECIPIENT, #MESSAGE_TYPE);
+#define __soaap_rpc_send_with_params(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
+  __soaap_rpc_send_helper(RECIPIENT, #MESSAGE_TYPE, PARAMS);
+
+__attribute__((noinline)) static void __soaap_rpc_recv_helper(char* message_type, void* handler) { }
+#define __soaap_rpc_recv(MESSAGE_TYPE, HANDLER) \
+  __soaap_rpc_recv_helper(#MESSAGE_TYPE, HANDLER);
+
 #endif /* SOAAP_H */

@@ -307,6 +307,15 @@ SandboxVector SandboxUtils::getSandboxesContainingMethod(Function* F, SandboxVec
   return containers;
 }
 
+Sandbox* SandboxUtils::getSandboxWithName(string name, SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    if (S->getName() == name) {
+      return S;
+    }
+  }
+  return NULL;
+}
+
 void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     outs() << INDENT_1 << "Sandbox: " << S->getName() << " (" << (S->isPersistent() ? "persistent" : "ephemeral") << ")\n";
