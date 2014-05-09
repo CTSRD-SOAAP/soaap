@@ -71,7 +71,8 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
                 outs() << INDENT_1 << (status == 0 ? demangled : funcName) << sandboxed << ":\n";
                 displayedFuncName = true;
               }
-              outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "(" << *C << ")\n";
+              outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
+              SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "IR instruction: " << *C << "\n");
             }
             numFPcalls++;
           }
