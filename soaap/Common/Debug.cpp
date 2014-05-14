@@ -4,7 +4,7 @@
 
 #include <llvm/Support/raw_ostream.h>
 
-#include <fnmatch.h>
+#include <regex>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -12,7 +12,7 @@ using namespace llvm;
 using namespace soaap;
 
 #ifndef NDEBUG
-bool soaap::debugging(StringRef ModuleName, int Verbosity, StringRef FunctionName) {
+bool soaap::debugging(string ModuleName, int Verbosity, string FunctionName) {
   if (CmdLineOpts::DebugModule.empty() || Verbosity > CmdLineOpts::DebugVerbosity) {
     return false;
   }
@@ -20,15 +20,8 @@ bool soaap::debugging(StringRef ModuleName, int Verbosity, StringRef FunctionNam
       && (CmdLineOpts::DebugFunction.empty() || matches(FunctionName, CmdLineOpts::DebugFunction));
 }
 
-bool soaap::matches(StringRef name, StringRef pattern) {
-  // Let e.g. 'soaap.infoflow' match 'soaap.infoflow.anything'.
-  if (name.size() > pattern.size()
-      && name.startswith(pattern)
-      && name[pattern.size()] == '.') {
-    return true;
-  }
-
-  // Use fnmatch()'s normal wildcard expansion.
-  return (fnmatch(pattern.str().c_str(), name.str().c_str(), 0) == 0);
+bool soaap::matches(string name, string pattern) {
+  regex reg(pattern);
+  return regex_match(name, reg);
 }
 #endif

@@ -3,7 +3,6 @@
 
 #include "Util/DebugUtils.h"
 
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Debug.h"
 
 #ifdef NDEBUG
@@ -21,11 +20,12 @@
 #endif
 
 using namespace llvm;
+using namespace std;
 
 namespace soaap {
 #ifndef NDEBUG  
-  bool debugging(StringRef ModuleName, int Verbosity, StringRef FunctionName);
-  bool matches(StringRef name, StringRef pattern);
+  bool debugging(string ModuleName, int Verbosity, string FunctionName);
+  bool matches(string name, string pattern);
 #endif
 }
 
