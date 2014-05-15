@@ -13,7 +13,7 @@ void OnMyMessage() {
 
 __soaap_sandbox_persistent("sandbox")
 void foo() {
-  __soaap_rpc_recv(MyMessage, OnMyMessage);
+  __soaap_rpc_recv("<privileged>", MyMessage, OnMyMessage);
 }
 
 int main(int argc, char** argv) {
