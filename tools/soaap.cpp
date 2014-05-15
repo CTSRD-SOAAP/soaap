@@ -107,7 +107,14 @@ int main(int argc, char **argv) {
     Err.print(argv[0], errs());
     return 1;
   }
-
+  
+  // Warn if M doesn't have debug info
+  if (M->getNamedMetadata("llvm.dbg.cu") == NULL) {
+    errs() << "**********************************************************\n";
+    errs() << "WARNING: Input IR file does not contain debug information\n";
+    errs() << "**********************************************************\n";
+  }
+  
   // Figure out what stream we are supposed to write to...
   OwningPtr<tool_output_file> Out;
   if (!OutputFilename.empty()) {
