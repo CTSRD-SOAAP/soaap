@@ -167,8 +167,8 @@ __attribute__((noinline)) static void __soaap_rpc_send_helper(char* recipient, c
 #define __soaap_rpc_send_with_params(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
   __soaap_rpc_send_helper(RECIPIENT, #MESSAGE_TYPE, PARAMS);
 
-__attribute__((noinline)) static void __soaap_rpc_recv_helper(char* message_type, void* handler) { }
-#define __soaap_rpc_recv(MESSAGE_TYPE, HANDLER) \
-  __soaap_rpc_recv_helper(#MESSAGE_TYPE, HANDLER);
+__attribute__((noinline)) static void __soaap_rpc_recv_helper(char* sender, char* message_type, void* handler) { }
+#define __soaap_rpc_recv(SENDER, MESSAGE_TYPE, HANDLER) \
+  __soaap_rpc_recv_helper(SENDER, #MESSAGE_TYPE, HANDLER);
 
 #endif /* SOAAP_H */

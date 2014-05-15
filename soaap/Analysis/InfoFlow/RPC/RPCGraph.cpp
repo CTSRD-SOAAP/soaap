@@ -57,12 +57,12 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
             // extract args
             string msgType = "";
             Function* msgHandler = NULL;
-            if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(0)->stripPointerCasts())) {
+            if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(1)->stripPointerCasts())) {
               if (ConstantDataArray* msgTypeStrArray = dyn_cast<ConstantDataArray>(msgTypeStrGlobal->getInitializer())) {
                 msgType = msgTypeStrArray->getAsCString();
               }
             }
-            msgHandler = dyn_cast<Function>(C->getArgOperand(1)->stripPointerCasts());
+            msgHandler = dyn_cast<Function>(C->getArgOperand(2)->stripPointerCasts());
             receiverToMsgTypeHandler[NULL][msgType] = msgHandler;
             SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg type: " << msgType << "\n");
             SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg handler: " << msgHandler->getName() << "\n");
@@ -82,12 +82,12 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
               // extract args
               string msgType = "";
               Function* msgHandler = NULL;
-              if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(0)->stripPointerCasts())) {
+              if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(1)->stripPointerCasts())) {
                 if (ConstantDataArray* msgTypeStrArray = dyn_cast<ConstantDataArray>(msgTypeStrGlobal->getInitializer())) {
                   msgType = msgTypeStrArray->getAsCString();
                 }
               }
-              msgHandler = dyn_cast<Function>(C->getArgOperand(1)->stripPointerCasts());
+              msgHandler = dyn_cast<Function>(C->getArgOperand(2)->stripPointerCasts());
               receiverToMsgTypeHandler[S][msgType] = msgHandler;
               SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg type: " << msgType << "\n");
               SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg handler: " << msgHandler->getName() << "\n");
