@@ -154,6 +154,7 @@ namespace soaap {
                 if (CI->getCalledValue() == V) {
                   // subclasses might want to be informed when
                   // the state of a function pointer changed
+                  SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_5 << "state changed for function pointer\n");
                   stateChangedForFunctionPointer(CI, V, state[C][V]);
                   
                   // if callee information has changed, we should propagate all

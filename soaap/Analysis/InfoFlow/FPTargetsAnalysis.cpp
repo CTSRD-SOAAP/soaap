@@ -96,15 +96,27 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
     for (int i=0; i<numSetBits; i++) {
       idx = (i == 0) ? newState.find_first() : newState.find_next(idx);
       Function* F = idxToFunc[idx];
+      SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "F: " << F->getName() << "\n");
+      SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT: " << *FT << "\n");
       if (F->getFunctionType() != FT || F->isDeclaration()) {
         newState.reset(idx);
+        if (F->isDeclaration()) {
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Declaration\n");
+        }
+        else {
+          FunctionType* FT2 = F->getFunctionType();
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Function types don't match: " << *FT2 << "\n");
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.return: " << *(FT2->getReturnType()) << "\n");
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.params: " << FT2->getNumParams() << "\n");
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.varargs: " << FT2->isVarArg() << "\n");
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT.vararg: " << FT->isVarArg() << "\n");
+        }
       }
     }
   }
   else {
     dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
   }
-
   FunctionSet newFuncs = convertBitVectorToFunctionSet(newState);
   CallGraphUtils::addCallees(CI, newFuncs);
 }

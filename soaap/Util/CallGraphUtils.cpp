@@ -342,8 +342,10 @@ void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
   CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* callerNode = CG->getOrInsertFunction(C->getParent()->getParent());
   FunctionSet& currentCallees = (FunctionSet&)callToCallees[C];
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << "New callees to add: " << stringifyFunctionSet(callees) << "\n");
   for (Function* callee : callees) {
     if (currentCallees.insert(callee)) {
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Adding: " << callee->getName() << "\n");
       CallGraphNode* calleeNode = CG->getOrInsertFunction(callee);
       callerNode->addCalledFunction(CallSite(C), calleeNode);
     }
