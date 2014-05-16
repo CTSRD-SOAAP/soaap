@@ -134,22 +134,37 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
               int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
               int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
               Value* fdArg = C->getArgOperand(fdArgIdx);
-              BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
+              
+              // check if there are any restrictions on fdArg and only then determine if this
+              // system call is allowed to be called on it (we don't want to be giving errors
+              // if the __soaap_limit_fd_syscalls(...) annotation has never been used for fdArg
+              bool restricted = false;
               if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
-                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
+                int fdVal = CI->getSExtValue();
+                restricted = intFdToAllowedSysCalls.find(fdVal) != intFdToAllowedSysCalls.end();
+              }
+              else {
+                restricted = state[S].find(fdArg) != state[S].end();
               }
 
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
-              if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
-                outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
-                outs() << " but is not allowed to for the given fd arg.\n";
-                if (MDNode *N = C->getMetadata("dbg")) {
-                  DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+              if (restricted) {
+                BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
+                if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+                  SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
                 }
-                outs() << "\n";
+
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
+                if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
+                  outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
+                  outs() << " but is not allowed to for the given fd arg.\n";
+                  if (MDNode *N = C->getMetadata("dbg")) {
+                    DILocation loc(N);
+                    outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  }
+                  outs() << "\n";
+                }
               }
             }
           }
