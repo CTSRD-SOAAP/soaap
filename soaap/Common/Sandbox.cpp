@@ -283,7 +283,7 @@ void Sandbox::findCapabilities() {
    * local variable annotations are represented in general in LLVM
    *
    * A parameter annotation looks like this:
-   * void m(int ifd __fd_read) { ... }
+   * void m(int ifd __soaap_fd(read, write)) { ... }
    *
    * It is turned into an intrinsic call as follows:
    *
@@ -293,7 +293,7 @@ void Sandbox::findCapabilities() {
    *   i8* getelementptr inbounds ([30 x i8]* @.str3, i32 0, i32 0),  // file name
    *   i32 5)              // line number
    *
-   * @.str2 = private unnamed_addr constant [8 x i8] c"fd_read\00", section "llvm.metadata"
+   * @.str2 = private unnamed_addr constant [8 x i8] c"fd_read, write\00", section "llvm.metadata"
    * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
    */
    
@@ -314,8 +314,8 @@ void Sandbox::findCapabilities() {
              * Find out the enclosing function and record which
              * param was annotated. We have to do this because
              * llvm creates a local var for the param by appending
-             * and associates the annotation with the newly created
-             * local var i.e. see ifd and ifd.addr1 above
+             * '.addr1' and associates the annotation with the newly
+             * created local var i.e. see ifd and ifd.addr1 above
              */
             if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
               DIVariable varDbg(dbgDecl->getVariable());
