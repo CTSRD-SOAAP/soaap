@@ -32,7 +32,9 @@ void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, Sa
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "setting bit for " << sysCallName << "\n")
         int idx = freeBSDSysCallProvider.getIdx(sysCallName);
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "idx: " << idx << "\n")
-        allowedSysCallsBitVector.resize(idx+1);
+        if (allowedSysCallsBitVector.size() <= idx) {
+          allowedSysCallsBitVector.resize(idx+1);
+        }
         allowedSysCallsBitVector.set(idx);
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << allowedSysCallsBitVector.size() << "," << allowedSysCallsBitVector.count() << "\n")
         state[C] = allowedSysCallsBitVector;

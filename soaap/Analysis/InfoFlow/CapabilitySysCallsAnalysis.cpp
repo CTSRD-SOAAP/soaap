@@ -175,7 +175,9 @@ BitVector CapabilitySysCallsAnalysis::convertFunctionSetToBitVector(FunctionSet 
   BitVector vector;
   for (Function* F : sysCalls) {
     int idx = freeBSDSysCallProvider.getIdx(F->getName());
-    vector.resize(idx+1);
+    if (vector.size() <= idx) {
+      vector.resize(idx+1);
+    }
     vector.set(idx);
   }
   return vector;

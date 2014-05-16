@@ -67,7 +67,9 @@ BitVector FPTargetsAnalysis::convertFunctionSetToBitVector(FunctionSet funcs) {
 
 void FPTargetsAnalysis::setBitVector(BitVector& vector, Function* F) {
   int idx = funcToIdx[F];
-  vector.resize(idx+1);
+  if (vector.size() <= idx) {
+    vector.resize(idx+1);
+  }
   vector.set(idx);
 }
 
