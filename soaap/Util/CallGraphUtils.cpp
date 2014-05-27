@@ -323,7 +323,7 @@ Function* CallGraphUtils::getDirectCallee(CallInst* C) {
     calledFunc = dyn_cast<Function>(V);
     if (calledFunc == NULL) {
       if (GlobalAlias* GA = dyn_cast<GlobalAlias>(V)) {
-        calledFunc = dyn_cast<Function>(GA->getAliasedGlobal());
+        calledFunc = dyn_cast<Function>(GA->getAliasee());
         //dbgs() << *C << " has direct callee " << calledFunc->getName() << "\n";
       }
     }
