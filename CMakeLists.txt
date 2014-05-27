@@ -33,12 +33,15 @@ find_package(LibCXX)
 if (LIBCXX_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
   include_directories(${LIBCXX_INCLUDE_DIRS})
-  link_directories(${LIBCXX_LIBRARIES})
+  foreach(lib ${LIBCXX_LIBRARIES})
+    GET_FILENAME_COMPONENT(LIBCXX_LIBRARY_DIR ${lib} DIRECTORY)
+    link_directories(${LIBCXX_LIBRARY_DIR})
+  endforeach(lib)
 endif()
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
-set(LLVM_RUNTIME_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/bin)
-set(LLVM_LIBRARY_OUTPUT_INTDIR ${PROJECT_BINARY_DIR}/lib)
+set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)
+set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib)
 
 set(LIT ${LLVM_BINARY_DIR}/bin/llvm-lit CACHE FILE "Location of llvm-lit")
 
