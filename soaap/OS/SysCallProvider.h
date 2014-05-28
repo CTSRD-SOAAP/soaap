@@ -2,7 +2,7 @@
 #define SOAAP_OS_SYSCALLPROVIDER_H
 
 #include <map>
-#include <set>
+#include <unordered_set>
 #include <string>
 
 using namespace std;
@@ -19,7 +19,7 @@ namespace soaap {
       virtual void initSysCalls() = 0;
     
     protected:
-      set<string> sysCalls;
+      unordered_set<string> sysCalls;
       map<string,int> sysCallToIdx;
       map<int,string> idxToSysCall;
       map<string,int> sysCallToFdArgIdx;
