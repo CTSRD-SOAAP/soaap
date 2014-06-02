@@ -70,7 +70,7 @@ GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
   return sharedVarToPerms;
 }
 
-ValueIntMap Sandbox::getCapabilities() {
+ValueFunctionSetMap Sandbox::getCapabilities() {
   return caps;
 }
 
@@ -306,9 +306,9 @@ void Sandbox::findCapabilities() {
 
             GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(call->getOperand(1)->stripPointerCasts());
             ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-            StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+            StringRef annotationStrValStr = annotationStrValArray->getAsCString();
 
-            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Annotation: " << annotationStrValCString << "\n");
+            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Annotation: " << annotationStrValStr << "\n");
 
             /*
              * Find out the enclosing function and record which
@@ -330,11 +330,25 @@ void Sandbox::findCapabilities() {
               }
 
               if (annotatedArg != NULL) {
-                if (annotationStrValCString == FD_READ) {
-                  caps[annotatedArg] |= FD_READ_MASK;
-                }
-                else if (annotationStrValCString == FD_WRITE) {
-                  caps[annotatedArg] |= FD_WRITE_MASK;
+                if (annotationStrValStr.startswith(SOAAP_FD)) {
+                  FunctionSet sysCalls;
+                  int subStrStartIdx = strlen(SOAAP_FD) + 1; //+1 because of _
+                  string sysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
+                  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
+                  istringstream ss(sysCallListCsv);
+                  string sysCallName;
+                  while(getline(ss, sysCallName, ',')) {
+                    // trim leading and trailing spaces
+                    size_t start = sysCallName.find_first_not_of(" ");
+                    size_t end = sysCallName.find_last_not_of(" ");
+                    sysCallName = sysCallName.substr(start, end-start+1);
+                    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
+                    if (Function* sysCallFn = module.getFunction(sysCallName)) {
+                      SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
+                      sysCalls.insert(sysCallFn);
+                    }
+                  }
+                  caps[annotatedArg] = sysCalls;
                 }
                 SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
               }

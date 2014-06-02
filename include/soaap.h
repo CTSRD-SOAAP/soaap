@@ -25,6 +25,7 @@
 #define VAR_WRITE_MASK 0x2
 
 // permissions for file descriptors
+#define SOAAP_FD "SOAAP_FD"
 #define FD_READ "FD_READ"
 #define FD_READ_MASK 0x1
 #define FD_WRITE "FD_WRITE"
@@ -62,10 +63,11 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* 
 #define __soaap_sandbox_ephemeral(N) __attribute__((annotate(SANDBOX_EPHEMERAL "_" N))) __attribute__((noinline))
 #define __soaap_var_read(N) __attribute__((annotate(VAR_READ "_" N)))
 #define __soaap_var_write(N) __attribute__((annotate(VAR_WRITE "_" N)))
-#define __soaap_fd_read __attribute__((annotate(FD_READ)))
-#define __soaap_fd_write __attribute__((annotate(FD_WRITE)))
+#define __soaap_fd_read __soaap_fd_permit(read)
+#define __soaap_fd_write __soaap_fd_permit(write)
 #define __soaap_indirect_fd_read(F) __attribute__((annotate(F "_" FD_READ)))
 #define __soaap_indirect_fd_write(F) __attribute__((annotate(F "_" FD_WRITE)))
+#define __soaap_fd_permit(...) __attribute__((annotate(SOAAP_FD "_" #__VA_ARGS__)))
 /*#define __soaap_callgates(fns...) \
   void __soaap_declare_callgates_helper(int unused, ...) { } \
 	void __soaap_declare_callgates() { \

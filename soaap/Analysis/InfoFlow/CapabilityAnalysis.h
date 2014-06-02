@@ -3,6 +3,8 @@
 
 #include "Analysis/InfoFlow/InfoFlowAnalysis.h"
 #include "Common/Typedefs.h"
+#include "OS/FreeBSDSysCallProvider.h"
+
 #include <string>
 
 using namespace llvm;
@@ -10,18 +12,19 @@ using namespace std;
 
 namespace soaap {
 
-  class CapabilityAnalysis : public InfoFlowAnalysis<int> {
+  class CapabilityAnalysis : public InfoFlowAnalysis<BitVector> {
     public:
-      CapabilityAnalysis(bool contextInsensitive) : InfoFlowAnalysis<int>(contextInsensitive, true) { }
+      CapabilityAnalysis(bool contextInsensitive) : InfoFlowAnalysis<BitVector>(contextInsensitive, true) { }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
-      virtual bool performMeet(int fromVal, int& toVal);
-      virtual int bottomValue() { return 0; }
-      virtual string stringifyFact(int fact);
+      virtual bool performMeet(BitVector fromVal, BitVector& toVal);
+      virtual BitVector bottomValue() { return BitVector(); }
+      virtual string stringifyFact(BitVector vector);
 
     private:
+      FreeBSDSysCallProvider freeBSDSysCallProvider;
       void validateDescriptorAccesses(Module& M, SandboxVector& sandboxes, string syscall, int requiredPerm);
   };
 }

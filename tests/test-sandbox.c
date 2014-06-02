@@ -19,13 +19,13 @@ int main() {
 }
 
 __soaap_sandbox_persistent("sandbox named foo")
-void f(int __soaap_fd_read ifd, int ofd) {
+void f(int ifd __soaap_fd_permit(read), int ofd) {
   printf("hello from sandbox\n");
   char buf[10];
   // CHECK-DAG: Sandboxed method "f" [sandbox named foo] wrote to global variable "x" ({{.*}}) but is not allowed to
   x = 3;
-  // CHECK-NOT: Insufficient privileges for "read()" in sandboxed method "f"
+  // CHECK-NOT: Sandbox "sandbox named foo" performs system call "read" but is not allowed to for the given fd arg.
   read(ifd, buf, 1);
-  // CHECK-DAG: Insufficient privileges for "write()" in sandboxed method "f"
+  // CHECK-DAG: Sandbox "sandbox named foo" performs system call "write" but is not allowed to for the given fd arg.
   write(ofd, buf, 1);
 }

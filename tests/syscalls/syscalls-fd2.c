@@ -20,10 +20,11 @@ __soaap_sandbox_persistent("sandbox")
 void foo() {
   __soaap_limit_syscalls(read, write);
   __soaap_limit_fd_syscalls(STDOUT_FILENO, read);
-  // CHECK-DAG: *** Sandbox "sandbox" performs system call "write" but is not allowed to for the given fd arg.
-  // CHECK-DAG: +++ Line 25 of file {{.*}}
+  // CHECK: * Checking system calls
+  // CHECK: *** Sandbox "sandbox" performs system call "write" but is not allowed to for the given fd arg.
+  // CHECK: +++ Line 26 of file {{.*}}
   write(STDOUT_FILENO, NULL, 0);
   // CHECK-NOT: *** Sandbox "sandbox" performs system call "read" but is not allowed to for the given fd arg.
-  // CHECK-NOT: +++ Line 28 of file {{.*}}
+  // CHECK-NOT: +++ Line 29 of file {{.*}}
   read(STDOUT_FILENO, NULL, 0);
 }

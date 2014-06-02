@@ -28,6 +28,7 @@ add_llvm_library(SOAAP
   Util/PrettyPrinters.cpp
   Util/SandboxUtils.cpp
   Util/ClassifiedUtils.cpp
+  Util/TypeUtils.cpp
 )
 
 # pass to output dynamic callgraph to DOT

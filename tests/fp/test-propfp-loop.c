@@ -15,10 +15,13 @@ void f(int __soaap_fd_read ifd) {
   int i=0;
   int j=ifd;
   char buf[10];
+  // CHECK: +++ Line 19 of file {{.*}}
+  read(j, buf, 10);
   while (i < 10) {
     ifd = j+1;
     j = ifd;
-    // CHECK: Insufficient privileges for "read()" in sandboxed method "f"
+    // CHECK: Sandbox "foo" performs system call "read" but is not allowed to for the given fd arg
+    // CHECK: +++ Line 25 of file {{.*}}
     read(j, buf, 10);
     i++;
   }

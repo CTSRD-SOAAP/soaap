@@ -5,59 +5,66 @@
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
+#include "Util/TypeUtils.h"
 #include "soaap.h"
+
+#include <sstream>
 
 using namespace soaap;
 
 void CapabilityAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
+  freeBSDSysCallProvider.initSysCalls();
   for (Sandbox* S : sandboxes) {
-    ValueIntMap caps = S->getCapabilities();
-    for (pair<const Value*,int> cap : caps) {
-      state[S][cap.first] = cap.second;
+    ValueFunctionSetMap caps = S->getCapabilities();
+    for (pair<const Value*,FunctionSet> cap : caps) {
+      function<int (Function*)> func = [&](Function* F) -> int { return freeBSDSysCallProvider.getIdx(F->getName()); };
+      state[S][cap.first] = TypeUtils::convertFunctionSetToBitVector(cap.second, func);
       addToWorklist(cap.first, S, worklist);
     }
   }
 }
 
-bool CapabilityAnalysis::performMeet(int fromVal, int& toVal) {
-  int oldToVal = toVal;
-  toVal =fromVal & toVal;
+bool CapabilityAnalysis::performMeet(BitVector fromVal, BitVector& toVal) {
+  BitVector oldToVal = toVal;
+  toVal &= fromVal;
   return toVal != oldToVal;
 }
 
 void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  validateDescriptorAccesses(M, sandboxes, "read", FD_READ_MASK);
-  validateDescriptorAccesses(M, sandboxes, "write", FD_WRITE_MASK);
-}
-
-/*
- * Validate that the necessary permissions propagate to the syscall
- */
-void CapabilityAnalysis::validateDescriptorAccesses(Module& M, SandboxVector& sandboxes, string syscall, int requiredPerm) {
-
-  SDEBUG("soaap.infoflow.capability", 3, dbgs() << "Validating descriptor accesses for \"" << syscall << "()\"\n");
-  if (Function* syscallFn = M.getFunction(syscall)) {
-    SDEBUG("soaap.infoflow.capability", 4, dbgs() << syscall << "'s Function* found ( " << syscallFn->getNumUses() << " uses)\n");
-
-    SDEBUG("soaap.infoflow.capability", 4, dbgs() << "Sandboxes: " << SandboxUtils::stringifySandboxVector(sandboxes) << "\n");
-    for (Sandbox* S : sandboxes) {
-      SDEBUG("soaap.infoflow.capability", 4, dbgs() << "Current sandbox: \"" << S->getName() << "\"\n");
-      for (User* U : syscallFn->users()) {
-        if (CallInst* Call = dyn_cast<CallInst>(U)) {
-          SDEBUG("soaap.infoflow.capability", 4, dbgs() << "Checking call " << *Call << "\n");
-          Function* Caller = cast<Function>(Call->getParent()->getParent());
-          if (S->containsFunction(Caller)) {
-            Value* fd = Call->getArgOperand(0);
-            if (!(state[S][fd] & requiredPerm)) {
-              outs() << " *** Insufficient privileges for \"" << syscall << "()\" in sandboxed method \"" << Caller->getName() << "\"\n";
-              if (MDNode *N = Call->getMetadata("dbg")) {  // Here I is an LLVM instruction
-                DILocation Loc(N);                      // DILocation is in DebugInfo.h
-                unsigned Line = Loc.getLineNumber();
-                StringRef File = Loc.getFilename();
-                StringRef Dir = Loc.getDirectory();
-                outs() << " +++ Line " << Line << " of file " << File << "\n";
+  for (Sandbox* S : sandboxes) {
+    SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "sandbox: " << S->getName() << "\n")
+    for (Function* F : S->getFunctions()) {
+      SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "func: " << F->getName() << "\n")
+      for (inst_iterator I=inst_begin(F), E=inst_end(F); I!=E; I++) {
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "call: " << *C << "\n")
+          for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+            string funcName = Callee->getName();
+            SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "callee: " << funcName << "\n")
+            if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName)) {
+              SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "syscall " << funcName << " found\n")
+              // this is a system call
+              int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
+              int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
+              Value* fdArg = C->getArgOperand(fdArgIdx);
+              
+              BitVector& vector = state[S][fdArg];
+              SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
+              SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
+              if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+                SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
               }
-              outs() << "\n";
+
+              SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
+              if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
+                outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
+                outs() << " but is not allowed to for the given fd arg.\n";
+                if (MDNode *N = C->getMetadata("dbg")) {
+                  DILocation loc(N);
+                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                }
+                outs() << "\n";
+              }
             }
           }
         }
@@ -66,6 +73,14 @@ void CapabilityAnalysis::validateDescriptorAccesses(Module& M, SandboxVector& sa
   }
 }
 
-string CapabilityAnalysis::stringifyFact(int fact) {
-  return SandboxUtils::stringifySandboxNames(fact);
+string CapabilityAnalysis::stringifyFact(BitVector vector) {
+  stringstream ss;
+  ss << "[";
+  int idx = 0;
+  for (int i=0; i<vector.count(); i++) {
+    idx = (i == 0) ? vector.find_first() : vector.find_next(idx);
+    ss << ((i > 0) ? "," : "") << freeBSDSysCallProvider.getSysCall(idx);
+  }
+  ss << "]";
+  return ss.str();
 }

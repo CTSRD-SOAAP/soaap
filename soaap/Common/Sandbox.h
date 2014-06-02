@@ -19,7 +19,7 @@ namespace soaap {
       Function* getEntryPoint();
       FunctionVector getFunctions();
       GlobalVariableIntMap getGlobalVarPerms();
-      ValueIntMap getCapabilities();
+      ValueFunctionSetMap getCapabilities();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
       FunctionVector getCallgates();
       bool isCallgate(Function* F);
@@ -48,7 +48,7 @@ namespace soaap {
       CallInstVector sysCallLimitPoints;
       map<CallInst*,FunctionSet> sysCallLimitPointToAllowedSysCalls;
       GlobalVariableIntMap sharedVarToPerms;
-      ValueIntMap caps;
+      ValueFunctionSetMap caps;
       int overhead;
       
       void findSandboxedFunctions();
