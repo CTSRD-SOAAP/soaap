@@ -300,8 +300,8 @@ void Sandbox::findCapabilities() {
   for (BasicBlock& BB : entryPoint->getBasicBlockList()) {
     for (Instruction& I : BB.getInstList()) {
       if (CallInst* call = dyn_cast<CallInst>(&I)) {
-        if (Function* callee = call->getCalledFunction()) {
-          if (callee->getName() == "llvm.var.annotation") {
+        if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(call)) {
+          if (II->getIntrinsicID() == Intrinsic::var_annotation) {
             Value* annotatedVar = dyn_cast<Value>(call->getOperand(0)->stripPointerCasts());
 
             GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(call->getOperand(1)->stripPointerCasts());
