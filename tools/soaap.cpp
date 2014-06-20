@@ -15,7 +15,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/Analysis/LoopPass.h"
@@ -101,7 +100,7 @@ int main(int argc, char **argv) {
   SMDiagnostic Err;
 
   // Load the input module...
-  OwningPtr<Module> M;
+  std::unique_ptr<Module> M;
   M.reset(ParseIRFile(InputFilename, Err, Context));
 
   if (M.get() == 0) {
@@ -117,7 +116,7 @@ int main(int argc, char **argv) {
   }
   
   // Figure out what stream we are supposed to write to...
-  OwningPtr<tool_output_file> Out;
+  std::unique_ptr<tool_output_file> Out;
   if (!OutputFilename.empty()) {
     std::string ErrorInfo;
     Out.reset(new tool_output_file(OutputFilename.c_str(), ErrorInfo,
