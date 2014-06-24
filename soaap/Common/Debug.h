@@ -11,9 +11,7 @@
 #define SDEBUG(NAME,VERBOSITY,X)  \
   if (debugging(NAME,VERBOSITY,__FUNCTION__)) { \
     do { \
-         errs().changeColor(raw_ostream::Colors::GREEN); \
-         errs() << "[" << __FUNCTION__ << " (" << NAME << ")]\n"; \
-         errs().resetColor(); \
+         showPreamble(NAME, __FUNCTION__); \
          X; \
        } while (0); \
   }
@@ -25,6 +23,7 @@ using namespace std;
 namespace soaap {
 #ifndef NDEBUG  
   bool debugging(string ModuleName, int Verbosity, string FunctionName);
+  void showPreamble(string ModuleName, string FunctionName);
   bool matches(string name, string pattern);
 #endif
 }
