@@ -55,6 +55,7 @@ namespace soaap {
       // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
       virtual bool performMeet(FactType fromVal, FactType& toVal) = 0;
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
+      virtual bool propagateToValue(FactType fact, const Value* to, Context* C, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, bool propagateAllArgs, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual Value* propagateForExternCall(CallInst* CI, const Value* V);
@@ -383,15 +384,21 @@ namespace soaap {
       toState = state[cTo][to];
       result = performMeet(state[cFrom][from], state[cTo][to]);
     }
-    //if (result) {
+    if (result) {
       SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_1
                                                   << *from << " " << stringifyFact(state[cFrom][from]) << "\n"
                                                   << INDENT_2 << " -> "
                                                   << *to << " " << stringifyFact(toState) << ", " << stringifyFact(state[cTo][to]) << "\n");
-    //}
+    }
     return result;
   }
 
+  template <typename FactType>
+  bool InfoFlowAnalysis<FactType>::propagateToValue(FactType fact, const Value* to, Context* C, Module& M) {
+    FactType oldFact = state[C][to];
+    state[C][to] = fact;
+    return oldFact != fact;
+  }
 
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallees(CallInst* CI, const Value* V, Context* C, bool propagateAllArgs, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
@@ -448,6 +455,8 @@ namespace soaap {
             // analysis sound when our meet operator is intersection
             bool change = false;
             if (mustAnalysis) {
+              FactType meet;
+              bool first = true;
               // To be sound, we need to take the meet of all values passed in for each
               // parameter that we are propagating to (i.e. from all other call sites and
               // not only CI). Otherwise, must analyses will lead to incorrect results.
@@ -457,11 +466,17 @@ namespace soaap {
                 if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
                   SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_6 << "Caller: " << *caller << " (enclosing func: " << caller->getParent()->getParent()->getName() << ")\n");
                   Value* V3 = caller->getArgOperand(argIdx);
-                  if (propagateToValue(V3, V2, C, C2, M)) { // propagate
-                    change = true;
+                  if (first) {
+                    meet = state[C][V3];
+                    first = false;
+                  }
+                  else {
+                    performMeet(state[C][V3], meet);
                   }
                 }
               }
+              state[C2][V2] = meet;
+              change = propagateToValue(meet, V2, C2, M);
             }
             else {
               change = propagateToValue(V, V2, C, C2, M);
