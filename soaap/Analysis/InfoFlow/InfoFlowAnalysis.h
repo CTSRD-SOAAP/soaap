@@ -123,7 +123,7 @@ namespace soaap {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);
             for (Context* C2 : C2s) {
-            SDEBUG("soaap.analysis.infoflow", 3,
+              SDEBUG("soaap.analysis.infoflow", 3,
                   dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
                     << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V) << "\n"
                     << ", " << ContextUtils::stringifyContext(C2) << ")\n");
@@ -361,23 +361,35 @@ namespace soaap {
 
   template <typename FactType>
   bool InfoFlowAnalysis<FactType>::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
-    SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "Propagating from " << *from << " to " << *to << "\n");
+
+    bool result = false;
+    FactType toState;
+
     if (mustAnalysis) {
       if (state[cTo].find(to) == state[cTo].end()) {
         state[cTo][to] = state[cFrom][from];
         SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "fromVal: " << stringifyFact(state[cFrom][from]) << ", old toVal: [], new toVal: " << stringifyFact(state[cTo][to]) << "\n");
-        return true; // return true to allow state to propagate through
+        result = true; // return true to allow state to propagate through
                      // regardless of whether the value was non-bottom
       }                   
       else {
         //FactType old = state[cTo][to];
         //state[cTo][to] = performMeet(state[cFrom][from], old);
-        return performMeet(state[cFrom][from], state[cTo][to]);
+        toState = state[cTo][to];
+        result = performMeet(state[cFrom][from], state[cTo][to]);
       }
     }
     else {
-      return performMeet(state[cFrom][from], state[cTo][to]);
+      toState = state[cTo][to];
+      result = performMeet(state[cFrom][from], state[cTo][to]);
     }
+    //if (result) {
+      SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_1
+                                                  << *from << " " << stringifyFact(state[cFrom][from]) << "\n"
+                                                  << INDENT_2 << " -> "
+                                                  << *to << " " << stringifyFact(toState) << ", " << stringifyFact(state[cTo][to]) << "\n");
+    //}
+    return result;
   }
 
 
