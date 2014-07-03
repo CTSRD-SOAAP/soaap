@@ -54,7 +54,8 @@ namespace soaap {
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
       // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
       virtual bool performMeet(FactType fromVal, FactType& toVal) = 0;
-      virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
+      virtual bool performUnion(FactType fromVal, FactType& toVal) = 0;
+      virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M, bool additive = false);
       virtual bool propagateToValue(FactType fact, const Value* to, Context* C, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, bool propagateAllArgs, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
       virtual void propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
@@ -111,7 +112,7 @@ namespace soaap {
         const Value* V2 = NULL;
         if (Constant* CS = dyn_cast<Constant>(U)) {
           V2 = CS;
-          if (propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
+          if (propagateToValue(V, V2, C, C, M, true)) { // propagate taint from (V,C) to (V2,C)
             SDEBUG("soaap.analysis.infoflow" , 3,
                   dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
                     << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2) << "\n"
@@ -128,7 +129,7 @@ namespace soaap {
                   dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
                     << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V) << "\n"
                     << ", " << ContextUtils::stringifyContext(C2) << ")\n");
-              propagateToValue(V, V, C, C2, M); 
+              propagateToValue(V, V, C, C2, M, true); 
               addToWorklist(V, C2, worklist);
             }
           }
@@ -184,16 +185,39 @@ namespace soaap {
             }
             else if (PHINode* PHI = dyn_cast<PHINode>(I)) {
               // take the meet of all incoming values
-              bool change = false;
-              int i;
-              for (i=0; i<PHI->getNumIncomingValues(); i++) {
-                Value* IV = PHI->getIncomingValue(i);
-                if (propagateToValue(IV, PHI, C, C, M)) {
-                  change = true;
+              if (mustAnalysis) {
+                FactType meet;
+                bool first = true;
+                for (int i=0; i<PHI->getNumIncomingValues(); i++) {
+                  Value* IV = PHI->getIncomingValue(i);
+                  if (first) {
+                    meet = state[C][IV];
+                    first = false;
+                  }
+                  else {
+                    performMeet(state[C][IV], meet);
+                  }
+                }
+                if (propagateToValue(meet, PHI, C, M)) {
+                  addToWorklist(PHI, C, worklist);
                 }
               }
-              if (change) {
-                addToWorklist(PHI, C, worklist);
+              else {
+                V2 = PHI;
+              }
+            }
+            else if (SelectInst* SI = dyn_cast<SelectInst>(I)) {
+              if (mustAnalysis) {
+                Value* SV1 = SI->getTrueValue();
+                Value* SV2 = SI->getFalseValue();
+                FactType meet = state[C][SV1];
+                performMeet(state[C][SV2], meet);
+                if (propagateToValue(meet, SI, C, M)) {
+                  addToWorklist(SI, C, worklist);
+                }
+              }
+              else {
+                V2 = SI;
               }
             }
             else {
@@ -203,7 +227,7 @@ namespace soaap {
             if (V2 != NULL) {
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "V2: " << *V2 << "\n");
             }
-            if (V2 != NULL && propagateToValue(V, V2, C, C, M)) { // propagate taint from (V,C) to (V2,C)
+            if (V2 != NULL && propagateToValue(V, V2, C, C, M, true)) { // propagate taint from (V,C) to (V2,C)
               SDEBUG("soaap.analysis.infoflow", 3,
                     dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
                        << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2)
@@ -254,7 +278,7 @@ namespace soaap {
     if (visited.count(Agg) == 0) {
       visited.insert(Agg);
       if (isa<AllocaInst>(Agg) || isa<GlobalVariable>(Agg) || isa<Argument>(Agg)) {
-        if (propagateToValue(V, Agg, C, C, M)) { 
+        if (propagateToValue(V, Agg, C, C, M, true)) { 
           SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_3 << "propagating to aggregate\n");
           addToWorklist(Agg, C, worklist);
         }
@@ -304,7 +328,7 @@ namespace soaap {
                        << "Value type: " << Agg->getValueID() << "\n");
         }
         // propagate to this Value*
-        if (propagateToValue(V, Agg, C, C, M)) { 
+        if (propagateToValue(V, Agg, C, C, M, true)) { 
           addToWorklist(Agg, C, worklist);
         }
       }
@@ -344,7 +368,8 @@ namespace soaap {
           //debugs() << "Propagating arg " << *A << " to caller " << callerFunc->getName() << "\n";
           SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_2 << "Adding arg " << *arg << " to worklist\n");
           for (Context* C2 : callerContexts) {
-            if (propagateToValue(V, arg, C, C2, M)) {
+            //TODO:
+            if (propagateToValue(V, arg, C, C2, M, true)) {
               addToWorklist(arg, C2, worklist);
             }
             propagateToAggregate(arg, C2, arg, visited, worklist, sandboxes, M);
@@ -361,28 +386,27 @@ namespace soaap {
   }
 
   template <typename FactType>
-  bool InfoFlowAnalysis<FactType>::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
+  bool InfoFlowAnalysis<FactType>::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M, bool additive) {
 
     bool result = false;
     FactType toState;
 
-    if (mustAnalysis) {
-      if (state[cTo].find(to) == state[cTo].end()) {
-        state[cTo][to] = state[cFrom][from];
-        SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "fromVal: " << stringifyFact(state[cFrom][from]) << ", old toVal: [], new toVal: " << stringifyFact(state[cTo][to]) << "\n");
-        result = true; // return true to allow state to propagate through
-                     // regardless of whether the value was non-bottom
-      }                   
-      else {
-        //FactType old = state[cTo][to];
-        //state[cTo][to] = performMeet(state[cFrom][from], old);
-        toState = state[cTo][to];
-        result = performMeet(state[cFrom][from], state[cTo][to]);
-      }
+    if (state[cTo].find(to) == state[cTo].end()) {
+      state[cTo][to] = state[cFrom][from];
+      SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "fromVal: " << stringifyFact(state[cFrom][from]) << ", old toVal: [], new toVal: " << stringifyFact(state[cTo][to]) << "\n");
+      result = true; // return true to allow state to propagate through
+                   // regardless of whether the value was non-bottom
     }
     else {
+      //FactType old = state[cTo][to];
+      //state[cTo][to] = performMeet(state[cFrom][from], old);
       toState = state[cTo][to];
-      result = performMeet(state[cFrom][from], state[cTo][to]);
+      if (additive) {
+        result = performUnion(state[cFrom][from], state[cTo][to]);
+      }
+      else {
+        result = performMeet(state[cFrom][from], state[cTo][to]);
+      }
     }
     if (result) {
       SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_1
@@ -479,7 +503,7 @@ namespace soaap {
               change = propagateToValue(meet, V2, C2, M);
             }
             else {
-              change = propagateToValue(V, V2, C, C2, M);
+              change = propagateToValue(V, V2, C, C2, M, false);
             }
             if (change) {
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "Adding (V2,C2) to worklist\n"
@@ -497,10 +521,36 @@ namespace soaap {
     Function* F = RI->getParent()->getParent();
     for (CallInst* CI : CallGraphUtils::getCallers(F, M)) {
       SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to caller " << stringifyValue(CI));
+      FunctionSet callees = CallGraphUtils::getCallees(CI, M);
       ContextVector C2s = ContextUtils::callerContexts(RI, CI, C, contextInsensitive, sandboxes, M);
       for (Context* C2 : C2s) {
-        if (propagateToValue(V, CI, C, C2, M)) {
-          addToWorklist(CI, C2, worklist);
+        // if this is a must analysis, then take the meet of all possible return values of all callees
+        if (mustAnalysis) {
+          FactType meet;
+          bool first = true;
+          for (Function* callee : callees) {
+            Context* C3 = ContextUtils::calleeContext(C2, contextInsensitive, callee, sandboxes, M);
+            for (BasicBlock& B : callee->getBasicBlockList()) {
+              if (ReturnInst* RI2 = dyn_cast<ReturnInst>(B.getTerminator())) {
+                Value* V2 = RI2->getReturnValue();
+                if (first) {
+                  meet = state[C3][V2];
+                  first = false;
+                }
+                else {
+                  performMeet(state[C3][V2], meet);
+                }
+              }
+            }
+          }
+          if (propagateToValue(meet, CI, C2, M)) {
+            addToWorklist(CI, C2, worklist);
+          }
+        }
+        else {
+          if (propagateToValue(V, CI, C, C2, M)) {
+            addToWorklist(CI, C2, worklist);
+          }
         }
       }
     }

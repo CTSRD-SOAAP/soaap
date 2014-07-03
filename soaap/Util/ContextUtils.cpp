@@ -26,6 +26,7 @@ Context* ContextUtils::calleeContext(Context* C, bool contextInsensitive, Functi
 
 ContextVector ContextUtils::callerContexts(ReturnInst* RI, CallInst* CI, Context* C, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
   // caller context is the same sandbox or other sandboxes/privileged context (if enclosing function is an entry point)
+  // TODO: what if RI's enclosing function is a callgate?
   if (contextInsensitive) {
     return ContextVector(1, SINGLE_CONTEXT);
   }

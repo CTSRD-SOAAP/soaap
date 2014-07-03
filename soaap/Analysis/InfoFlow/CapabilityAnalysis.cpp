@@ -30,6 +30,12 @@ bool CapabilityAnalysis::performMeet(BitVector fromVal, BitVector& toVal) {
   return toVal != oldToVal;
 }
 
+bool CapabilityAnalysis::performUnion(BitVector fromVal, BitVector& toVal) {
+  BitVector oldToVal = toVal;
+  toVal |= fromVal;
+  return toVal != oldToVal;
+}
+
 void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "sandbox: " << S->getName() << "\n")

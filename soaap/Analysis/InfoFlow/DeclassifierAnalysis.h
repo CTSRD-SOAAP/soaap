@@ -21,6 +21,7 @@ namespace soaap {
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual bool performMeet(bool from, bool& to);
+      virtual bool performUnion(bool from, bool& to);
       virtual bool bottomValue() { return false; }
       virtual string stringifyFact(bool fact);
       virtual void findAllFollowingInstructions(Instruction* I, Value* V);

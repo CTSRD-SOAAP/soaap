@@ -32,13 +32,14 @@ void FPTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes
 
 // return the union of from and to
 bool FPTargetsAnalysis::performMeet(BitVector from, BitVector& to) {
+  return performUnion(from, to);
+}
+
+// return the union of from and to
+bool FPTargetsAnalysis::performUnion(BitVector from, BitVector& to) {
   //static int counter = 0;
   BitVector oldTo = to;
   to |= from;
-  //if (counter++ == 1000) {
-  //  dbgs() << from.count() << " " << to.count() << "\n";
-  //  counter = 0;
-  //}
   return to != oldTo;
 }
 

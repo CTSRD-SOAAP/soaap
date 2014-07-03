@@ -53,6 +53,10 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
 
 
 bool AccessOriginAnalysis::performMeet(int from, int& to) {
+  return performUnion(from, to);
+}
+
+bool AccessOriginAnalysis::performUnion(int from, int& to) {
   int oldTo = to;
   to = from | to;
   return to != oldTo;

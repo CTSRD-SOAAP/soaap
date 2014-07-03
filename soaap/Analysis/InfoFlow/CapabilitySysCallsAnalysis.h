@@ -23,6 +23,7 @@ namespace soaap {
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual bool performMeet(BitVector fromVal, BitVector& toVal);
+      virtual bool performUnion(BitVector fromVal, BitVector& toVal);
       virtual BitVector bottomValue() { return BitVector(); }
       virtual string stringifyFact(BitVector fact);
       virtual BitVector convertFunctionSetToBitVector(FunctionSet sysCalls);

@@ -270,6 +270,10 @@ bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to
 }
 
 bool SandboxPrivateAnalysis::performMeet(int from, int& to) {
+  return performUnion(from, to);
+}
+
+bool SandboxPrivateAnalysis::performUnion(int from, int& to) {
   int oldTo = to;
   to = from | to;
   return to != oldTo;

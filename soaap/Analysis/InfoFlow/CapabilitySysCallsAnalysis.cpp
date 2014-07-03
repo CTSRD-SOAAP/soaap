@@ -116,6 +116,13 @@ bool CapabilitySysCallsAnalysis::performMeet(BitVector fromVal, BitVector& toVal
   return toVal != oldToVal;
 }
 
+bool CapabilitySysCallsAnalysis::performUnion(BitVector fromVal, BitVector& toVal) {
+  BitVector oldToVal = toVal;
+  toVal |= fromVal;
+  SDEBUG("soaap.analysis.infoflow.capsyscalls", 4, dbgs() << "fromVal: " << stringifyFact(fromVal) << ", old toVal: " << stringifyFact(oldToVal) << ", new toVal: " << stringifyFact(toVal) << "\n");
+  return toVal != oldToVal;
+}
+
 // check 
 void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {

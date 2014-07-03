@@ -106,6 +106,10 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
 }
 
 bool ClassifiedAnalysis::performMeet(int from, int& to) {
+  return performUnion(from, to);
+}
+
+bool ClassifiedAnalysis::performUnion(int from, int& to) {
   int oldTo = to;
   to = from | to;
   return to != oldTo;

@@ -82,6 +82,12 @@ bool DeclassifierAnalysis::performMeet(bool from, bool& to) {
   return to != oldTo;
 }
 
+bool DeclassifierAnalysis::performUnion(bool from, bool& to) {
+  bool oldTo = to;
+  to |= from;
+  return to != oldTo;
+}
+
 bool DeclassifierAnalysis::isDeclassified(const Value* V) {
   return state[ContextUtils::SINGLE_CONTEXT][V];
 }
