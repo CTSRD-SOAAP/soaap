@@ -372,29 +372,31 @@ void Sandbox::findCapabilities() {
                   size_t quote2Pos = sandboxNameAndSysCallListCsv.find("\"", quotePos+1);
                   if (quote2Pos != string::npos) {
                     string sandboxName = sandboxNameAndSysCallListCsv.substr(quotePos+1, quote2Pos-(quotePos+1));
-                    outs() << "sandbox name: \"" << sandboxName << "\"\n";
-                    string sysCallListCsv = sandboxNameAndSysCallListCsv.substr(quote2Pos+1);
-                    outs() << "sysCallList: " << sysCallListCsv << "\n";
-                    int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
-                    FunctionSet sysCalls;
-                    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
-                    istringstream ss(sysCallListCsv);
-                    string sysCallName;
-                    while(getline(ss, sysCallName, ',')) {
-                      outs() << "syscall: " << sysCallName << "\n";
-                      // trim leading and trailing spaces
-                      size_t start = sysCallName.find_first_not_of(" ");
-                      size_t end = sysCallName.find_last_not_of(" ");
-                      if (start != string::npos && end != string::npos) {
-                        sysCallName = sysCallName.substr(start, end-start+1);
-                        SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
-                        if (Function* sysCallFn = module.getFunction(sysCallName)) {
-                          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
-                          sysCalls.insert(sysCallFn);
+                    if (sandboxName == name) {
+                      outs() << "sandbox name: \"" << sandboxName << "\"\n";
+                      string sysCallListCsv = sandboxNameAndSysCallListCsv.substr(quote2Pos+1);
+                      outs() << "sysCallList: " << sysCallListCsv << "\n";
+                      int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
+                      FunctionSet sysCalls;
+                      SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
+                      istringstream ss(sysCallListCsv);
+                      string sysCallName;
+                      while(getline(ss, sysCallName, ',')) {
+                        outs() << "syscall: " << sysCallName << "\n";
+                        // trim leading and trailing spaces
+                        size_t start = sysCallName.find_first_not_of(" ");
+                        size_t end = sysCallName.find_last_not_of(" ");
+                        if (start != string::npos && end != string::npos) {
+                          sysCallName = sysCallName.substr(start, end-start+1);
+                          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
+                          if (Function* sysCallFn = module.getFunction(sysCallName)) {
+                            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
+                            sysCalls.insert(sysCallFn);
+                          }
                         }
                       }
+                      caps[II] = sysCalls;
                     }
-                    caps[II] = sysCalls;
                   }
                 }
               }
