@@ -119,8 +119,10 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
  */
 #define SOAAP_SYSCALLS "SOAAP_SYSCALLS"
-#define __soaap_limit_syscalls(syscalls...) \
+#define __soaap_limit_syscalls_afterx(syscalls...) \
   __builtin_annotation(0, SOAAP_SYSCALLS "_" #syscalls)
+#define __soaap_limit_syscalls(syscalls...) \
+  __soaap_limit_syscalls_afterx(syscalls)
 
 /**
  * Limit the system calls that can be called with respect to a file descriptor.
@@ -133,8 +135,10 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
  * subsumed into SOAAP itself as it learns about more mechanisms' semantics.
  */
 #define SOAAP_FD_SYSCALLS "SOAAP_FD_SYSCALLS"
-#define __soaap_limit_fd_syscalls(fd, syscalls...) \
+#define __soaap_limit_fd_syscalls_afterx(fd, syscalls...) \
   __builtin_annotation(fd, SOAAP_FD_SYSCALLS "_" #syscalls)
+#define __soaap_limit_fd_syscalls(fd, syscalls...) \
+  __soaap_limit_fd_syscalls_afterx(fd, syscalls)
 
 /**
  * Limit the system calls that can be called with respect to a file descriptor
