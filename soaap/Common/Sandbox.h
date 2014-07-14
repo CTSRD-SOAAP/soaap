@@ -18,6 +18,7 @@ namespace soaap {
       int getNameIdx();
       Function* getEntryPoint();
       FunctionVector getFunctions();
+      CallInstVector getCalls();
       GlobalVariableIntMap getGlobalVarPerms();
       ValueFunctionSetMap getCapabilities();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
@@ -44,6 +45,7 @@ namespace soaap {
       FunctionVector callgates;
       FunctionVector functionsVec;
       DenseSet<Function*> functionsSet;
+      CallInstVector callInsts;
       CallInstVector creationPoints;
       CallInstVector sysCallLimitPoints;
       map<CallInst*,FunctionSet> sysCallLimitPointToAllowedSysCalls;
@@ -53,6 +55,7 @@ namespace soaap {
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
+      void findSandboxedCalls();
       void findSharedGlobalVariables();
       void findCallgates();
       void findCapabilities();

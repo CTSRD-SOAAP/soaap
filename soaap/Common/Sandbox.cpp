@@ -9,6 +9,7 @@
 
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -22,6 +23,8 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed functions\n");
   findSandboxedFunctions();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed calls\n");
+  findSandboxedCalls();
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding shared global variables\n");
   findSharedGlobalVariables();
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
@@ -38,6 +41,8 @@ Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m)
   : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed functions\n");
   findSandboxedFunctions();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed calls\n");
+  findSandboxedCalls();
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding shared global variables\n");
   findSharedGlobalVariables();
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
@@ -64,6 +69,10 @@ int Sandbox::getNameIdx() {
 
 FunctionVector Sandbox::getFunctions() {
   return functionsVec;
+}
+
+CallInstVector Sandbox::getCalls() {
+  return callInsts;
 }
 
 GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
@@ -144,7 +153,6 @@ void Sandbox::findSandboxedFunctions() {
   SDEBUG("soaap.util.sandbox", 3, dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
 }
 
-
 void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
   Function* F = node->getFunction();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
@@ -168,6 +176,24 @@ void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
     CallGraphNode* calleeNode = I->second;
     if (Function* calleeFunc = calleeNode->getFunction()) {
       findSandboxedFunctionsHelper(calleeNode);
+    }
+  }
+}
+
+void Sandbox::findSandboxedCalls() {
+  for (Function* F : functionsVec) {
+    for (inst_iterator I=inst_begin(F), E=inst_end(F); I!=E; I++) {
+      if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+        callInsts.push_back(C);
+      }
+    }
+  }
+  // if this sandbox doesn't have an entrypoint then search region instructions also
+  if (entryPoint == NULL) {
+    for (Instruction* I : region) {
+      if (CallInst* C = dyn_cast<CallInst>(I)) {
+        callInsts.push_back(C);
+      }
     }
   }
 }

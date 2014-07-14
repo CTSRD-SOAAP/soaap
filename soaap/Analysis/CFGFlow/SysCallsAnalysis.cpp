@@ -48,32 +48,28 @@ void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, Sa
 void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
-    for (Function* F : S->getFunctions()) {
-      SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "func: " << F->getName() << "\n")
-      for (inst_iterator I=inst_begin(F), E=inst_end(F); I!=E; I++) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "call: " << *C << "\n")
-          for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
-            string funcName = Callee->getName();
-            SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
-            if (freeBSDSysCallProvider.isSysCall(funcName)) {
-              SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
-              // this is a system call
-              int idx = freeBSDSysCallProvider.getIdx(funcName);
-              BitVector& vector = state[C];
-              SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
-              SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
-              if (vector.size() <= idx || !vector.test(idx)) {
-                outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
-                outs() << " but it is not allowed to,\n";
-                outs() << " *** based on the current sandboxing restrictions.\n";
-                if (MDNode *N = C->getMetadata("dbg")) {
-                  DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
-                }
-                outs() << "\n";
-              }
+    for (CallInst* C : S->getCalls()) {
+      SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "call: " << *C
+                                                          << " (func: " << C->getParent()->getParent()->getName() << ")\n");
+      for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+        string funcName = Callee->getName();
+        SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
+        if (freeBSDSysCallProvider.isSysCall(funcName)) {
+          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
+          // this is a system call
+          int idx = freeBSDSysCallProvider.getIdx(funcName);
+          BitVector& vector = state[C];
+          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
+          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
+          if (vector.size() <= idx || !vector.test(idx)) {
+            outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
+            outs() << " but it is not allowed to,\n";
+            outs() << " *** based on the current sandboxing restrictions.\n";
+            if (MDNode *N = C->getMetadata("dbg")) {
+              DILocation loc(N);
+              outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
             }
+            outs() << "\n";
           }
         }
       }
