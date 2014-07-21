@@ -59,6 +59,15 @@ Function* Sandbox::getEntryPoint() {
   return entryPoint;
 }
 
+bool Sandbox::isRegionWithin(Function* F) {
+  if (entryPoint == NULL) {
+    Instruction* firstI = region.front();
+    Function* enclosingFunc = firstI->getParent()->getParent();
+    return enclosingFunc == F;
+  }
+  return false;
+}
+
 string Sandbox::getName() {
   return name;
 }
@@ -121,6 +130,18 @@ FunctionSet Sandbox::getAllowedSysCalls(CallInst* sysCallLimitPoint) {
 
 bool Sandbox::containsFunction(Function* F) {
   return functionsSet.find(F) != functionsSet.end();
+}
+
+bool Sandbox::containsInstruction(Instruction* I) {
+  if (entryPoint == NULL) {
+    // This is a sandboxed region; first search the top-level
+    // instructions in it.
+    if (find(region.begin(), region.end(), I) != region.end()) {
+      return true;
+    }
+  }
+  Function* F = I->getParent()->getParent();
+  return containsFunction(F);
 }
 
 bool Sandbox::hasCallgate(Function* F) {

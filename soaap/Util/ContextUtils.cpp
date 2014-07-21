@@ -56,8 +56,23 @@ ContextVector ContextUtils::getContextsForMethod(Function* F, bool contextInsens
   }
 }
 
+ContextVector ContextUtils::getContextsForInstruction(Instruction* I, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
+  if (contextInsensitive) {
+    return ContextVector(1, SINGLE_CONTEXT);
+  }
+  else {
+    ContextVector Cs;
+    if (SandboxUtils::isPrivilegedInstruction(I, sandboxes, M)) {
+      Cs.push_back(PRIV_CONTEXT);
+    }
+    SandboxVector containers = SandboxUtils::getSandboxesContainingInstruction(I, sandboxes);
+    Cs.insert(Cs.begin(), containers.begin(), containers.end());
+    return Cs;
+  }
+}
+
 bool ContextUtils::isInContext(Instruction* I, Context* C, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
-  ContextVector Cs = getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);
+  ContextVector Cs = getContextsForInstruction(I, contextInsensitive, sandboxes, M);
   return find(Cs.begin(), Cs.end(), C) != Cs.end();
 }
 

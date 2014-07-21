@@ -17,6 +17,7 @@ namespace soaap {
       string getName();
       int getNameIdx();
       Function* getEntryPoint();
+      bool isRegionWithin(Function* F);
       FunctionVector getFunctions();
       CallInstVector getCalls();
       GlobalVariableIntMap getGlobalVarPerms();
@@ -31,6 +32,7 @@ namespace soaap {
       CallInstVector getSysCallLimitPoints();
       FunctionSet getAllowedSysCalls(CallInst* sysCallLimitPoint);
       bool containsFunction(Function* F);
+      bool containsInstruction(Instruction* I);
       bool hasCallgate(Function* F);
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
 

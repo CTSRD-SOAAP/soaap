@@ -24,8 +24,10 @@ namespace soaap {
       static bool isSandboxEntryPoint(Module& M, Function* F);
       static FunctionSet getPrivilegedMethods(Module& M);
       static bool isPrivilegedMethod(Function* F, Module& M);
+      static bool isPrivilegedInstruction(Instruction* I, SandboxVector& sandboxes, Module& M);
       static Sandbox* getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes);
+      static SandboxVector getSandboxesContainingInstruction(Instruction* I, SandboxVector& sandboxes);
       static Sandbox* getSandboxWithName(string name, SandboxVector& sandboxes);
       static void outputSandboxedFunctions(SandboxVector& sandboxes);
       static bool isSandboxedFunction(Function* F, SandboxVector& sandboxes);

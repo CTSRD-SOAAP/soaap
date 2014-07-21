@@ -286,6 +286,22 @@ bool SandboxUtils::isPrivilegedMethod(Function* F, Module& M) {
   return privilegedMethods.count(F) > 0;
 }
 
+bool SandboxUtils::isPrivilegedInstruction(Instruction* I, SandboxVector& sandboxes, Module& M) {
+  // An instruction is privileged if:
+  //  1) it occurs within a privileged method
+  //  2) it does not occur within a sandboxed region
+  Function* F = I->getParent()->getParent();
+  if (isPrivilegedMethod(F, M)) {
+    // check we're not in a sandboxed region
+    for (Sandbox* S : sandboxes) {
+      if (S->isRegionWithin(F) && S->containsInstruction(I)) {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
 Sandbox* SandboxUtils::getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     if (S->getEntryPoint() == F) {
@@ -299,8 +315,17 @@ Sandbox* SandboxUtils::getSandboxForEntryPoint(Function* F, SandboxVector& sandb
 SandboxVector SandboxUtils::getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes) {
   SandboxVector containers;
   for (Sandbox* S : sandboxes) {
-    FunctionVector sFuncs = S->getFunctions();
-    if (find(sFuncs.begin(), sFuncs.end(), F) != sFuncs.end()) {
+    if (S->containsFunction(F)) {
+      containers.push_back(S);
+    }
+  }
+  return containers;
+}
+
+SandboxVector SandboxUtils::getSandboxesContainingInstruction(Instruction* I, SandboxVector& sandboxes) {
+  SandboxVector containers;
+  for (Sandbox* S : sandboxes) {
+    if (S->containsInstruction(I)) {
       containers.push_back(S);
     }
   }

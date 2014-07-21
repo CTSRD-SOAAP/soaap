@@ -123,7 +123,7 @@ namespace soaap {
         else if (Instruction* I = dyn_cast<Instruction>(U)) {
           if (C == ContextUtils::NO_CONTEXT) {
             // update the taint value for the correct context and put the new pair on the worklist
-            ContextVector C2s = ContextUtils::getContextsForMethod(I->getParent()->getParent(), contextInsensitive, sandboxes, M);
+            ContextVector C2s = ContextUtils::getContextsForInstruction(I, contextInsensitive, sandboxes, M);
             for (Context* C2 : C2s) {
               SDEBUG("soaap.analysis.infoflow", 3,
                   dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
@@ -362,9 +362,9 @@ namespace soaap {
         // we found the param index, propagate back to all caller args
         int argIdx = A->getArgNo();
         for (CallInst* caller : CallGraphUtils::getCallers(enclosingFunc, M)) {
-          Function* callerFunc = caller->getParent()->getParent();
-          ContextVector callerContexts = ContextUtils::getContextsForMethod(callerFunc, contextInsensitive, sandboxes, M);
+          ContextVector callerContexts = ContextUtils::getContextsForInstruction(caller, contextInsensitive, sandboxes, M);
           Value* arg = caller->getArgOperand(argIdx);
+          Function* callerFunc = caller->getParent()->getParent();
           //debugs() << "Propagating arg " << *A << " to caller " << callerFunc->getName() << "\n";
           SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_2 << "Adding arg " << *arg << " to worklist\n");
           for (Context* C2 : callerContexts) {
