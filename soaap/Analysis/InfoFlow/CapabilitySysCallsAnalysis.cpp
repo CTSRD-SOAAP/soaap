@@ -127,52 +127,49 @@ bool CapabilitySysCallsAnalysis::performUnion(BitVector fromVal, BitVector& toVa
 void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
-    for (Function* F : S->getFunctions()) {
-      SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "func: " << F->getName() << "\n")
-      for (inst_iterator I=inst_begin(F), E=inst_end(F); I!=E; I++) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "call: " << *C << "\n")
-          for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
-            string funcName = Callee->getName();
-            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "callee: " << funcName << "\n")
-            if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName)) {
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall " << funcName << " found\n")
-              // this is a system call
-              int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
-              int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
-              Value* fdArg = C->getArgOperand(fdArgIdx);
-              
-              // check if there are any restrictions on fdArg and only then determine if this
-              // system call is allowed to be called on it (we don't want to be giving errors
-              // if the __soaap_limit_fd_syscalls(...) annotation has never been used for fdArg
-              bool restricted = false;
-              if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
-                int fdVal = CI->getSExtValue();
-                restricted = intFdToAllowedSysCalls.find(fdVal) != intFdToAllowedSysCalls.end();
-              }
-              else {
-                restricted = state[S].find(fdArg) != state[S].end();
-              }
+    for (CallInst* C : S->getCalls()) {
+      SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "call: " << *C << "\n")
+      for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+        string funcName = Callee->getName();
+        SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "callee: " << funcName << "\n")
+        if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName)) {
+          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall " << funcName << " found and takes fd arg\n")
+          // this is a system call
+          int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
+          int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
+          Value* fdArg = C->getArgOperand(fdArgIdx);
 
-              if (restricted) {
-                BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
-                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
-                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
-                if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
-                  SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
-                }
+          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg: " << *fdArg << "\n")
+          
+          // check if there are any restrictions on fdArg and only then determine if this
+          // system call is allowed to be called on it (we don't want to be giving errors
+          // if the __soaap_limit_fd_syscalls(...) annotation has never been used for fdArg
+          bool restricted = false;
+          if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+            int fdVal = CI->getSExtValue();
+            restricted = intFdToAllowedSysCalls.find(fdVal) != intFdToAllowedSysCalls.end();
+          }
+          else {
+            restricted = state[S].find(fdArg) != state[S].end();
+          }
 
-                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
-                if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
-                  outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
-                  outs() << " but is not allowed to for the given fd arg.\n";
-                  if (MDNode *N = C->getMetadata("dbg")) {
-                    DILocation loc(N);
-                    outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
-                  }
-                  outs() << "\n";
-                }
+          if (restricted) {
+            BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
+            if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
+            }
+
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
+            if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
+              outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
+              outs() << " but is not allowed to for the given fd arg.\n";
+              if (MDNode *N = C->getMetadata("dbg")) {
+                DILocation loc(N);
+                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
               }
+              outs() << "\n";
             }
           }
         }

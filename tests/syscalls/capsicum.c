@@ -8,6 +8,7 @@
 #include "soaap.h"
 
 #include <fcntl.h>
+#include <unistd.h>
 
 /*
  * An extremely simple model of Capsicum's cap_enter():
@@ -20,7 +21,7 @@
  *       don't have to manually annotate every call site.
  */
 #define CAPSICUM_SYSCALLS \
-	read, write, openat, exit
+	read, write, openat, exit, cap_enter
 
 int	cap_enter(void);
 
@@ -32,9 +33,11 @@ int main(int argc, char** argv)
 	/*
 	 * This is ok: we still have ambient authority.
 	 *
-	 * CHECK-NOT: +++ Line 29 of file
+	 * CHECK-NOT: +++ Line 38 of file
 	 */
 	passwd = open("/etc/passwd", O_RDONLY);
+
+  __soaap_sandboxed_region_start("cap_sandbox");
 
 	/*
 	 * Enter capability mode: from now on, only system calls in
@@ -43,6 +46,8 @@ int main(int argc, char** argv)
 	 * TODO: allow this annotation to be attached to cap_enter()'s
 	 *       declaration, then eventually incorporate this domain
 	 *       knowledge into SOAAP itself (as well as seccomp-bpf, etc.).
+	 * 
+   * CHECK-NOT: +++ Line 53 of file
 	 */
 	__soaap_limit_syscalls(CAPSICUM_SYSCALLS);
 	cap_enter();
@@ -51,7 +56,7 @@ int main(int argc, char** argv)
 	 * This is not ok: cap_enter() disallows "open".
 	 *
 	 * CHECK: performs system call "open" but it is not allowed to
-	 * CHECK: +++ Line 38 of file
+	 * CHECK: +++ Line 61 of file
 	 */
 	root = open("/", O_RDONLY);
 
@@ -64,6 +69,8 @@ int main(int argc, char** argv)
 	 * CHECK: performs system call "write" but
 	 */
 	write(passwd, "foo", 4);
+
+  __soaap_sandboxed_region_end("cap_sandbox");
 
 	return 0;
 }
