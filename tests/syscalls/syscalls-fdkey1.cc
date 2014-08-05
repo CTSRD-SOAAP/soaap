@@ -30,6 +30,7 @@ class Map {
 };
 
 int main(int argc, char** argv) {
+  __soaap_create_persistent_sandbox("sandbox");
   foo();
   return 0;
 }
