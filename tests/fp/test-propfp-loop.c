@@ -20,7 +20,7 @@ void f(int __soaap_fd_read ifd) {
   while (i < 10) {
     ifd = j+1;
     j = ifd;
-    // CHECK: Sandbox "foo" performs system call "read" but is not allowed to for the given fd arg
+    // CHECK: Sandbox "foo" performs system call "read" but {{.*}}is not allowed to
     // CHECK: +++ Line 25 of file {{.*}}
     read(j, buf, 10);
     i++;
