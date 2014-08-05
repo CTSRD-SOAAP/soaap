@@ -44,7 +44,6 @@ void foo() {
   int fd = m->Get(kPrimaryIPCChannel);
   // CHECK-DAG: *** Sandbox "sandbox" performs system call "write" but is not allowed to for the given fd arg.
   // CHECK-DAG: +++ Line 47 of file {{.*}}
-  
   write(fd, NULL, 0);
   // CHECK-NOT: *** Sandbox "sandbox" performs system call "read" but is not allowed to for the given fd arg.
   // CHECK-NOT: +++ Line 50 of file {{.*}}
