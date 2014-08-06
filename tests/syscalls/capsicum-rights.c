@@ -4,12 +4,16 @@
  * RUN: FileCheck %s -input-file %t.out
  *
  * CHECK: Running Soaap Pass
- *
- * XFAIL: darwin,linux,windows
  */
 #include "soaap.h"
 
+/*
+ * We don't *actually* need to compile the capability stuff,
+ * we're just testing annotations.
+ */
+#ifdef __FreeBSD__
 #include <sys/capability.h>    /* TODO: change to sys/capsicum.h */
+#endif
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -33,7 +37,9 @@ int	cap_enter(void);
 
 int main(int argc, char** argv)
 {
+#ifdef CAPRIGHT
 	cap_rights_t rights;
+#endif
 	char buffer[10];
 	int passwd;
 
@@ -48,7 +54,9 @@ int main(int argc, char** argv)
 	 *
 	 * CHECK-NOT: performs system call "cap_rights_limit" but
 	 */
+#ifdef CAPRIGHT
 	cap_rights_limit(passwd, cap_rights_init(&rights, CAP_READ));
+#endif
 	__soaap_limit_fd_syscalls(passwd, read);
 
 	/*
