@@ -34,7 +34,7 @@ int main(int argc, char** argv)
 	/*
 	 * This is ok: we still have ambient authority.
 	 *
-	 * CHECK-NOT: +++ Line 38 of file
+	 * CHECK-NOT: +++ Line 39 of file
 	 */
 	passwd = open("/etc/passwd", O_RDONLY);
 
@@ -58,16 +58,6 @@ int main(int argc, char** argv)
 	 * CHECK: +++ Line 60 of file
 	 */
 	root = open("/", O_RDONLY);
-
-	__soaap_limit_fd_syscalls(passwd, read);
-	//cap_rights_limit(passwd, cap_rights_init(&rights, CAP_READ));
-
-	/*
-	 * This is not ok: we only have CAP_READ on passwd now.
-	 *
-	 * CHECK: performs system call "write" but
-	 */
-	write(passwd, "foo", 4);
 
 	return 0;
 }
