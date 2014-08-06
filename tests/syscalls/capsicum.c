@@ -70,7 +70,5 @@ int main(int argc, char** argv)
 	 */
 	write(passwd, "foo", 4);
 
-  __soaap_sandboxed_region_end("cap_sandbox");
-
 	return 0;
 }
