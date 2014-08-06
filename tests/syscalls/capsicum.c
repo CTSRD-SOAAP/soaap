@@ -20,8 +20,9 @@
  * TODO: tag the cap_enter() declaration with these syscalls so that we
  *       don't have to manually annotate every call site.
  */
-#define CAPSICUM_SYSCALLS \
-	read, write, openat, exit, cap_enter
+#define SOAAP_CAPSICUM_CAPABILITY_MODE \
+	__soaap_sandboxed_region_start("cap_sandbox"); \
+	__soaap_limit_syscalls(read, write, openat, exit);
 
 int	cap_enter(void);
 
@@ -37,8 +38,6 @@ int main(int argc, char** argv)
 	 */
 	passwd = open("/etc/passwd", O_RDONLY);
 
-  __soaap_sandboxed_region_start("cap_sandbox");
-
 	/*
 	 * Enter capability mode: from now on, only system calls in
 	 * cap_enter()'s annotation above are allowed.
@@ -46,17 +45,17 @@ int main(int argc, char** argv)
 	 * TODO: allow this annotation to be attached to cap_enter()'s
 	 *       declaration, then eventually incorporate this domain
 	 *       knowledge into SOAAP itself (as well as seccomp-bpf, etc.).
-	 * 
-   * CHECK-NOT: +++ Line 53 of file
+	 *
+	 * CHECK-NOT: +++ Line 51 of file
 	 */
-	__soaap_limit_syscalls(CAPSICUM_SYSCALLS);
 	cap_enter();
+	SOAAP_CAPSICUM_CAPABILITY_MODE
 
 	/*
 	 * This is not ok: cap_enter() disallows "open".
 	 *
 	 * CHECK: performs system call "open" but it is not allowed to
-	 * CHECK: +++ Line 61 of file
+	 * CHECK: +++ Line 60 of file
 	 */
 	root = open("/", O_RDONLY);
 
