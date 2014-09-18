@@ -2,7 +2,7 @@ add_llvm_executable(soaap
   soaap.cpp
 )
 
-llvm_map_components_to_libraries(LLVM_LIBS
+llvm_map_components_to_libnames(LLVM_LIBS
   Analysis
   BitWriter
   Codegen
