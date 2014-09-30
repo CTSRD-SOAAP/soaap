@@ -87,8 +87,8 @@ bool Soaap::runOnModule(Module& M) {
     outs() << "* Checking global variable accesses\n";
     checkGlobalVariables(M);
 
-    outs() << "* Checking file descriptor accesses\n";
-    checkFileDescriptors(M);
+    //outs() << "* Checking file descriptor accesses\n";
+    //checkFileDescriptors(M);
 
     outs() << "* Checking system calls\n";
     checkSysCalls(M);

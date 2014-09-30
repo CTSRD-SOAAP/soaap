@@ -9,12 +9,25 @@
 #include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
+#include "Util/TypeUtils.h"
 #include "soaap.h"
 
 using namespace soaap;
 
 void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
   freeBSDSysCallProvider.initSysCalls();
+  
+  // Add annotations on file descriptor parameters to sandbox entry point
+  for (Sandbox* S : sandboxes) {
+    ValueFunctionSetMap caps = S->getCapabilities();
+    for (pair<const Value*,FunctionSet> cap : caps) {
+      function<int (Function*)> func = [&](Function* F) -> int { return freeBSDSysCallProvider.getIdx(F->getName()); };
+      state[S][cap.first] = TypeUtils::convertFunctionSetToBitVector(cap.second, func);
+      addToWorklist(cap.first, S, worklist);
+    }
+  }
+
+  // Find and add file descriptors annotated using __soaap_limit_fd_(key_)?syscalls
   if (Function* F = M.getFunction("llvm.annotation.i32")) {
     for (User* U : F->users()) {
       if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
@@ -125,6 +138,9 @@ bool CapabilitySysCallsAnalysis::performUnion(BitVector fromVal, BitVector& toVa
 
 // check 
 void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
+  //
+  // TODO: check that error messages appropriate for both types of annotations
+  //
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
