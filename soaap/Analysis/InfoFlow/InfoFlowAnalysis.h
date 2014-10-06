@@ -135,8 +135,10 @@ namespace soaap {
           }
           else if (ContextUtils::isInContext(I, C, contextInsensitive, sandboxes, M)) { // check if using instruction is in context C
             if (StoreInst* SI = dyn_cast<StoreInst>(I)) {
-              if (V == SI->getPointerOperand()) // to avoid infinite looping
+              if (V == SI->getPointerOperand()) { // to avoid infinite looping
+                // TODO: Are we clobbering V's dataflow state?
                 continue;
+              }
               V2 = SI->getPointerOperand();
             }
             else if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(I)) {
