@@ -227,7 +227,7 @@ namespace soaap {
             if (V2 != NULL) {
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "V2: " << *V2 << "\n");
             }
-            if (V2 != NULL && propagateToValue(V, V2, C, C, M, true)) { // propagate taint from (V,C) to (V2,C)
+            if (V2 != NULL && propagateToValue(V, V2, C, C, M, !mustAnalysis)) { // propagate taint from (V,C) to (V2,C)
               SDEBUG("soaap.analysis.infoflow", 3,
                     dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
                        << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2)

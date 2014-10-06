@@ -24,8 +24,8 @@ void f(int ifd __soaap_fd_permit(read), int ofd) {
   char buf[10];
   // CHECK-DAG: Sandboxed method "f" [sandbox named foo] wrote to global variable "x" ({{.*}}) but is not allowed to
   x = 3;
-  // CHECK-NOT: Sandbox "sandbox named foo" performs system call "read" but is not allowed to for the given fd arg.
+  // CHECK-NOT: Sandbox "sandbox named foo" performs system call "read" but it is not allowed to
   read(ifd, buf, 1);
-  // CHECK-DAG: Sandbox "sandbox named foo" performs system call "write" but is not allowed to for the given fd arg.
+  // CHECK-DAG: Sandbox "sandbox named foo" performs system call "write" but is not allowed to
   write(ofd, buf, 1);
 }

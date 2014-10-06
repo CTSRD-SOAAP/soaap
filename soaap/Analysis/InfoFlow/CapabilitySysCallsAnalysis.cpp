@@ -23,6 +23,7 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
     for (pair<const Value*,FunctionSet> cap : caps) {
       function<int (Function*)> func = [&](Function* F) -> int { return freeBSDSysCallProvider.getIdx(F->getName()); };
       state[S][cap.first] = TypeUtils::convertFunctionSetToBitVector(cap.second, func);
+      SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_2 << "Adding " << *(cap.first) << "\n");
       addToWorklist(cap.first, S, worklist);
     }
   }
@@ -160,16 +161,16 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
           // check if there are any restrictions on fdArg and only then determine if this
           // system call is allowed to be called on it (we don't want to be giving errors
           // if the __soaap_limit_fd_syscalls(...) annotation has never been used for fdArg
-          bool restricted = false;
-          if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
-            int fdVal = CI->getSExtValue();
-            restricted = intFdToAllowedSysCalls.find(fdVal) != intFdToAllowedSysCalls.end();
-          }
-          else {
-            restricted = state[S].find(fdArg) != state[S].end();
-          }
+          //bool restricted = false;
+          //if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+          //  int fdVal = CI->getSExtValue();
+          //  restricted = intFdToAllowedSysCalls.find(fdVal) != intFdToAllowedSysCalls.end();
+          //}
+          //else {
+          //  restricted = state[S].find(fdArg) != state[S].end();
+          //}
 
-          if (restricted) {
+          //if (restricted) {
             BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
             SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
             SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
@@ -187,7 +188,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
               }
               outs() << "\n";
             }
-          }
+          //}
         }
       }
     }
