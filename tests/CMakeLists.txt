@@ -44,7 +44,7 @@ add_custom_command(OUTPUT lit.site.cfg
 	COMMENT "Checking host's LLVM triple..."
 )
 
-add_custom_target(test
+add_custom_target(soaap-test
 	COMMAND
 		PATH=${LLVM_BINARY_DIR}/bin:$ENV{PATH} ${LIT}
 		${LIT_OPTIONS} ${CMAKE_CURRENT_SOURCE_DIR}
@@ -55,4 +55,4 @@ add_custom_target(test
 	DEPENDS lit.site.cfg
 	COMMENT "Running test suite")
 
-add_dependencies(test libsoaap)
+add_dependencies(soaap-test SOAAP)
