@@ -20,6 +20,9 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/RPC/RPCGraph.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
+#include "OS/Sandbox/Capsicum.h"
+#include "OS/Sandbox/SandboxPlatform.h"
+#include "OS/Sandbox/Seccomp.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/ContextUtils.h"
@@ -121,6 +124,26 @@ void Soaap::processCmdLineArgs(Module& M) {
     SDEBUG("soaap", 3, dbgs() << "Vulnerable vendor: " << vendor << "\n");
     vulnerableVendors.push_back(vendor);
   }
+
+  // process ClSandboxPlatform
+  SDEBUG("soaap", 3, dbgs() << "Sandboxing model: " << CmdLineOpts::SandboxPlatform << "\n");
+  switch (CmdLineOpts::SandboxPlatform) {
+    case SandboxPlatformName::Annotated: {
+      // don't initialise sandboxPlatform
+      break;
+    }
+    case SandboxPlatformName::Capsicum: {
+      sandboxPlatform.reset(new class Capsicum);
+      break;
+    }
+    case SandboxPlatformName::Seccomp: {
+      sandboxPlatform.reset(new class Seccomp);
+      break;
+    }
+    default: {
+      errs() << "Unrecognised Sandbox Platform " << CmdLineOpts::SandboxPlatform << "\n";
+    }
+  }
 }
 
 void Soaap::checkPrivilegedCalls(Module& M) {
@@ -158,9 +181,9 @@ void Soaap::checkFileDescriptors(Module& M) {
 }
 
 void Soaap::checkSysCalls(Module& M) {
-  SysCallsAnalysis analysis;
-  analysis.doAnalysis(M, sandboxes);
-  CapabilitySysCallsAnalysis capsAnalysis(CmdLineOpts::ContextInsens);
+  SysCallsAnalysis sysCallsAnalysis(sandboxPlatform);
+  sysCallsAnalysis.doAnalysis(M, sandboxes);
+  CapabilitySysCallsAnalysis capsAnalysis(CmdLineOpts::ContextInsens, sandboxPlatform, sysCallsAnalysis);
   capsAnalysis.doAnalysis(M, sandboxes);
 }
 

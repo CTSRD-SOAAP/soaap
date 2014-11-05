@@ -1,6 +1,6 @@
 /*
  * RUN: clang %cflags -emit-llvm -S %s -o %t.ll
- * RUN: soaap -o %t.soaap.ll %t.ll > %t.out
+ * RUN: soaap --soaap-sandbox-platform=annotated -o %t.soaap.ll %t.ll > %t.out
  * RUN: FileCheck %s -input-file %t.out
  *
  * CHECK: Running Soaap Pass

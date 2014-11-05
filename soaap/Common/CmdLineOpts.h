@@ -9,6 +9,9 @@ using namespace llvm;
 using namespace std;
 
 namespace soaap {
+  enum SandboxPlatformName {
+    Annotated, Capsicum, Seccomp
+  };
   class CmdLineOpts {
     public:
       static bool EmPerf;
@@ -25,6 +28,7 @@ namespace soaap {
       static int DebugVerbosity;
       static int SummariseTraces;
       static bool DumpRPCGraph;
+      static SandboxPlatformName SandboxPlatform;
   };
 }
 

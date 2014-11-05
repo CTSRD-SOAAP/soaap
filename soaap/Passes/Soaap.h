@@ -18,6 +18,7 @@
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/CapabilityAnalysis.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
+#include "OS/Sandbox/SandboxPlatform.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/ContextUtils.h"
@@ -43,6 +44,7 @@ namespace soaap {
       SandboxVector sandboxes;
       FunctionSet privilegedMethods;
       StringVector vulnerableVendors;
+      shared_ptr<SandboxPlatform> sandboxPlatform;
       void processCmdLineArgs(Module& M);
       void checkPrivilegedCalls(Module& M);
       void checkLeakedRights(Module& M);

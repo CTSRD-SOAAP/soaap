@@ -21,6 +21,9 @@ add_llvm_library(SOAAP
   Instrument/PerformanceEmulationInstrumenter.cpp
   OS/FreeBSDSysCallProvider.cpp
   OS/SysCallProvider.cpp
+  OS/Sandbox/Capsicum.cpp
+  OS/Sandbox/SandboxPlatform.cpp
+  OS/Sandbox/Seccomp.cpp
   Util/CallGraphUtils.cpp
   Util/ClassHierarchyUtils.cpp
   Util/ContextUtils.cpp

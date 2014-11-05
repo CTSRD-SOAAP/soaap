@@ -51,38 +51,61 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
-      // only produce an error message if there is some kind of restriction 
-      // on this call instruction. If there isn't, then that means that there
-      // are no preceding __soaap_limit_syscalls annotations that reach this
-      // point
-      if (state.find(C) != state.end()) {
-        SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "call: " << *C
-                                                            << " (func: " << C->getParent()->getParent()->getName() << ")\n");
-        for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
-          string funcName = Callee->getName();
-          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
-          if (freeBSDSysCallProvider.isSysCall(funcName)) {
-            SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
-            // this is a system call
-            int idx = freeBSDSysCallProvider.getIdx(funcName);
+      for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+        string funcName = Callee->getName();
+        SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
+        if (freeBSDSysCallProvider.isSysCall(funcName)) {
+          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
+          bool sysCallAllowed = false;
+          if (sandboxPlatform) {
+            // sandbox platform dictates if the system call is allowed
+            sysCallAllowed = sandboxPlatform->isSysCallPermitted(funcName);
+          }
+          else if (state.find(C) == state.end()) { // no annotations
+            sysCallAllowed = true;
+          }
+          else { // there are annotations
+            // We distinguish an empty vector from C not appearing in state
+            // because the former means that no system calls are allowed
+            // whereas the latter that there are no annotations so all system
+            // calls are allowed
             BitVector& vector = state[C];
+            int idx = freeBSDSysCallProvider.getIdx(funcName);
             SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
             SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
-            if (vector.size() <= idx || !vector.test(idx)) {
-              outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
-              outs() << " but it is not allowed to,\n";
-              outs() << " *** based on the current sandboxing restrictions.\n";
-              if (MDNode *N = C->getMetadata("dbg")) {
-                DILocation loc(N);
-                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
-              }
-              outs() << "\n";
+            sysCallAllowed = vector.size() > idx && vector.test(idx);
+          }
+
+          // Show warning if system call is not allowed
+          if (!sysCallAllowed) {
+            outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
+            outs() << " but it is not allowed to,\n";
+            outs() << " *** based on the current sandboxing restrictions.\n";
+            if (MDNode *N = C->getMetadata("dbg")) {
+              DILocation loc(N);
+              outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
             }
+            outs() << "\n";
           }
         }
       }
     }
   }
+}
+
+bool SysCallsAnalysis::allowedToPerformNamedSystemCallAtSandboxedPoint(Instruction* I, string sysCall) {
+  if (sandboxPlatform) {
+    return sandboxPlatform->isSysCallPermitted(sysCall);
+  }
+  else  if (state.find(I) == state.end()) {
+    return true;
+  }
+  else {
+    int idx = freeBSDSysCallProvider.getIdx(sysCall);
+    BitVector& vector = state[I];
+    return vector.size() > idx && vector.test(idx);
+  }
+  return false;
 }
 
 string SysCallsAnalysis::stringifyFact(BitVector& vector) {

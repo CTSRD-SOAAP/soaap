@@ -74,3 +74,14 @@ bool CmdLineOpts::DumpRPCGraph;
 static cl::opt<bool, true> ClDumpRPCGraph("soaap-dump-rpc-graph",
        cl::desc("Dump RPC Graph"),
        cl::location(CmdLineOpts::DumpRPCGraph));
+
+SandboxPlatformName CmdLineOpts::SandboxPlatform;
+static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platform",
+       cl::desc("Sandbox platform to model"),
+       cl::values(
+         clEnumValN(Annotated, "annotated", "Annotated"),
+         clEnumValN(Capsicum, "capsicum", "Capsicum (default)"),
+         clEnumValN(Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),
+       clEnumValEnd),
+       cl::location(CmdLineOpts::SandboxPlatform),
+       cl::init(Capsicum)); // default value is Capsicum
