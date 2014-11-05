@@ -391,6 +391,12 @@ void Sandbox::findCapabilities() {
                       size_t end = sysCallName.find_last_not_of(" ");
                       sysCallName = sysCallName.substr(start, end-start+1);
                       SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
+                      if (sysCallName == SOAAP_NO_SYSCALLS_ALLOWED) {
+                        // Defensive: ideally no other system calls should have been listed
+                        // but we play it safe and remove any that may have been annotated 
+                        sysCalls.clear();
+                        break;
+                      }
                       if (Function* sysCallFn = module.getFunction(sysCallName)) {
                         SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
                         sysCalls.insert(sysCallFn);
@@ -528,6 +534,12 @@ void Sandbox::findAllowedSysCalls() {
               size_t end = sysCall.find_last_not_of(" ");
               sysCall = sysCall.substr(start, end-start+1);
               SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "SysCall: " << sysCall << "\n");
+              if (sysCall == SOAAP_NO_SYSCALLS_ALLOWED) {
+                // Defensive: ideally no other system calls should have been listed
+                // but we play it safe and remove any that may have been annotated 
+                allowedSysCalls.clear();
+                break;
+              }
               if (Function* sysCallFn = module.getFunction(sysCall)) {
                 SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding Function* " << sysCallFn->getName() << "\n");
                 allowedSysCalls.insert(sysCallFn);

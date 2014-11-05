@@ -48,6 +48,13 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
             size_t start = sysCallName.find_first_not_of(" ");
             size_t end = sysCallName.find_last_not_of(" ");
             sysCallName = sysCallName.substr(start, end-start+1);
+            if (sysCallName == SOAAP_NO_SYSCALLS_ALLOWED) {
+              // Defensive: ideally no other system calls should have been listed
+              // but we play it safe and remove any that may have been annotated 
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_1 << "no system calls are allowed on the file descriptor/key")
+              sysCalls.clear();
+              break;
+            }
             SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
             if (Function* sysCallFn = M.getFunction(sysCallName)) {
               SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
@@ -55,12 +62,12 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
             }
           }
           BitVector sysCallsVector = convertFunctionSetToBitVector(sysCalls);
+          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed system calls: " << stringifyFact(sysCallsVector) << "\n");
           if (annotationStrValStr.startswith(SOAAP_FD_KEY_SYSCALLS)) {
             SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_2 << "Annotated var is a fd key\n");                                                                                                      
             if (ConstantInt* CI = dyn_cast<ConstantInt>(annotatedVar)) {
               // currently only support constant/enum key values
               SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "key value is: " << CI->getSExtValue() << "\n");
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed system calls: " << stringifyFact(sysCallsVector) << "\n");
               fdKeyToAllowedSysCalls[CI->getSExtValue()] = sysCallsVector;
             }
           }

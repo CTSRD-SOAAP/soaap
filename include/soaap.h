@@ -111,6 +111,8 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define SOAAP_DANGEROUS "SOAAP_DANGEROUS"
 #define __soaap_dangerous __attribute__((annotate(SOAAP_DANGEROUS)))
 
+#define SOAAP_NO_SYSCALLS_ALLOWED "SOAAP_NO_SYSCALLS_ALLOWED"
+
 /**
  * Limit the system calls that can be performed from this point on in the
  * current execution process (sandbox or regular process).
