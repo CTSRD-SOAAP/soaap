@@ -121,6 +121,7 @@ InstTrace PrettyPrinters::findPathToFunc(Function* From, Function* To, ValueIntM
 }
 
 void PrettyPrinters::ppPrivilegedPathToFunction(Function* Target, Module& M) {
+  SDEBUG("soaap.pp", 3, dbgs() << "printing privileged path to function \"" << Target->getName() << "\"\n");
 
   if (shortestCallPathsFromMain.empty()) {
     calculateShortestCallPathsFromMain(M);
@@ -130,6 +131,7 @@ void PrettyPrinters::ppPrivilegedPathToFunction(Function* Target, Module& M) {
     // Find privileged path to instruction I, via a function that calls a sandboxed callee
     CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     InstTrace& callStack = shortestCallPathsFromMain[Target];
+    SDEBUG("soaap.pp", 3, dbgs() << "call stack is empty? " << callStack.empty() << "\n");
     ppTrace(callStack);
     outs() << "\n";
   }
@@ -169,6 +171,7 @@ void PrettyPrinters::ppTrace(InstTrace& trace) {
     }
   }
   else {
+    SDEBUG("soaap.pp", 3, dbgs() << "not summarising. pretty printing each instruction.");
     for (Instruction* I : trace) {
       ppInstruction(I);
     }
@@ -184,5 +187,8 @@ void PrettyPrinters::ppInstruction(Instruction* I) {
     unsigned FileOnlyIdx = File.find_last_of("/");
     StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
     outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
+  }
+  else {
+    errs() << "Warning: instruction does not contain debug metadata\n";
   }
 }
