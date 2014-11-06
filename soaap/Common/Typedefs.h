@@ -11,6 +11,7 @@
 #include <list>
 #include <map>
 #include <vector>
+#include <set>
 
 #include "Analysis/InfoFlow/Context.h"
 
@@ -26,6 +27,7 @@ namespace soaap {
   typedef map<const Value*,int> ValueIntMap;
   typedef map<const Value*,FunctionSet> ValueFunctionSetMap;
   typedef SmallVector<string,16> StringVector;
+  typedef set<string> StringSet;
   typedef SmallVector<Context*,8> ContextVector;
   typedef vector<BasicBlock*> BasicBlockVector;  // use <vector> as can be large
   typedef list<Instruction*> InstTrace;
