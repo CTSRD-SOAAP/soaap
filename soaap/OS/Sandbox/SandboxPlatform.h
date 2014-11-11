@@ -21,6 +21,9 @@ namespace soaap {
       // if isSysCallPermitted(name) returns true.
       virtual bool doesSysCallRequireFDRights(string name);
 
+      // Does this sandbox platform provide any protection?
+      virtual bool doesProvideProtection();
+
     protected:
       SandboxPlatform() { } // this is an abstract class
       unordered_set<string> permittedSysCalls;

@@ -10,7 +10,7 @@ using namespace std;
 
 namespace soaap {
   enum SandboxPlatformName {
-    Annotated, Capsicum, Seccomp
+    None, Annotated, Capsicum, Seccomp
   };
   class CmdLineOpts {
     public:

@@ -20,6 +20,7 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/RPC/RPCGraph.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
+#include "OS/Sandbox/NoSandboxPlatform.h"
 #include "OS/Sandbox/Capsicum.h"
 #include "OS/Sandbox/SandboxPlatform.h"
 #include "OS/Sandbox/Seccomp.h"
@@ -128,6 +129,11 @@ void Soaap::processCmdLineArgs(Module& M) {
   // process ClSandboxPlatform
   SDEBUG("soaap", 3, dbgs() << "Sandboxing model: " << CmdLineOpts::SandboxPlatform << "\n");
   switch (CmdLineOpts::SandboxPlatform) {
+    case SandboxPlatformName::None: {
+      // no sandboxing
+      sandboxPlatform.reset(new class NoSandboxPlatform);
+      break;
+    }
     case SandboxPlatformName::Annotated: {
       // don't initialise sandboxPlatform
       break;
@@ -152,7 +158,7 @@ void Soaap::checkPrivilegedCalls(Module& M) {
 }
 
 void Soaap::checkLeakedRights(Module& M) {
-  VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors);
+  VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors, sandboxPlatform);
   analysis.doAnalysis(M, sandboxes);
 }
 

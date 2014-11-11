@@ -10,6 +10,10 @@ bool SandboxPlatform::doesSysCallRequireFDRights(string name) {
   return sysCallsReqFDRights.count(name) != 0;
 }
 
+bool SandboxPlatform::doesProvideProtection() {
+  return true;
+}
+
 void SandboxPlatform::addPermittedSysCall(string name, bool reqFDRights) {
   permittedSysCalls.insert(name);
   if (reqFDRights) {
