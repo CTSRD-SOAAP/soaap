@@ -62,14 +62,12 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
             // sandbox platform dictates if the system call is allowed
             sysCallAllowed = sandboxPlatform->isSysCallPermitted(funcName);
           }
-          else if (state.find(C) == state.end()) { // no annotations
-            sysCallAllowed = true;
+          else if (state.find(C) == state.end()) { // no annotations, so disallow by default
+            sysCallAllowed = false;
           }
           else { // there are annotations
             // We distinguish an empty vector from C not appearing in state
-            // because the former means that no system calls are allowed
-            // whereas the latter that there are no annotations so all system
-            // calls are allowed
+            // to avoid blowing up the state map
             BitVector& vector = state[C];
             int idx = freeBSDSysCallProvider.getIdx(funcName);
             SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
@@ -98,10 +96,7 @@ bool SysCallsAnalysis::allowedToPerformNamedSystemCallAtSandboxedPoint(Instructi
   if (sandboxPlatform) {
     return sandboxPlatform->isSysCallPermitted(sysCall);
   }
-  else  if (state.find(I) == state.end()) {
-    return true;
-  }
-  else {
+  else if (state.find(I) != state.end()) {
     int idx = freeBSDSysCallProvider.getIdx(sysCall);
     BitVector& vector = state[I];
     return vector.size() > idx && vector.test(idx);
