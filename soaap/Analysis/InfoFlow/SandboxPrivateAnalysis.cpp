@@ -11,22 +11,23 @@ using namespace soaap;
 void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
 
   declassifierAnalysis.doAnalysis(M, sandboxes);
-  
-  // initialise with pointers to annotated fields and uses of annotated global variables
-  if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
-    for (User* U : F->users()) {
-      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
-        Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-
-        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-        
-        if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
-          StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
-          int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
-        
-          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "   Sandbox-private annotation " << annotationStrValCString << " found:"; annotatedVar->dump(););
+ 
+  for (Sandbox* S : sandboxes) {
+    int bitIdx = S->getNameIdx();
+    ValueSet privateData = S->getPrivateData();
+    for (Value* V : privateData) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(V)) {
+        if (annotateCall->getIntrinsicID() == Intrinsic::var_annotation) {
+          // llvm.var.annotation
+          Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
+          for (Context* C : Cs) {
+            state[C][annotatedVar] |= (1 << bitIdx);
+            addToWorklist(annotatedVar, C, worklist);
+          }
+        }
+        else if (annotateCall->getIntrinsicID() == Intrinsic::ptr_annotation) {
+          // llvm.ptr.annotation.p0i8
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M);
           for (Context* C : Cs) {
             addToWorklist(annotateCall, C, worklist);
@@ -34,54 +35,9 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           }
         }
       }
-    }
-  }
-  
-  if (Function* F = M.getFunction("llvm.var.annotation")) {
-    for (User* U : F->users()) {
-      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
-        Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-
-        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
-        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-        if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
-          StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
-          int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
-        
-          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Sandbox-private annotation " << annotationStrValCString << " found: "; annotatedVar->dump(););
-          ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
-          for (Context* C : Cs) {
-            state[C][annotatedVar] |= (1 << bitIdx);
-            addToWorklist(annotatedVar, C, worklist);
-          }
-        }
-      }
-    }
-  }
-
-  // annotations on variables are stored in the llvm.global.annotations global
-  // array
-  if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
-    ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
-    for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
-      ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
-
-      // get the annotation value first
-      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-      StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-      if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
-        GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
-        if (isa<GlobalVariable>(annotatedVal)) {
-          GlobalVariable* annotatedVar = dyn_cast<GlobalVariable>(annotatedVal);
-          if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
-            StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
-            SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Found sandbox-private global variable " << annotatedVar->getName() << "; belongs to \"" << sandboxName << "\"\n");
-            state[ContextUtils::NO_CONTEXT][annotatedVar] |= (1 << SandboxUtils::getBitIdxFromSandboxName(sandboxName));
-            addToWorklist(annotatedVar, ContextUtils::NO_CONTEXT, worklist);
-          }
-        }
+      else if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
+        state[ContextUtils::NO_CONTEXT][G] |= (1 << bitIdx);
+        addToWorklist(G, ContextUtils::NO_CONTEXT, worklist);
       }
     }
   }

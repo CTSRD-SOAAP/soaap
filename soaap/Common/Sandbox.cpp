@@ -35,6 +35,7 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   findCreationPoints();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
   findAllowedSysCalls();
+  findPrivateData();
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
@@ -53,6 +54,7 @@ Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m)
   findCreationPoints();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
   findAllowedSysCalls();
+  findPrivateData();
 }
 
 Function* Sandbox::getEntryPoint() {
@@ -624,4 +626,80 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
 
     return creationOnAllPaths;
   }
+}
+
+void Sandbox::findPrivateData() {
+  
+  // initialise with pointers to annotated fields and uses of annotated global variables
+  if (Function* F = module.getFunction("llvm.ptr.annotation.p0i8")) {
+    for (User* U : F->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
+        Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        
+        if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+          StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+          if (sandboxName == name) {
+            privateData.insert(annotateCall);
+          }
+        }
+
+        
+        SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Sandbox-private struct field: "; annotatedVar->dump(););
+      }
+    }
+  }
+  
+  if (Function* F = module.getFunction("llvm.var.annotation")) {
+    for (User* U : F->users()) {
+      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
+        Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+          StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+          if (sandboxName == name) {
+            privateData.insert(annotateCall);
+          }
+        
+          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Sandbox-private local variable: "; annotatedVar->dump(););
+        }
+      }
+    }
+  }
+
+  // annotations on variables are stored in the llvm.global.annotations global
+  // array
+  if (GlobalVariable* lga = module.getNamedGlobal("llvm.global.annotations")) {
+    ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+    for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+      ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+      // get the annotation value first
+      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+      StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
+      if (annotationStrArrayCString.startswith(SANDBOX_PRIVATE)) {
+        StringRef sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PRIVATE)+1);
+        if (sandboxName == name) {
+          GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+          if (isa<GlobalVariable>(annotatedVal)) {
+            privateData.insert(annotatedVal);
+
+            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Found sandbox-private global variable \"" << annotatedVal->getName() << "\"\n";)
+          }
+        }
+      }
+    }
+  }
+
+}
+
+ValueSet Sandbox::getPrivateData() {
+  return privateData;
 }

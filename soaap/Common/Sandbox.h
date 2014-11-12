@@ -31,6 +31,7 @@ namespace soaap {
       CallInstVector getCreationPoints();
       CallInstVector getSysCallLimitPoints();
       FunctionSet getAllowedSysCalls(CallInst* sysCallLimitPoint);
+      ValueSet getPrivateData();
       bool containsFunction(Function* F);
       bool containsInstruction(Instruction* I);
       bool hasCallgate(Function* F);
@@ -54,6 +55,7 @@ namespace soaap {
       GlobalVariableIntMap sharedVarToPerms;
       ValueFunctionSetMap caps;
       int overhead;
+      ValueSet privateData;
       
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(CallGraphNode* n);
@@ -63,6 +65,7 @@ namespace soaap {
       void findCapabilities();
       void findAllowedSysCalls();
       void findCreationPoints();
+      void findPrivateData();
       void validateEntryPointCalls();
       bool validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace);
   };
