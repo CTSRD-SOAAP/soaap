@@ -646,7 +646,6 @@ void Sandbox::findPrivateData() {
             privateData.insert(annotateCall);
           }
         }
-
         
         SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Sandbox-private struct field: "; annotatedVar->dump(););
       }
