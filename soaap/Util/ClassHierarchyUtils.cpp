@@ -105,7 +105,6 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
           else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
             ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
             string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
-            //dbgs() << "definingTypeVTableConstantStr: " << definingTypeVTableConstantStr << "\n";
             definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr, true);
             hasMetadata = true;
           }
@@ -130,8 +129,8 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
             callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
           }
           else if (hasMetadata) {
-            dbgs() << "Defining VTable is NULL!\n";
-            I->dump();
+            SDEBUG("soaap.util.classhierarchy", 4, dbgs() << "Defining VTable is NULL!\n");
+            SDEBUG("soaap.util.classhierarchy", 4, I->dump());
           }
         }
       }
