@@ -1,0 +1,234 @@
+#!/usr/bin/env python
+
+import argparse
+import collections
+import dot
+import re
+import sys
+
+def enum(*sequential, **named):
+    enums = dict(zip(sequential, enumerate(sequential)), **named)
+    return type('Enum', (), enums)
+
+# Possible consequences of errors that SOAAP detects.
+Consequence = enum('AmbientAuthority', 'DataLeak', 'LostWrite', 'Unknown')
+
+
+args = argparse.ArgumentParser()
+args.add_argument('input')
+args.add_argument('-o', '--output')
+
+args = args.parse_args()
+
+
+annotations = collections.defaultdict(set)
+annotated_functions = set()
+status = []
+warnings = set()
+
+
+
+class State(object):
+    """
+    SOAAP output requires a stateful parser. This is the base class for
+    parser states, which attempt to parse a single line and set self.next
+    to the next parser state.
+    """
+
+    def parse(self, line):
+        assert False
+
+
+class StartState(State):
+    """
+    Start state for the parser. Parses "Found annotated function" lines and
+    SOAAP status lines (e.g., "* Running Soaap Pass"). Switches to the
+    error message parsing state when it encounters an error line
+    (e.g., "*** Function "foo" has past-vulnerability annotations").
+    """
+
+    annotated_fn = re.compile('^\s+Found annotated function (.*)\n$')
+    status_line = re.compile('^\* (.*)\n$')
+
+    def parse(self, line):
+        self.next = self
+
+        # This is an ugly construction. We might be able to do something
+        # more declarative, but that's not a high priority right now.
+        m = StartState.annotated_fn.match(line)
+        if m:
+            (fn,) = m.groups()
+            annotated_functions.add(fn)
+            return True
+
+        m = ErrorMessage.regex.match(line)
+        if m:
+            (msg,) = m.groups()
+            self.next = ErrorMessage(msg)
+            return True
+
+        m = StartState.status_line.match(line)
+        if m:
+            (line,) = m.groups()
+            status.append(line)
+            return True
+
+        return False
+
+
+class ErrorMessage(State):
+    """
+    Parser state for parsing error messages. Switches to error trace parser
+    state on encountering the first line that doesn't start with "***".
+    """
+
+    regex = re.compile('^ \*\*\* (.*)\n$')
+    past_vuln = re.compile(
+            '.*Function "(.*)" has past-vulnerability annotations for "(.*)".*')
+    trace_header = re.compile('^\s+Possible trace:')
+
+    def __init__(self, message):
+        m = ErrorMessage.past_vuln.match(message)
+        if m:
+            (name,vulns) = m.groups()
+
+            name = name.split('(')[0]
+            vulns = set(vulns[1:-1].split(','))
+
+            annotations[name].update(vulns)
+            self.vulns = vulns
+
+        self.message = message
+        self.consequence = Consequence.Unknown
+
+    def parse(self, line):
+        m = ErrorMessage.regex.match(line)
+        if m:
+            (msg,) = m.groups()
+
+            if msg.startswith('Another vulnerability here would leak ambient authority'):
+                self.consequence = Consequence.AmbientAuthority
+            else:
+                self.message = self.message + ' ' + msg
+
+            self.next = self
+            return True
+
+        m = ErrorMessage.trace_header.match(line)
+        if m:
+            self.next = ErrorTrace(self.message, self.consequence, self.vulns)
+            return True
+
+class ErrorTrace(State):
+    """
+    Parser state for parsing SOAAP backtraces.
+    """
+
+    method = re.compile('(.*)\((.*)\)(.*)\(([_a-zA-Z0-9\.]+):([0-9]+)\)')
+    main = re.compile('(.*)\(([_a-zA-Z0-9\.]+):([0-9]+)\)')
+
+    def __init__(self, message, consequence, vulns):
+        self.message = message
+        self.consequence = consequence
+        self.backtrace = []
+        self.vulns = tuple(vulns)
+
+    def parse(self, line):
+        m = ErrorTrace.method.match(line)
+        if m:
+            (name, parameters, cv, filename, line) = m.groups()
+            self.backtrace.append(
+                    Backtrace(
+                        name, parameters.split(', '), cv.split(' '),
+                        filename, line))
+
+            self.next = self
+            return True
+
+        m = ErrorTrace.main.match(line)
+        if m:
+            (name, filename, line) = m.groups()
+            name = name.strip()
+
+            self.backtrace.append(Backtrace(name, [], [], filename, line))
+            self.next = self
+            return True
+
+        warnings.add(
+            (self.message, self.consequence, self.vulns, tuple(self.backtrace)))
+
+        m = ErrorMessage.regex.match(line)
+        if m:
+            (msg,) = m.groups()
+            self.next = ErrorMessage(msg)
+            return True
+
+        self.next = StartState()
+        return False
+
+
+class Backtrace(object):
+    """
+    A stack trace output by SOAAP.
+    """
+
+    def __init__(self, name, parameters, cv, filename, line):
+        self.name = name.strip()
+        self.parameters = tuple(parameters)
+        self.cv = tuple(cv)
+        self.filename = filename.strip()
+        self.line = int(line)
+
+    def __str__(self):
+        return '%s:%d %s(%s)%s' % (
+            self.filename, self.line, self.name,
+            ', '.join(self.parameters), ' '.join(self.cv))
+
+    def __repr__(self):
+        return self.__str__()
+
+
+
+
+
+with open(args.input, 'r') as f:
+    state = StartState()
+
+    for line in f:
+        if not state.parse(line) and len(line.split()) != 0:
+            raise ValueError('%s could not parse line' % state, line)
+
+        state = state.next
+
+
+
+# Convert the backtraces into a dot graph.
+nodes = set()
+edges = collections.defaultdict(int)
+
+for (number,w) in enumerate(warnings):
+    (message, consequence, vulns, backtrace) = w
+
+    consequence = (consequence[1], consequence[1])
+
+    for v in vulns:
+        v = (v, v)
+        edges[(v, consequence)] += 1
+
+    destination = [ (v, v) for v in vulns ]
+    for t in backtrace:
+        node = (t.name, t.name[:60])
+        nodes.add(node)
+
+        try:
+            edges[(node, destination)] += 1
+
+        except TypeError:
+            for d in destination:
+                edges[(node, d)] += 1
+
+        destination = node
+
+
+dot.write_directed_graph(nodes, edges,
+    out = open(args.output, 'w') if args.output else sys.stdout)
