@@ -14,5 +14,6 @@ int main() {
   C c;
   c.foo();
   // CHECK-NOT: !soaap_defining_vtable_var
+  // CHECK-NOT: !soaap_defining_vtable_name
   return 0;
 }
