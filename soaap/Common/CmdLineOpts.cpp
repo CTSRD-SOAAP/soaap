@@ -86,3 +86,8 @@ static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platf
        clEnumValEnd),
        cl::location(CmdLineOpts::SandboxPlatform),
        cl::init(Capsicum)); // default value is Capsicum
+
+bool CmdLineOpts::DumpDOTCallGraph;
+static cl::opt<bool, true> ClDumpDOTCallGraph("soaap-dump-dot-callgraph",
+       cl::desc("Dump DOT CallGraph"),
+       cl::location(CmdLineOpts::DumpDOTCallGraph));

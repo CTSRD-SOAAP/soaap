@@ -49,17 +49,21 @@ bool Soaap::runOnModule(Module& M) {
   CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
 
-  if (CmdLineOpts::ListAllFuncs) {
-    CallGraphUtils::listAllFuncs(M);
-    return true;
-  }
-
   outs() << "* Finding class hierarchy (if there is one)\n";
   ClassHierarchyUtils::findClassHierarchy(M);
 
   outs() << "* Adding dynamic/annotated/inferred call edges to callgraph (if available)\n";
   CallGraphUtils::loadDynamicCallGraphEdges(M);
   CallGraphUtils::loadAnnotatedCallGraphEdges(M);
+
+  if (CmdLineOpts::ListAllFuncs) {
+    CallGraphUtils::listAllFuncs(M);
+    return true;
+  }
+
+  if (CmdLineOpts::DumpDOTCallGraph) {
+    CallGraphUtils::dumpDOTGraph();
+  }
 
   if (CmdLineOpts::ListFPTargets) {
     CallGraphUtils::listFPTargets(M);

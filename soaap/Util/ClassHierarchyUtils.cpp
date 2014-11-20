@@ -37,11 +37,22 @@ void ClassHierarchyUtils::findClassHierarchy(Module& M) {
   // than debug info. The former works even for when there are anonymous
   // namespaces. type_info structs can be obtained from vtable globals.
   // (for more info, see http://mentorembedded.github.io/cxx-abi/abi.html)
+  
+  // 1. Process type_info structures
+  for (Module::global_iterator I=M.global_begin(), E=M.global_end(); I != E; I++) {
+    GlobalVariable* G = &*I;
+    if (G->getName().startswith("_ZTI")) {
+      SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Found type_info: " << G->getName() << "\n");
+      processTypeInfo(G);
+    }
+  }
+
+  // 2. Process vtables
   for (Module::global_iterator I=M.global_begin(), E=M.global_end(); I != E; I++) {
     GlobalVariable* G = &*I;
     if (G->getName().startswith("_ZTV")) {
       if (G->hasInitializer()) {
-        SDEBUG("soaap.util.classhierarchy", 3, G->dump());
+        SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Found vtable: " << *G << "\n");
         ConstantArray* Ginit = cast<ConstantArray>(G->getInitializer());
         // Ginit[1] is the type_info global for this vtable's type
         bool typeInfoFound = false;
@@ -50,16 +61,21 @@ void ClassHierarchyUtils::findClassHierarchy(Module& M) {
           // typeinfo will be the first global variable in the array.
           // It's not always at a fixed index so we have to search for it...
           if (GlobalVariable* TI = dyn_cast<GlobalVariable>(Ginit->getOperand(i)->stripPointerCasts())) {
+
+            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Found TI " << TI->getName() << " at index " << i << "\n");
+            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Storing mapping " << G->getName() << " <-> " << TI->getName() << "\n");
             //TI->dump();
             typeInfoToVTable[TI] = G;
             vTableToTypeInfo[G] = TI;
-            processTypeInfo(TI); // process TI recursively (it contains refs to super-class TIs)
+            //processTypeInfo(TI); // process TI recursively (it contains refs to super-class TIs)
             typeInfoFound = true;
             if (primaryVTable) {
+              SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Primary VTable\n");
               primaryVTable = false;
               vTableToSecondaryVTableMaps[G][0] = i+1;  // i+1 is also the size of the vtable header            
             }
             else {
+              SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Secondary VTable\n");
               // offset_to_top is at the previous index 
               ConstantExpr* offsetValCast = cast<ConstantExpr>(Ginit->getOperand(i-1)->stripPointerCasts());
               ConstantInt* offsetVal = cast<ConstantInt>(offsetValCast->getOperand(0)); 
@@ -93,44 +109,73 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
   if (!cachingDone) {
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
       if (F->isDeclaration()) continue;
+      SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Processing " << F->getName() << "\n");
       for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           GlobalVariable* definingTypeVTableVar = NULL;
+          GlobalVariable* definingTypeTIVar = NULL;
           GlobalVariable* staticTypeVTableVar = NULL;
+          GlobalVariable* staticTypeTIVar = NULL;
           bool hasMetadata = false;
           if (MDNode* N = I->getMetadata("soaap_defining_vtable_var")) {
+            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_defining_vtable_var\n");
             definingTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+            definingTypeTIVar = vTableToTypeInfo[definingTypeVTableVar];
             hasMetadata = true;
           }
           else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
+            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_defining_vtable_name\n");
             ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
             string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
-            definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr, true);
+            string definingTypeTIStr = "_ZTI" + definingTypeVTableConstantStr.substr(4);
+            definingTypeTIVar = M.getGlobalVariable(definingTypeTIStr);
+            /*definingTypeVTableVar = M.getGlobalVariable(definingTypeVTableConstantStr, true);
+            if (definingTypeVTableVar == NULL) {
+              definingTypeTIVar = M.getGlobalVariable(definingTypeTIStr);
+              dbgs() << "definingTypeVTableVar is null: " << definingTypeVTableConstantStr << "\n";
+              dbgs() << "definingTypeTIStr: " << definingTypeTIStr << "\n";
+
+              if (MDNode* N2 = I->getMetadata("dbg")) {
+                DILocation loc(N2);
+                dbgs() << "location - " << loc.getFilename() << ":" << loc.getLineNumber() << "\n";
+              }
+            }*/
             hasMetadata = true;
           }
           if (MDNode* N = I->getMetadata("soaap_static_vtable_var")) {
+            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_static_vtable_var\n");
             staticTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+            staticTypeTIVar = vTableToTypeInfo[staticTypeVTableVar];
             hasMetadata = true;
           }
           else if (MDNode* N = I->getMetadata("soaap_static_vtable_name")) {
+            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_static_vtable_name\n");
             ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
             string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
+            string staticTypeTIStr = "_ZTI" + staticTypeVTableConstantStr.substr(4);
+            staticTypeTIVar = M.getGlobalVariable(staticTypeTIStr);
             //dbgs() << "staticTypeVTableConstantStr: " << staticTypeVTableConstantStr << "\n";
-            staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr, true);
+            /*staticTypeVTableVar = M.getGlobalVariable(staticTypeVTableConstantStr, true);
+            if (staticTypeVTableVar == NULL) {
+              string staticTypeTIStr = "_ZTI" + staticTypeVTableConstantStr.substr(4);
+              staticTypeTIVar = M.getGlobalVariable(staticTypeTIStr);
+              dbgs() << "staticTypeVTableVar is null: " << staticTypeVTableConstantStr << "\n";
+              dbgs() << "staticTypeTIStr: " << staticTypeTIStr << "\n";
+              if (MDNode* N2 = I->getMetadata("dbg")) {
+                DILocation loc(N2);
+                dbgs() << "location - " << loc.getFilename() << ":" << loc.getLineNumber() << "\n";
+              }
+            }*/
             hasMetadata = true;
           }
-          if (definingTypeVTableVar != NULL) {
-            SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Found definingVTableVar: " << *definingTypeVTableVar << "\n");
-            if (staticTypeVTableVar == NULL) {
-              dbgs() << "definingVTableVar is not null, but staticTypeVTableVar is NULL\n";
-              // This could be the case if no instance of the static type is ever created
-              staticTypeVTableVar = definingTypeVTableVar;
+          if (hasMetadata) {
+            if (definingTypeTIVar == NULL || staticTypeTIVar == NULL) {
+              SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "definingTypeTIVar or staticTypeTIVar is NULL\n");
             }
-            callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeVTableVar, staticTypeVTableVar, M);
-          }
-          else if (hasMetadata) {
-            SDEBUG("soaap.util.classhierarchy", 4, dbgs() << "Defining VTable is NULL!\n");
-            SDEBUG("soaap.util.classhierarchy", 4, I->dump());
+            else {
+              callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeTIVar, staticTypeTIVar, M);
+              SDEBUG("soaap.util.classhierarchy", 4, dbgs() << "Num of callees: " << callToCalleesCache[C].size() << "\n");
+            }
           }
         }
       }
@@ -148,6 +193,7 @@ FunctionSet ClassHierarchyUtils::getCalleesForVirtualCall(CallInst* C, Module& M
 
 void ClassHierarchyUtils::processTypeInfo(GlobalVariable* TI) {
   if (find(classes.begin(), classes.end(), TI) == classes.end()) {
+    SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "Adding class " << TI->getName() << "\n");
     classes.push_back(TI);
 
     // extract direct base classes from type_info
@@ -155,18 +201,19 @@ void ClassHierarchyUtils::processTypeInfo(GlobalVariable* TI) {
       ConstantStruct* TIinit = cast<ConstantStruct>(TI->getInitializer());
 
       int TInumOperands = TIinit->getNumOperands();
-      if (TInumOperands > 2) {
+      if (TInumOperands > 2) { // first two operands are vptr and type name
         // we have >= 1 base class(es).
         if (TInumOperands == 3) {
           // abi::__si_class_type_info
+          SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "abi::__si_class_type_info\n");
           GlobalVariable* baseTI = cast<GlobalVariable>(TIinit->getOperand(2)->stripPointerCasts());
           classToSubclasses[baseTI].push_back(TI);
           //dbgs() << "  " << *baseTI << "\n";
           classToBaseOffset[TI][baseTI] = 0;
           processTypeInfo(baseTI);
-          
         }
         else {
+          SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "abi::__vmi_class_type_info\n");
           // abi::__vmi_class_type_info
           // (skip over first two additional fields, which are "flags" and "base_count")
           for (int i=4; i<TInumOperands; i+=2) {
@@ -223,7 +270,7 @@ void ClassHierarchyUtils::ppClassHierarchyHelper(GlobalVariable* c, ClassHierarc
 }
 
 
-FunctionSet ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeVTableVar, GlobalVariable* staticTypeVTableVar, Module& M) {
+FunctionSet ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeTIVar, GlobalVariable* staticTypeTIVar, Module& M) {
   
   FunctionSet callees;
 
@@ -256,25 +303,25 @@ FunctionSet ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Globa
         // find all implementations in reciever's class (corresponding to the
         // static type) as well as all descendent classes. Note: callees will
         // be at same idx in all vtables
-        GlobalVariable* definingClazzTI = vTableToTypeInfo[definingTypeVTableVar];
-        GlobalVariable* staticClazzTI = vTableToTypeInfo[staticTypeVTableVar];
+        //GlobalVariable* definingTypeTIVar = vTableToTypeInfo[definingTypeVTableVar];
+        //GlobalVariable* staticTypeTIVar = vTableToTypeInfo[staticTypeVTableVar];
 
         /*
-        if (definingClazzTI == NULL) {
-          dbgs() << "definingClazzTI is null, vtable: " << definingTypeVTableVar->getName() << "\n";
+        if (definingTypeTIVar == NULL) {
+          dbgs() << "definingTypeTIVar is null, vtable: " << definingTypeVTableVar->getName() << "\n";
           C->dump();
         }
-        if (staticClazzTI == NULL) {
-          dbgs() << "staticClazzTI is null, vtable: " << staticTypeVTableVar->getName() << "\n";
+        if (staticTypeTIVar == NULL) {
+          dbgs() << "staticTypeTIVar is null, vtable: " << staticTypeVTableVar->getName() << "\n";
           C->dump();
         }
         */
 
-        if (definingClazzTI != NULL && staticClazzTI != NULL) {
-          int subObjOffset = findSubObjOffset(definingClazzTI, staticClazzTI);
-          SDEBUG("soaap.util.classhierarchy", 3, dbgs() << *definingClazzTI << " is at offset " << subObjOffset << " in " << *staticClazzTI << "\n");
-          findAllCalleesInSubClasses(C, staticClazzTI, cVTableIdx, subObjOffset, callees);
-        }
+        //if (definingTypeTIVar != NULL && staticTypeTIVar != NULL) {
+          int subObjOffset = findSubObjOffset(definingTypeTIVar, staticTypeTIVar);
+          SDEBUG("soaap.util.classhierarchy", 3, dbgs() << *definingTypeTIVar << " is at offset " << subObjOffset << " in " << *staticTypeTIVar << "\n");
+          findAllCalleesInSubClasses(C, staticTypeTIVar, cVTableIdx, subObjOffset, callees);
+        //}
       }
       else {
         dbgs() << "vtable idx is NOT a ConstantInt\n";
@@ -302,17 +349,18 @@ FunctionSet ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Globa
   return callees;
 }
 
-int ClassHierarchyUtils::findSubObjOffset(GlobalVariable* definingClazzTI, GlobalVariable* staticClazzTI) {
-  if (definingClazzTI == staticClazzTI) {
+int ClassHierarchyUtils::findSubObjOffset(GlobalVariable* definingTypeTIVar, GlobalVariable* staticTypeTIVar) {
+  if (definingTypeTIVar == staticTypeTIVar) {
     return 0;
   }
   else {
-    for (GlobalVariable* subTI : classToSubclasses[definingClazzTI]) {
-      // When moving to a subclass, adjust subObjOffset by adding TI's offset in subTI.
+    for (GlobalVariable* subTI : classToSubclasses[definingTypeTIVar]) {
+      // When moving to a subclass, adjust subObjOffset by adding TI's offset
+      // in subTI.
       // (relative ordering of subobjects are always maintained).
-      int subObjOffset = findSubObjOffset(subTI, staticClazzTI);
+      int subObjOffset = findSubObjOffset(subTI, staticTypeTIVar);
       if (subObjOffset != -1) {
-        return subObjOffset + classToBaseOffset[subTI][definingClazzTI];
+        return subObjOffset + classToBaseOffset[subTI][definingTypeTIVar];
       }
     }
     return -1;
@@ -325,15 +373,18 @@ void ClassHierarchyUtils::findAllCalleesInSubClasses(CallInst* C, GlobalVariable
   if (GlobalVariable* vTableVar = typeInfoToVTable[TI]) { // Maybe NULL if TI doesn't have a vtable def
     ConstantArray* clazzVTable = cast<ConstantArray>(vTableVar->getInitializer());
 
-    // It's possible that TI is a superclass that doesn't contain the function. This
-    // will be due to a downcast... the receiver object was initially of the superclass type
-    // and then it was downcasted before the vtable func is called. So we skip this class and 
-    // move to the subclass. There are two ways to discover if a downcast did occur:
+    // It's possible that TI is a superclass that doesn't contain the function.
+    // This will be due to a downcast... the receiver object was initially of
+    // the superclass type and then it was downcasted before the vtable func is
+    // called. So we skip this class and move to the subclass. There are two
+    // ways to discover if a downcast did occur:
     //   1) the subObjOffset doesn't appear in clazzVTable
-    //   2) the vtable doesn't contain a function at the vtable idx relative to the start of 
-    //      the subobject's vtable (because it is added by a descendent class)
-    // We cannot reliably detect downcasts however as the function may have been introduced 
-    // in-between TI and the casted-to type and so we may infer more callees.
+    //   2) the vtable doesn't contain a function at the vtable idx relative to
+    //   the start of the subobject's vtable (because it is added by a
+    //   descendent class)
+    // We cannot reliably detect downcasts however as the function may have
+    // been introduced in-between TI and the casted-to type and so we may infer
+    // more callees.
     if (vTableToSecondaryVTableMaps[vTableVar].find(subObjOffset) != vTableToSecondaryVTableMaps[vTableVar].end()) {
       int subObjVTableOffset = vTableToSecondaryVTableMaps[vTableVar][subObjOffset];
       SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "    Absolute vtable index: " << (subObjVTableOffset+vtableIdx) << "\n");

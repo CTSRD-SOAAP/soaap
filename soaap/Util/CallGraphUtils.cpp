@@ -9,6 +9,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/GraphWriter.h" 
 #include "llvm/Support/raw_ostream.h"
 
 #include <sstream>
@@ -366,4 +367,10 @@ string CallGraphUtils::stringifyFunctionSet(FunctionSet& funcs) {
   }
   funcNamesStr += "]";
   return funcNamesStr;
+}
+
+void CallGraphUtils::dumpDOTGraph() {
+  DOTGraphTraits<CallGraph*> DT;
+  outs() << DT.getGraphName(NULL) << "\n";
+  WriteGraph(LLVMAnalyses::getCallGraphAnalysis(), "callgraph");
 }

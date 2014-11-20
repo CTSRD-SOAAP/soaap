@@ -2,6 +2,7 @@
 #define SOAAP_UTILS_CALLGRAPHUTILS_H
 
 #include "llvm/IR/Module.h"
+#include "llvm/Support/GraphWriter.h"
 #include "Common/Sandbox.h"
 #include "Common/Typedefs.h"
 
@@ -24,6 +25,7 @@ namespace soaap {
       static bool isExternCall(CallInst* C);
       static void addCallees(CallInst* C, FunctionSet& callees);
       static string stringifyFunctionSet(FunctionSet& funcs);
+      static void dumpDOTGraph();
     
     private:
       static map<const CallInst*, FunctionSet> callToCallees;
@@ -34,5 +36,10 @@ namespace soaap {
       static void populateCallCalleeCaches(Module& M);
   };
 }
-
+namespace llvm {
+  template<>
+  struct DOTGraphTraits<CallGraph*> : public DefaultDOTGraphTraits {
+    DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
+  };
+}
 #endif

@@ -25,7 +25,7 @@ namespace soaap {
       static bool cachingDone;
       static int findSubObjOffset(GlobalVariable* definingClazzTI, GlobalVariable* staticClazzTI);
       static void processTypeInfo(GlobalVariable* TI);
-      static FunctionSet findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingVTableVar, GlobalVariable* staticVTableVar, Module& M);
+      static FunctionSet findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeTIVar, GlobalVariable* staticTypeTIVar, Module& M);
       static void findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionSet& callees);
       static Function* extractFunctionFromThunk(Function* F);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);

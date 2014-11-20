@@ -29,6 +29,7 @@ namespace soaap {
       static int SummariseTraces;
       static bool DumpRPCGraph;
       static SandboxPlatformName SandboxPlatform;
+      static bool DumpDOTCallGraph;
   };
 }
 
