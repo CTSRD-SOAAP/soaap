@@ -1,6 +1,8 @@
 #ifndef _SOAAP_PERF_H_
 #define _SOAAP_PERF_H_
 
+#include <stdbool.h>
+
 #define DATA_IN "DATA_IN"
 #define DATA_OUT "DATA_OUT"
 
@@ -62,6 +64,8 @@ pid_t soaap_pid;
 int pfds[2]; /* Paired descriptors used for both sockets and pipes */
 char soaap_buf[SOAAP_BUF_LEN];
 char soaap_tmpbuf[SOAAP_BUF_LEN];
+
+bool in_sandbox = false;
 
 __attribute__((used)) static void
 soaap_perf_create_persistent_sbox(void)
@@ -148,7 +152,8 @@ soaap_perf_enter_persistent_sbox()
   struct ctrl_msg cm;
   write(pfds[1], &cm, sizeof(cm));
   //DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
-  
+  DPRINTF("PARENT: transferring control flow to sandbox");
+  in_sandbox = true;
 }
 
 __attribute__((used)) static void
@@ -174,6 +179,8 @@ soaap_perf_enter_datain_persistent_sbox(int datalen_in)
    * argument.
    */
   if (datalen_in >= 0) {
+    DPRINTF("PARENT: transferring control flow to sandbox");
+    in_sandbox = true;
     while(datalen_in > SOAAP_BUF_LEN) {
       nbytes = write(pfds[1], soaap_buf, SOAAP_BUF_LEN);
       DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
@@ -213,6 +220,9 @@ soaap_perf_enter_dataout_persistent_sbox(int datalen_out)
     DPRINTF("Zero or negative request for data");
     return;
   }
+
+  DPRINTF("PARENT: transferring control flow to sandbox");
+  in_sandbox = true;
 
   DPRINTF("DATALEN IN: %d", datalen_out);
 
@@ -254,6 +264,9 @@ soaap_perf_enter_datainout_persistent_sbox(int datalen_in, int datalen_out)
 
   if (!datalen_in && !datalen_out)
     return;
+
+  DPRINTF("PARENT: transferring control flow to sandbox");
+  in_sandbox = true;
 
   /* Initialize cm */
   cm.magic = MAGIC;
@@ -303,61 +316,62 @@ soaap_perf_enter_datainout_persistent_sbox(int datalen_in, int datalen_out)
 __attribute__((used)) static void
 soaap_perf_callgate()
 {
+  if (in_sandbox) {
+    int nbytes = 0, nbytes_left, tmpnbytes;
+    uint32_t *magicptr;
+    struct ctrl_msg cm;
 
-  int nbytes = 0, nbytes_left, tmpnbytes;
-  uint32_t *magicptr;
-  struct ctrl_msg cm;
+    DPRINTF("Emulating performance of calling a callgate");
 
-  DPRINTF("Emulating performance of calling a callgate");
+    int datalen_in = 1; // TODO: use datain annotations?
+    int datalen_out = 1; // TODO: use dataout annotations?
 
-  int datalen_in = 1; // TODO: use datain annotations?
-  int datalen_out = 1; // TODO: use dataout annotations?
+    /* Initialize cm */
+    cm.magic = MAGIC;
+    cm.op = OP_SENDRECEIVE;
+    cm.sbox_datain_len = datalen_in; 
+    cm.sbox_dataout_len = datalen_out;
 
-  /* Initialize cm */
-  cm.magic = MAGIC;
-  cm.op = OP_SENDRECEIVE;
-  cm.sbox_datain_len = datalen_in; 
-  cm.sbox_dataout_len = datalen_out;
+    /* Initialize ctrl message and required data */
+    nbytes_left = sizeof(cm) + datalen_in;
+    memmove(soaap_buf, &cm, sizeof(cm));
+    magicptr = (uint32_t *) soaap_buf;
 
-  /* Initialize ctrl message and required data */
-  nbytes_left = sizeof(cm) + datalen_in;
-  memmove(soaap_buf, &cm, sizeof(cm));
-  magicptr = (uint32_t *) soaap_buf;
+    /*
+     * Send and receive data to/from the privileged parent
+     * We model this by sending and receiving data to/from
+     * the "sandbox" process. This is fine as we are just
+     * interested in emulating the IPC cost.
+     */
+    while(nbytes_left > SOAAP_BUF_LEN) {
+      nbytes = write(pfds[1], soaap_buf, SOAAP_BUF_LEN);
 
-  /*
-   * Send and receive data to/from the privileged parent
-   * We model this by sending and receiving data to/from
-   * the "sandbox" process. This is fine as we are just
-   * interested in emulating the IPC cost.
-   */
-  while(nbytes_left > SOAAP_BUF_LEN) {
-    nbytes = write(pfds[1], soaap_buf, SOAAP_BUF_LEN);
+      /* Ensure that the ctrl message is sent */
+      while (nbytes <  (int) sizeof(cm)) {
+        tmpnbytes = write(pfds[1], &soaap_buf, sizeof(cm) - nbytes);
+        nbytes += tmpnbytes;
+      }
 
-    /* Ensure that the ctrl message is sent */
-    while (nbytes <  (int) sizeof(cm)) {
-      tmpnbytes = write(pfds[1], &soaap_buf, sizeof(cm) - nbytes);
-      nbytes += tmpnbytes;
+      /* Unset the magic */
+      *magicptr &= ~(MAGIC);
+
+      nbytes_left -= nbytes;
     }
 
-    /* Unset the magic */
-    *magicptr &= ~(MAGIC);
+    while (nbytes_left > 0) {
+      nbytes = write(pfds[1], soaap_buf, nbytes_left);
+      nbytes_left -= nbytes;
+    }
+    DPRINTF("SANDBOX: sent to parent %d bytes and "
+      "requested back %d bytes", datalen_in, datalen_out);
 
-    nbytes_left -= nbytes;
-  }
-
-  while (nbytes_left > 0) {
-    nbytes = write(pfds[1], soaap_buf, nbytes_left);
-    nbytes_left -= nbytes;
-  }
-  DPRINTF("SANDBOX: sent to parent %d bytes and "
-    "requested back %d bytes", datalen_in, datalen_out);
-
-  /* Chew the data that sent from the parent */
-  nbytes_left = cm.sbox_dataout_len;
-  while( nbytes_left > 0 ) {
-    nbytes = read(pfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
-    DPRINTF("SANDBOX: read from fd %d bytes", nbytes);
-    nbytes_left -= nbytes;
+    /* Chew the data that sent from the parent */
+    nbytes_left = cm.sbox_dataout_len;
+    while( nbytes_left > 0 ) {
+      nbytes = read(pfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
+      DPRINTF("SANDBOX: read from fd %d bytes", nbytes);
+      nbytes_left -= nbytes;
+    }
   }
 }
 
@@ -617,6 +631,8 @@ soaap_perf_total_toc(struct timespec *start_ts, struct timespec *sbox_ts)
 #else
     ;
 #endif
+  DPRINTF("SANDBOX: return control to parent");  
+  in_sandbox = false;
 }
 
 __attribute__((used)) static void
@@ -664,7 +680,8 @@ soaap_perf_total_toc_thres(struct timespec *start_ts, struct timespec *sbox_ts,
 #else
     ;
 #endif
-
+  DPRINTF("SANDBOX: return control to parent");  
+  in_sandbox = false;
 }
 
 #endif  /* IN_SOAAP_INSTRUMENTER */

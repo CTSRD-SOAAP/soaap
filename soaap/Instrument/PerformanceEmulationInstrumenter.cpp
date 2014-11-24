@@ -234,14 +234,15 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
       perfOverheadFn = M.getFunction("soaap_perf_total_toc");
     }
 
-    perfOverheadCall = CallInst::Create(perfOverheadFn,
-      ArrayRef<Value*>(soaap_perf_overhead_args));
 
     // Get terminator instruction of the current basic block.
     for (BasicBlock& BB : F->getBasicBlockList()) {
       TerminatorInst* termInst = BB.getTerminator();
       if (isa<ReturnInst>(termInst)) {
         //BB is an exit block, instrument ret
+        perfOverheadCall = CallInst::Create(perfOverheadFn,
+          ArrayRef<Value*>(soaap_perf_overhead_args));
+        dbgs() << "Inserting call to " << perfOverheadFn->getName() << "\n";
         perfOverheadCall->insertBefore(termInst);
       }
     }
