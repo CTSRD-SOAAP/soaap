@@ -85,6 +85,7 @@ bool Soaap::runOnModule(Module& M) {
   }
 
   if (CmdLineOpts::EmPerf) {
+    outs() << "* Instrumenting sandbox emulation calls\n";
     instrumentPerfEmul(M);
   }
   else {
