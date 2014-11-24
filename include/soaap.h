@@ -97,7 +97,7 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define __soaap_sandboxed_region_end(N) __builtin_annotation(0, SOAAP_SANDBOX_REGION_END "_" N); 
 
 #define __soaap_callgates(N, fns...) \
-  void __soaap_declare_callgates_helper_##N(int unused, ...) { } \
+  extern void __soaap_declare_callgates_helper_##N(int unused, ...); \
 	void __soaap_declare_callgates_##N() { \
 		__soaap_declare_callgates_helper_##N(0, fns); \
 	} 
