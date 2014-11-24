@@ -115,6 +115,7 @@ soaap_perf_create_persistent_sbox(void)
         case OP_SENDBACK:
           /* Fallback */
           /* Send back data */
+          // XXX KG: should we send back an entire message?
           DPRINTF("SANDBOX: sending back %d bytes", cm->sbox_dataout_len);
           while (cm->sbox_dataout_len > SOAAP_BUF_LEN) {
             nbytes = write(pfds[0], soaap_tmpbuf, SOAAP_BUF_LEN);
@@ -144,7 +145,8 @@ soaap_perf_enter_persistent_sbox()
 
   DPRINTF("Emulating performance of entering persistent sandbox.");
   DPRINTF("Sending request over RPC.");
-  write(pfds[1], soaap_buf, 1);
+  struct ctrl_msg cm;
+  write(pfds[1], &cm, sizeof(cm));
   //DPRINTF("PARENT: written to the pipe %d bytes", nbytes);
   
 }
@@ -294,6 +296,67 @@ soaap_perf_enter_datainout_persistent_sbox(int datalen_in, int datalen_out)
   while( nbytes_left > 0 ) {
     nbytes = read(pfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
     DPRINTF("PARENT: read from fd %d bytes", nbytes);
+    nbytes_left -= nbytes;
+  }
+}
+
+__attribute__((used)) static void
+soaap_perf_callgate()
+{
+
+  int nbytes = 0, nbytes_left, tmpnbytes;
+  uint32_t *magicptr;
+  struct ctrl_msg cm;
+
+  DPRINTF("Emulating performance of calling a callgate");
+
+  int datalen_in = 1; // TODO: use datain annotations?
+  int datalen_out = 1; // TODO: use dataout annotations?
+
+  /* Initialize cm */
+  cm.magic = MAGIC;
+  cm.op = OP_SENDRECEIVE;
+  cm.sbox_datain_len = datalen_in; 
+  cm.sbox_dataout_len = datalen_out;
+
+  /* Initialize ctrl message and required data */
+  nbytes_left = sizeof(cm) + datalen_in;
+  memmove(soaap_buf, &cm, sizeof(cm));
+  magicptr = (uint32_t *) soaap_buf;
+
+  /*
+   * Send and receive data to/from the privileged parent
+   * We model this by sending and receiving data to/from
+   * the "sandbox" process. This is fine as we are just
+   * interested in emulating the IPC cost.
+   */
+  while(nbytes_left > SOAAP_BUF_LEN) {
+    nbytes = write(pfds[1], soaap_buf, SOAAP_BUF_LEN);
+
+    /* Ensure that the ctrl message is sent */
+    while (nbytes <  (int) sizeof(cm)) {
+      tmpnbytes = write(pfds[1], &soaap_buf, sizeof(cm) - nbytes);
+      nbytes += tmpnbytes;
+    }
+
+    /* Unset the magic */
+    *magicptr &= ~(MAGIC);
+
+    nbytes_left -= nbytes;
+  }
+
+  while (nbytes_left > 0) {
+    nbytes = write(pfds[1], soaap_buf, nbytes_left);
+    nbytes_left -= nbytes;
+  }
+  DPRINTF("SANDBOX: sent to parent %d bytes and "
+    "requested back %d bytes", datalen_in, datalen_out);
+
+  /* Chew the data that sent from the parent */
+  nbytes_left = cm.sbox_dataout_len;
+  while( nbytes_left > 0 ) {
+    nbytes = read(pfds[1], soaap_tmpbuf, SOAAP_BUF_LEN);
+    DPRINTF("SANDBOX: read from fd %d bytes", nbytes);
     nbytes_left -= nbytes;
   }
 }

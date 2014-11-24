@@ -3,6 +3,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "Common/Debug.h"
 #include "Util/DebugUtils.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/Support/Debug.h"
@@ -244,6 +245,30 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
         perfOverheadCall->insertBefore(termInst);
       }
     }
+
+    bool cgDebugOutput = false;
+    SDEBUG("soaap.instr.perf", 3, cgDebugOutput = true);
+    Function* invokeCallgateFn = M.getFunction("soaap_perf_callgate");
+    for (Function* CGF : S->getCallgates()) {
+      // Precede each call to a callgate function within the sandbox with
+      // an RPC send and receive 
+      for (User* U : CGF->users()) {
+        if (CallInst* C = dyn_cast<CallInst>(U)) {
+          if (S->containsInstruction(C)) {
+            if (cgDebugOutput) {
+              dbgs() << "Adding call to soaap_perf_callgate invocation of callgate \"" << CGF->getName() << "\" in sandbox: ";
+              if (MDNode* N = C->getMetadata("dbg")) {
+                DILocation loc(N);
+                dbgs() << loc.getFilename() << ":" << loc.getLineNumber();
+              }
+              dbgs() << "\n";
+            }
+            CallInst* invokeCallgateCall = CallInst::Create(invokeCallgateFn, ArrayRef<Value*>());
+            invokeCallgateCall->insertBefore(C);
+          }
+        }
+      }
+    }
   }
 
   /*
@@ -264,24 +289,23 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
       createCall->insertBefore(mainFirstInst);
     }
 
-    ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
-      -1, true);
-
     Function* terminatePersistentSandbox
       = M.getFunction("soaap_perf_enter_datain_persistent_sbox");
-    CallInst* terminateCall
-      = CallInst::Create(terminatePersistentSandbox,
-        ArrayRef<Value*>(dyn_cast<Value>(arg)));
     //CallInst* terminateCall
     //= CallInst::Create(terminatePersistentSandbox,
     //ArrayRef<Value*>());
-    terminateCall->setTailCall();
 
     // Iterate over main's BasicBlocks and instrument all ret points
     for (BasicBlock& BB : mainFn->getBasicBlockList()) {
       TerminatorInst* mainLastInst = BB.getTerminator();
       if (isa<ReturnInst>(mainLastInst)) {
         //BB is an exit block, instrument ret
+        ConstantInt *arg = ConstantInt::get(Type::getInt32Ty(C),
+          -1, true);
+        CallInst* terminateCall
+          = CallInst::Create(terminatePersistentSandbox,
+            ArrayRef<Value*>(dyn_cast<Value>(arg)));
+        terminateCall->setTailCall();
         terminateCall->insertBefore(mainLastInst);
       }
     }
