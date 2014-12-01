@@ -322,6 +322,20 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
           if (hasMetadata) {
             if (definingTypeTIVar == NULL || staticTypeTIVar == NULL) {
               SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "definingTypeTIVar or staticTypeTIVar is NULL\n");
+              bool debug = false;
+              SDEBUG("soaap.util.classhierarchy", 3, debug = true);
+              if (debug) {
+                if (definingTypeTIVar != NULL) {
+                  dbgs() << "   definingTypeTIVar is: " << definingTypeTIVar->getName() << "\n";
+                }
+                if (staticTypeTIVar != NULL) {
+                  dbgs() << "   staticTypeTIVar is: " << staticTypeTIVar->getName() << "\n";
+                }
+                if (MDNode* N = I->getMetadata("dbg")) {
+                  DILocation loc(N);
+                  dbgs() << "   location: " << loc.getFilename() << ":" << loc.getLineNumber() << "\n";
+                }
+              }
             }
             else {
               callToCalleesCache[C] = findAllCalleesForVirtualCall(C, definingTypeTIVar, staticTypeTIVar, M);
