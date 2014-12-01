@@ -115,7 +115,7 @@ void CallGraphUtils::listFPTargets(Module& M) {
               }
               outs() << "\n";
             }
-            numFPCalls++;
+            numFPcalls++;
           }
         }
       }
