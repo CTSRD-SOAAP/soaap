@@ -108,9 +108,12 @@ void CallGraphUtils::listFPTargets(Module& M) {
               for (Function* T : fpInferredTargetsAnalysis.getTargets(C->getCalledValue()->stripPointerCasts())) {
                 outs() << INDENT_4 << T->getName() << " (inferred)\n";
               }
-              outs() << "\n";
+              if (C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL) { // virtual-call
+                for (Function* T : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
+                  outs() << INDENT_4 << T->getName() << " (inferred virtual)\n";
+                }
+              }
             }
-            numFPcalls++;
           }
         }
       }
