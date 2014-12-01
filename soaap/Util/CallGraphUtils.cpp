@@ -113,7 +113,9 @@ void CallGraphUtils::listFPTargets(Module& M) {
                   outs() << INDENT_4 << T->getName() << " (inferred virtual)\n";
                 }
               }
+              outs() << "\n";
             }
+            numFPCalls++;
           }
         }
       }
