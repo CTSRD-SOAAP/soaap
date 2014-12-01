@@ -22,11 +22,13 @@ namespace soaap {
       static map<CallInst*,FunctionSet> callToCalleesCache;
       static map<GlobalVariable*,map<int,int> > vTableToSecondaryVTableMaps;
       static map<GlobalVariable*,map<GlobalVariable*,int> > classToBaseOffset;
+      static map<GlobalVariable*,map<GlobalVariable*,int> > classToVBaseOffsetOffset;
       static bool cachingDone;
-      static int findSubObjOffset(GlobalVariable* definingClazzTI, GlobalVariable* staticClazzTI);
-      static void processTypeInfo(GlobalVariable* TI);
+
+      static void processTypeInfo(GlobalVariable* TI, Module& M);
       static FunctionSet findAllCalleesForVirtualCall(CallInst* C, GlobalVariable* definingTypeTIVar, GlobalVariable* staticTypeTIVar, Module& M);
-      static void findAllCalleesInSubClasses(CallInst* C, GlobalVariable* TI, int vtableIdx, int subObjOffset, FunctionSet& callees);
+      static void findAllCalleesInSubClasses(CallInst* C, GlobalVariable* definingTypeTI, GlobalVariable* staticTypeTI, int vtableIdx, FunctionSet& callees);
+      static void findAllCalleesInSubClassesHelper(CallInst* C, GlobalVariable* TI, GlobalVariable* staticTypeTI, int vtableIdx, int vbaseOffsetOffset, int subObjOffset, int vbaseSubObjOffset, bool collectingCallees, FunctionSet& callees);
       static Function* extractFunctionFromThunk(Function* F);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);
       static void ppClassHierarchyHelper(GlobalVariable* c, ClassHierarchy& classHierarchy, int nesting);
