@@ -3,10 +3,11 @@
 
 #include "Report/Render/Renderer.h"
 
+#include <algorithm>
+#include <vector>
+
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
-
-#include <vector>
 
 using namespace std;
 using namespace rapidjson;
