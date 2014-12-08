@@ -2,6 +2,33 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "type": "object",
   "properties": {
+    "callgraph": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "caller": {
+            "type": "string"
+          },
+          "callees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "callee": {
+                  "type": "string"
+                },
+                "call_count": {
+                  "type": "integer"
+                },
+                "required": ["callee", "call_count"]
+              }
+            }
+          }
+        }
+      },
+      "required": ["caller", "callees"]
+    },
     "vulnerabilities": {
       "type": "array",
       "items": {

@@ -49,7 +49,7 @@ bool Soaap::runOnModule(Module& M) {
   }
   outs() << "\n";
 
-  CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
+  llvm::CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
 
   outs() << "* Finding class hierarchy (if there is one)\n";

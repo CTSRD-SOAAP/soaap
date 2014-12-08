@@ -3,6 +3,7 @@
 
 namespace soaap {
   // to avoid header include cycles
+  class CallGraph;
   class Report;
   class SourceLocation;
   class Vulnerability;
@@ -10,6 +11,7 @@ namespace soaap {
     public:
       Renderer(bool rtime) : realtime(rtime) { }
       virtual bool isRealtime() { return realtime; }
+      virtual void visit(CallGraph* r) = 0;
       virtual void visit(Report* r) = 0;
       virtual void visit(Vulnerability* v) = 0;
       virtual void visit(SourceLocation* s) = 0;

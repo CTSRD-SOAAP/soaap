@@ -17,8 +17,37 @@ JSONRenderer::JSONRenderer() : Renderer(false) {
   writer = new PrettyWriter<StringBuffer>(s);
 }
 
+void JSONRenderer::visit(CallGraph* cg) {
+  writer->StartArray();
+  map<Function*, map<Function*,int> > funcToCalleeCallCount = cg->getFuncToCalleeCallCounts();
+  for (pair<Function*,map<Function*,int> > p : funcToCalleeCallCount) {
+    writer->StartObject();
+    writer->Key("caller");
+    Function* caller = p.first;
+    writer->String(caller->getName().str().c_str());
+    writer->Key("callees");
+    writer->StartArray();
+    for (pair<Function*,int> p2 : p.second) {
+      writer->StartObject();
+      writer->Key("callee");
+      Function* callee = p2.first;
+      writer->String(callee->getName().str().c_str());
+      writer->Key("call_count");
+      writer->Int(p2.second);
+      writer->EndObject();
+    }
+    writer->EndArray();
+    writer->EndObject();
+  }
+  writer->EndArray();
+}
+
 void JSONRenderer::visit(Report* r) {
   writer->StartObject();
+  CallGraph* cg = r->getCallGraph();
+  writer->Key("callgraph");
+  visit(cg);
+  
   vector<Vulnerability*> vulns = r->getVulnerabilities();
   writer->Key("vulnerabilities");
   writer->StartArray();

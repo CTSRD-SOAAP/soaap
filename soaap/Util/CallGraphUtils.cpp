@@ -2,6 +2,8 @@
 #include "Analysis/InfoFlow/FPInferredTargetsAnalysis.h"
 #include "Common/CmdLineOpts.h"
 #include "Passes/Soaap.h"
+#include "Report/IR/CallGraph.h"
+#include "Report/IR/Report.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"
@@ -49,7 +51,7 @@ void CallGraphUtils::loadDynamicCallGraphEdges(Module& M) {
 }
 
 void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   unsigned long numFPcalls = 0;
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
@@ -86,7 +88,7 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
 }
 
 void CallGraphUtils::listFPTargets(Module& M) {
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   unsigned long numFPcalls = 0;
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
@@ -148,7 +150,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // for each fp-call, add annotated edges to the call graph
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Finding all fp calls\n");
   if (fpInferredTargetsAnalysis.hasTargets() || fpAnnotatedTargetsAnalysis.hasTargets()) {
-    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+    llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
       if (F->isDeclaration()) continue;
       CallGraphNode* callerNode = CG->getOrInsertFunction(F);
@@ -185,6 +187,16 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // and now turn on caching so future calls to getCallees and getCallers read from the caches.
   populateCallCalleeCaches(M);
   caching = true;
+
+  FunctionToCalleeCallCountsMap funcToCalleeCallCounts;
+  for (pair<const CallInst*,FunctionSet> p : callToCallees) {
+    const CallInst* C = p.first;
+    Function* F = (Function*)C->getParent()->getParent();
+    for (Function* G : p.second) {
+      funcToCalleeCallCounts[F][G]++;
+    }
+  }
+  Report::v()->setCallGraph(new CallGraph(funcToCalleeCallCounts));
 }
 
 FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {
@@ -226,7 +238,7 @@ void CallGraphUtils::populateCallCalleeCaches(Module& M) {
   callToCallees.clear();
   calleeToCalls.clear();
 
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     CallGraphNode* F1Node = CG->getOrInsertFunction(F1);
@@ -346,7 +358,7 @@ bool CallGraphUtils::isExternCall(CallInst* C) {
 }
 
 void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   CallGraphNode* callerNode = CG->getOrInsertFunction(C->getParent()->getParent());
   FunctionSet& currentCallees = (FunctionSet&)callToCallees[C];
   SDEBUG("soaap.util.callgraph", 3, dbgs() << "New callees to add: " << stringifyFunctionSet(callees) << "\n");
@@ -383,144 +395,73 @@ void CallGraphUtils::dumpDOTGraph() {
 
 void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M) {
   // we use Dijkstra's algorithm
-  //if (Function* MainFn = M.getFunction("main")) {
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "calculating shortest paths from " << F->getName() << " cache");
-    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-    CallGraphNode* MainNode = (*CG)[F];
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "calculating shortest paths from " << F->getName() << " cache");
+  llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+  CallGraphNode* MainNode = (*CG)[F];
 
-    // Find privileged path to instruction I, via a function that calls a sandboxed callee
-    QueueSet<CallGraphNode*> worklist;
-    map<CallGraphNode*,int> distanceFromMain;
-    map<CallGraphNode*,CallGraphNode*> pred;
-    map<CallGraphNode*,CallInst*> call;
+  // Find privileged path to instruction I, via a function that calls a sandboxed callee
+  QueueSet<CallGraphNode*> worklist;
+  map<CallGraphNode*,int> distanceFromMain;
+  map<CallGraphNode*,CallGraphNode*> pred;
+  map<CallGraphNode*,CallInst*> call;
 
-    worklist.enqueue(MainNode);
-    distanceFromMain[MainNode] = 0;
-    pred[MainNode] = NULL;
-    call[MainNode] = NULL;
+  worklist.enqueue(MainNode);
+  distanceFromMain[MainNode] = 0;
+  pred[MainNode] = NULL;
+  call[MainNode] = NULL;
 
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "setting all distances from main to INT_MAX\n")
-    for (CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
-      CallGraphNode* N = I->second;
-      if (N != MainNode) {
-        distanceFromMain[N] = INT_MAX;
-      }
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "setting all distances from main to INT_MAX\n")
+  for (llvm::CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
+    CallGraphNode* N = I->second;
+    if (N != MainNode) {
+      distanceFromMain[N] = INT_MAX;
     }
-
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "computing dijkstra's algorithm\n")
-    while (!worklist.empty()) {
-      CallGraphNode* N = worklist.dequeue();
-      SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_2 << "Current func: " << N->getFunction()->getName() << "\n")
-      // only proceed if:
-      // a) in the privileged case, N is not a sandbox entrypoint
-      // b) in the non-privileged case, if N is a sandbox entrypoint it must be S's
-      // (i.e. in both case we are not entering a different protection domain)
-      if (!(privileged && SandboxUtils::isSandboxEntryPoint(M, N->getFunction()))
-          && !(!privileged && SandboxUtils::isSandboxEntryPoint(M, N->getFunction()) && N->getFunction() != S->getEntryPoint())){
-        for (CallGraphNode::iterator I=N->begin(), E=N->end(); I!=E; I++) {
-          CallGraphNode* SuccN = I->second;
-          if (Function* SuccFunc = SuccN->getFunction()) {
-            SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
-            if (distanceFromMain[SuccN] > distanceFromMain[N]+1) {
-              distanceFromMain[SuccN] = distanceFromMain[N]+1;
-              pred[SuccN] = N;
-              SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Call inst: " << *(I->first))
-              call[SuccN] = dyn_cast<CallInst>(I->first);
-              worklist.enqueue(SuccN);
-            }
-          }
-        }
-      }
-    }
-
-    // cache shortest paths for each function
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
-    for (CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
-      CallGraphNode* N = I->second;
-      if (distanceFromMain[N] < INT_MAX) { // N is reachable from main
-        InstTrace path;
-        CallGraphNode* CurrN = N;
-        while (CurrN != MainNode) {
-          path.push_back(call[CurrN]);
-          CurrN = pred[CurrN];
-        }
-        funcToShortestCallPaths[F][N->getFunction()] = path;
-        SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << N->getFunction()->getName() << ": " << path.size() << "\n")
-      }
-    }
-
-    SDEBUG("soaap.util.callgraph", 4, dbgs() << "completed calculating shortest paths from main cache\n");
-  //}
-}
-
-/*
-void CallGraphUtils::calculateShortestPrivilegedCallPathsFromMain(Module& M) {
-  // we use Dijkstra's algorithm
-  if (Function* MainFn = M.getFunction("main")) {
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "calculating shortest paths from main cache\n")
-    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
-    CallGraphNode* MainNode = (*CG)[MainFn];
-
-    // Find privileged path to instruction I, via a function that calls a sandboxed callee
-    QueueSet<CallGraphNode*> worklist;
-    map<CallGraphNode*,int> distanceFromMain;
-    map<CallGraphNode*,CallGraphNode*> pred;
-    map<CallGraphNode*,CallInst*> call;
-
-    worklist.enqueue(MainNode);
-    distanceFromMain[MainNode] = 0;
-    pred[MainNode] = NULL;
-    call[MainNode] = NULL;
-
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "setting all distances from main to INT_MAX\n")
-    for (CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
-      CallGraphNode* N = I->second;
-      if (N != MainNode) {
-        distanceFromMain[N] = INT_MAX;
-      }
-    }
-
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "computing dijkstra's algorithm\n")
-    while (!worklist.empty()) {
-      CallGraphNode* N = worklist.dequeue();
-      SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_2 << "Current func: " << N->getFunction()->getName() << "\n")
-      if (!SandboxUtils::isSandboxEntryPoint(N->getFunction(), M)) {
-        for (CallGraphNode::iterator I=N->begin(), E=N->end(); I!=E; I++) {
-          CallGraphNode* SuccN = I->second;
-          if (Function* SuccFunc = SuccN->getFunction()) {
-            SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
-            if (distanceFromMain[SuccN] > distanceFromMain[N]+1) {
-              distanceFromMain[SuccN] = distanceFromMain[N]+1;
-              pred[SuccN] = N;
-              SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Call inst: " << *(I->first))
-              call[SuccN] = dyn_cast<CallInst>(I->first);
-              worklist.enqueue(SuccN);
-            }
-          }
-        }
-      }
-    }
-
-    // cache shortest paths for each function
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
-    for (CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
-      CallGraphNode* N = I->second;
-      if (distanceFromMain[N] < INT_MAX) { // N is reachable from main
-        InstTrace path;
-        CallGraphNode* CurrN = N;
-        while (CurrN != MainNode) {
-          path.push_back(call[CurrN]);
-          CurrN = pred[CurrN];
-        }
-        shortestCallPathsFromMain[N->getFunction()] = path;
-        SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from main() to " << N->getFunction()->getName() << ": " << path.size() << "\n")
-      }
-    }
-
-    SDEBUG("soaap.util.callgraph", 4, dbgs() << "completed calculating shortest paths from main cache\n");
   }
+
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "computing dijkstra's algorithm\n")
+  while (!worklist.empty()) {
+    CallGraphNode* N = worklist.dequeue();
+    SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_2 << "Current func: " << N->getFunction()->getName() << "\n")
+    // only proceed if:
+    // a) in the privileged case, N is not a sandbox entrypoint
+    // b) in the non-privileged case, if N is a sandbox entrypoint it must be S's
+    // (i.e. in both case we are not entering a different protection domain)
+    if (!(privileged && SandboxUtils::isSandboxEntryPoint(M, N->getFunction()))
+        && !(!privileged && SandboxUtils::isSandboxEntryPoint(M, N->getFunction()) && N->getFunction() != S->getEntryPoint())){
+      for (CallGraphNode::iterator I=N->begin(), E=N->end(); I!=E; I++) {
+        CallGraphNode* SuccN = I->second;
+        if (Function* SuccFunc = SuccN->getFunction()) {
+          SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
+          if (distanceFromMain[SuccN] > distanceFromMain[N]+1) {
+            distanceFromMain[SuccN] = distanceFromMain[N]+1;
+            pred[SuccN] = N;
+            SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Call inst: " << *(I->first))
+            call[SuccN] = dyn_cast<CallInst>(I->first);
+            worklist.enqueue(SuccN);
+          }
+        }
+      }
+    }
+  }
+
+  // cache shortest paths for each function
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
+  for (llvm::CallGraph::iterator I=CG->begin(), E=CG->end(); I!= E; I++) {
+    CallGraphNode* N = I->second;
+    if (distanceFromMain[N] < INT_MAX) { // N is reachable from main
+      InstTrace path;
+      CallGraphNode* CurrN = N;
+      while (CurrN != MainNode) {
+        path.push_back(call[CurrN]);
+        CurrN = pred[CurrN];
+      }
+      funcToShortestCallPaths[F][N->getFunction()] = path;
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << N->getFunction()->getName() << ": " << path.size() << "\n")
+    }
+  }
+
+  SDEBUG("soaap.util.callgraph", 4, dbgs() << "completed calculating shortest paths from main cache\n");
 }
-*/
 
 InstTrace CallGraphUtils::findPrivilegedPathToFunction(Function* Target, Module& M) {
   SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding privileged path to function \"" << Target->getName() << "\" (from main)\n");

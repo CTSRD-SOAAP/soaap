@@ -15,6 +15,10 @@ void Report::addRenderer(Renderer* r) {
   renderers.push_back(r);
 }
 
+void Report::setCallGraph(CallGraph* cg) {
+  callgraph = cg;
+}
+
 void Report::addVulnerability(Vulnerability* v) {
   vulnerabilities.push_back(v);
   renderIfRealtime(v);
