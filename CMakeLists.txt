@@ -51,6 +51,7 @@ include_directories(${LLVM_MAIN_SRC_DIR}/runtime/libprofile)
 include_directories(${LLVM_BINARY_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/soaap)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rapidjson/include)
 link_directories(${LLVM_LIBRARY_DIR})
 
 add_subdirectory(include)

@@ -1,0 +1,167 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "vulnerabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "object",
+            "properties": {
+              "function": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "line_number": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "function",
+              "filename",
+              "line_number"
+            ]
+          },
+          "vuln_vendor": {
+            "type": "boolean",
+          },
+          "cves": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sandboxed": {
+            "type": "boolean",
+          },
+          "sandbox": {
+            "type": "string",
+          },
+          "call_stack": {
+            "type": "array",
+            "items": [
+              {
+                "type": "object",
+                "properties": {
+                  "function": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  },
+                  "line_number": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "function",
+                  "filename",
+                  "line_number"
+                ]
+              }
+            ]
+          },
+          "leaks_limited_right": {
+            "type": "boolean",
+          },
+          "rights": {
+            "type": "object",
+            "properties": {
+              "globals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "var_name": {
+                      "type": "string",
+                    },
+                    "rights": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                      }
+                    }
+                  },
+                  "required": [
+                    "var_name",
+                    "rights"
+                  ]
+                }
+              },
+              "privates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "var_name": {
+                      "type": "string",
+                    },
+                    "var_type": {
+                      "type": "string",
+                    }
+                  },
+                  "required": [
+                    "var_name",
+                    "var_type"
+                  ]
+                }
+              },
+              "callgates": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                }
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "var_name": {
+                      "type": "string",
+                    },
+                    "syscalls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                      }
+                    }
+                  },
+                  "required": [
+                    "var_name",
+                    "syscalls"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "globals",
+              "privates",
+              "callgates",
+              "capabilities"
+            ]
+          }
+        },
+        "required": [
+          "location",
+          "vuln_vendor",
+          "sandboxed",
+          "call_stack",
+          "leaks_limited_right"
+        ],
+        "dependencies": {
+          "vuln_vendor":["cves"],
+          "sandboxed":["sandbox"],
+          "leaks_limited_rights":["rights"] 
+        }
+      }
+    }
+  },
+  "required": [
+    "vulnerabilities"
+  ]
+}

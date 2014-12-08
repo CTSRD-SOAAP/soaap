@@ -9,6 +9,7 @@ namespace soaap {
   class TypeUtils {
     public:
       static BitVector convertFunctionSetToBitVector(FunctionSet& set, function<int (Function*)> funcToIdMapper);
+      static string stringifyStringSet(StringSet& strings);
   };
 }
 

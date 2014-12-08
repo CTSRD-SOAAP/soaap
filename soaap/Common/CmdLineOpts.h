@@ -12,6 +12,9 @@ namespace soaap {
   enum SandboxPlatformName {
     None, Annotated, Capsicum, Seccomp
   };
+  enum ReportOutputFormat {
+    Console, JSON
+  };
   class CmdLineOpts {
     public:
       static bool EmPerf;
@@ -30,6 +33,8 @@ namespace soaap {
       static bool DumpRPCGraph;
       static SandboxPlatformName SandboxPlatform;
       static bool DumpDOTCallGraph;
+      static list<ReportOutputFormat> ReportOutputFormats;
+      static string ReportFilePrefix;
   };
 }
 

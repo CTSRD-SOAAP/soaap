@@ -91,3 +91,19 @@ bool CmdLineOpts::DumpDOTCallGraph;
 static cl::opt<bool, true> ClDumpDOTCallGraph("soaap-dump-dot-callgraph",
        cl::desc("Dump DOT CallGraph"),
        cl::location(CmdLineOpts::DumpDOTCallGraph));
+
+list<ReportOutputFormat> CmdLineOpts::ReportOutputFormats;
+static cl::list<ReportOutputFormat, list<ReportOutputFormat> > ClReportOutputFormats("soaap-report-output-formats",
+       cl::desc("Comma-separated list of report-output formats"),
+       cl::value_desc("list of report-output formats"),
+       cl::values(
+         clEnumValN(Console, "console", "Console"),
+         clEnumValN(JSON, "json", "JSON"),
+       clEnumValEnd),
+       cl::CommaSeparated,
+       cl::location(CmdLineOpts::ReportOutputFormats));
+
+string CmdLineOpts::ReportFilePrefix;
+static cl::opt<string, true> ClReportFilePrefix("soaap-report-file-prefix",
+       cl::desc("Prefix for report-output filenames"),
+       cl::location(CmdLineOpts::ReportFilePrefix));

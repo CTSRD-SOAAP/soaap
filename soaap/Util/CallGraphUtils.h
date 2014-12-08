@@ -26,14 +26,18 @@ namespace soaap {
       static void addCallees(CallInst* C, FunctionSet& callees);
       static string stringifyFunctionSet(FunctionSet& funcs);
       static void dumpDOTGraph();
+      static InstTrace findPrivilegedPathToFunction(Function* Target, Module& M);
+      static InstTrace findSandboxedPathToFunction(Function* Target, Sandbox* S, Module& M);
     
     private:
       static map<const CallInst*, FunctionSet> callToCallees;
       static map<const Function*, CallInstSet> calleeToCalls;
+      static map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths;
       static FPAnnotatedTargetsAnalysis fpAnnotatedTargetsAnalysis;
       static FPInferredTargetsAnalysis fpInferredTargetsAnalysis;
       static bool caching;
       static void populateCallCalleeCaches(Module& M);
+      static void calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M);
   };
 }
 namespace llvm {

@@ -16,3 +16,16 @@ BitVector TypeUtils::convertFunctionSetToBitVector(FunctionSet& set, function<in
   }
   return vector;
 }
+
+string TypeUtils::stringifyStringSet(StringSet& strings) {
+  string str = "[";
+  bool first = true;
+  for (string s : strings) {
+    if (!first) 
+      str += ",";
+    str += s;
+    first = false;
+  }
+  str += "]";
+  return str;
+}

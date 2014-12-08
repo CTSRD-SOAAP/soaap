@@ -24,6 +24,9 @@
 #include "OS/Sandbox/Capsicum.h"
 #include "OS/Sandbox/SandboxPlatform.h"
 #include "OS/Sandbox/Seccomp.h"
+#include "Report/IR/Report.h"
+#include "Report/Render/ConsoleRenderer.h"
+#include "Report/Render/JSONRenderer.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/ContextUtils.h"
@@ -121,6 +124,8 @@ bool Soaap::runOnModule(Module& M) {
     buildRPCGraph(M);
   }
 
+  Report::v()->render();
+
   return false;
 }
 
@@ -153,6 +158,28 @@ void Soaap::processCmdLineArgs(Module& M) {
     }
     default: {
       errs() << "Unrecognised Sandbox Platform " << CmdLineOpts::SandboxPlatform << "\n";
+    }
+  }
+
+  // process ClReportOutputFormats
+  // default value is console
+  // TODO: not sure how to specify this in the option itself
+  if (CmdLineOpts::ReportOutputFormats.empty()) { 
+    CmdLineOpts::ReportOutputFormats.push_back(Console);
+  }
+  for (ReportOutputFormat r : CmdLineOpts::ReportOutputFormats) {
+    switch (r) {
+      case Console: {
+        SDEBUG("soaap", 3, dbgs() << "Console selected\n");
+        Report::v()->addRenderer(new ConsoleRenderer);
+        break;
+      }
+      case JSON: {
+        SDEBUG("soaap", 3, dbgs() << "JSON selected\n");
+        Report::v()->addRenderer(new JSONRenderer);
+        break;
+      }
+      default: { }
     }
   }
 }
