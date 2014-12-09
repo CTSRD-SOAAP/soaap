@@ -3,7 +3,6 @@
 
 #include "Report/Render/Renderer.h"
 
-#include <algorithm>
 #include <vector>
 
 #include "rapidjson/prettywriter.h"
