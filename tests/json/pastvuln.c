@@ -2,6 +2,7 @@
  * RUN: clang %cflags -emit-llvm -S %s -o %t.ll
  * RUN: soaap -o %t.soaap.ll --soaap-report-output-formats=json --soaap-report-file-prefix=%t %t.ll > %t.out
  * RUN: FileCheck %s -input-file %t.json
+ * XFAIL: *
  */
 #include "soaap.h"
 
