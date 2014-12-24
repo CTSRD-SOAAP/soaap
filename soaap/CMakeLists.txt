@@ -26,12 +26,6 @@ add_llvm_library(SOAAP
   OS/Sandbox/Capsicum.cpp
   OS/Sandbox/SandboxPlatform.cpp
   OS/Sandbox/Seccomp.cpp
-  Report/IR/CallGraph.cpp
-  Report/IR/Report.cpp
-  Report/IR/SourceLocation.cpp
-  Report/IR/Vulnerability.cpp
-  Report/Render/ConsoleRenderer.cpp
-  Report/Render/JSONRenderer.cpp
   Util/CallGraphUtils.cpp
   Util/ClassHierarchyUtils.cpp
   Util/ContextUtils.cpp

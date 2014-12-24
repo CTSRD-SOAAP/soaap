@@ -2,8 +2,6 @@
 #include "Analysis/InfoFlow/FPInferredTargetsAnalysis.h"
 #include "Common/CmdLineOpts.h"
 #include "Passes/Soaap.h"
-#include "Report/IR/CallGraph.h"
-#include "Report/IR/Report.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/LLVMAnalyses.h"
@@ -187,16 +185,6 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // and now turn on caching so future calls to getCallees and getCallers read from the caches.
   populateCallCalleeCaches(M);
   caching = true;
-
-  FunctionToCalleeCallCountsMap funcToCalleeCallCounts;
-  for (pair<const CallInst*,FunctionSet> p : callToCallees) {
-    const CallInst* C = p.first;
-    Function* F = (Function*)C->getParent()->getParent();
-    for (Function* G : p.second) {
-      funcToCalleeCallCounts[F][G]++;
-    }
-  }
-  Report::v()->setCallGraph(new CallGraph(funcToCalleeCallCounts));
 }
 
 FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {

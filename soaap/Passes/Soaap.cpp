@@ -25,9 +25,6 @@
 #include "OS/Sandbox/Capsicum.h"
 #include "OS/Sandbox/SandboxPlatform.h"
 #include "OS/Sandbox/Seccomp.h"
-#include "Report/IR/Report.h"
-#include "Report/Render/ConsoleRenderer.h"
-#include "Report/Render/JSONRenderer.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/ContextUtils.h"
@@ -127,8 +124,6 @@ bool Soaap::runOnModule(Module& M) {
     buildRPCGraph(M);
   }
 
-  Report::v()->render();
-
   return false;
 }
 
@@ -165,7 +160,7 @@ void Soaap::processCmdLineArgs(Module& M) {
   }
 
   // process ClReportOutputFormats
-  // default value is console
+  // default value is text
   // TODO: not sure how to specify this in the option itself
   if (CmdLineOpts::ReportOutputFormats.empty()) { 
     CmdLineOpts::ReportOutputFormats.push_back(Text);
@@ -175,7 +170,6 @@ void Soaap::processCmdLineArgs(Module& M) {
       case Text: {
         SDEBUG("soaap", 3, dbgs() << "Text selected\n");
         XO::create(XO_STYLE_TEXT, XOF_FLUSH);
-        Report::v()->addRenderer(new ConsoleRenderer);
         break;
       }
       case HTML: {
@@ -198,7 +192,6 @@ void Soaap::processCmdLineArgs(Module& M) {
         else {
           errs() << "Error creating JSON report file: " << strerror(errno) << "\n";
         }
-        Report::v()->addRenderer(new JSONRenderer);
         break;
       }
       case XML: {
