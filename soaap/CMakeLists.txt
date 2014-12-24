@@ -4,6 +4,7 @@ add_llvm_library(SOAAP
   Common/CmdLineOpts.cpp
   Common/Debug.cpp
   Common/Sandbox.cpp
+  Common/XO.cpp
   Analysis/VulnerabilityAnalysis.cpp
   Analysis/PrivilegedCallAnalysis.cpp
   Analysis/CFGFlow/GlobalVariableAnalysis.cpp
@@ -42,16 +43,5 @@ add_llvm_library(SOAAP
   Util/TypeUtils.cpp
 )
 
-# pass to output dynamic callgraph to DOT
-#add_llvm_loadable_module(libdotdyncg
-#  Passes/DOTDynCG.cpp
-#)
-
-# pass to instrument dynamic call edge profiling
-#add_llvm_loadable_module(libcep
-#  Passes/CallEdgeProfiling.cpp
-#  Passes/CallEdgeProfiling.c
-#)
-#link_directories(${LLVM_BINARY_DIR}/lib)
-#add_library(cep_rt SHARED Passes/CallEdgeProfiling.c)
-#target_link_libraries(cep_rt profile_rt)
+# link with libxo
+target_link_libraries(SOAAP ${LIBXO_LIBRARY})

@@ -9,6 +9,7 @@ set(LLVM_MAIN_SRC_DIR "" CACHE PATH "Path to LLVM source tree")
 
 find_package(LLVM REQUIRED NO_CMAKE_PATH)
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
 
 foreach(v
     TOOLS_BINARY_DIR
@@ -38,6 +39,10 @@ if (LIBCXX_FOUND)
     link_directories(${LIBCXX_LIBRARY_DIR})
   endforeach(lib)
 endif()
+
+# libxo
+find_package(LibXO REQUIRED)
+include_directories(${LIBXO_INCLUDE_DIRS})
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)

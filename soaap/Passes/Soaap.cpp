@@ -9,6 +9,7 @@
 #include "Common/CmdLineOpts.h"
 #include "Common/Typedefs.h"
 #include "Common/Sandbox.h"
+#include "Common/XO.h"
 #include "Analysis/VulnerabilityAnalysis.h"
 #include "Analysis/PrivilegedCallAnalysis.h"
 #include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
@@ -33,6 +34,8 @@
 #include "Util/LLVMAnalyses.h"
 #include "Util/SandboxUtils.h"
 
+#include <cstdio>
+
 using namespace soaap;
 using namespace llvm;
 using namespace std;
@@ -48,6 +51,11 @@ bool Soaap::runOnModule(Module& M) {
     outs() << " in context-insensitive mode";
   }
   outs() << "\n";
+  
+  outs() << "* Processing command-line options\n"; 
+  processCmdLineArgs(M);
+
+  XO::open_container("soaap");
 
   llvm::CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
@@ -71,9 +79,6 @@ bool Soaap::runOnModule(Module& M) {
   if (CmdLineOpts::ListFPTargets) {
     CallGraphUtils::listFPTargets(M);
   }
-
-  outs() << "* Processing command-line options\n"; 
-  processCmdLineArgs(M);
 
   outs() << "* Finding sandboxes\n";
   findSandboxes(M);
@@ -126,6 +131,8 @@ bool Soaap::runOnModule(Module& M) {
 
   Report::v()->render();
 
+  XO::close_container("soaap");
+  XO::finish();
   return false;
 }
 
@@ -165,18 +172,46 @@ void Soaap::processCmdLineArgs(Module& M) {
   // default value is console
   // TODO: not sure how to specify this in the option itself
   if (CmdLineOpts::ReportOutputFormats.empty()) { 
-    CmdLineOpts::ReportOutputFormats.push_back(Console);
+    CmdLineOpts::ReportOutputFormats.push_back(Text);
   }
   for (ReportOutputFormat r : CmdLineOpts::ReportOutputFormats) {
     switch (r) {
-      case Console: {
-        SDEBUG("soaap", 3, dbgs() << "Console selected\n");
-        Report::v()->addRenderer(new ConsoleRenderer);
+      case Text: {
+        SDEBUG("soaap", 3, dbgs() << "Text selected\n");
+        XO::create(XO_STYLE_TEXT, XOF_FLUSH);
+        break;
+      }
+      case HTML: {
+        SDEBUG("soaap", 3, dbgs() << "HTML selected\n");
+        string filename = CmdLineOpts::ReportFilePrefix + ".html";
+        if (FILE* fp = fopen(filename.c_str(), "w")) {
+          XO::create_to_file(fp, XO_STYLE_HTML, XOF_PRETTY | XOF_FLUSH);
+        }
+        else {
+          errs() << "Error creating JSON report file: " << strerror(errno) << "\n";
+        }
         break;
       }
       case JSON: {
         SDEBUG("soaap", 3, dbgs() << "JSON selected\n");
-        Report::v()->addRenderer(new JSONRenderer);
+        string filename = CmdLineOpts::ReportFilePrefix + ".json";
+        if (FILE* fp = fopen(filename.c_str(), "w")) {
+          XO::create_to_file(fp, XO_STYLE_JSON, XOF_PRETTY | XOF_FLUSH);
+        }
+        else {
+          errs() << "Error creating JSON report file: " << strerror(errno) << "\n";
+        }
+        break;
+      }
+      case XML: {
+        SDEBUG("soaap", 3, dbgs() << "XML selected\n");
+        string filename = CmdLineOpts::ReportFilePrefix + ".xml";
+        if (FILE* fp = fopen(filename.c_str(), "w")) {
+          XO::create_to_file(fp, XO_STYLE_XML, XOF_PRETTY | XOF_FLUSH);
+        }
+        else {
+          errs() << "Error creating XML report file: " << strerror(errno) << "\n";
+        }
         break;
       }
       default: { }
@@ -249,10 +284,7 @@ void Soaap::buildRPCGraph(Module& M) {
 
 char Soaap::ID = 0;
 INITIALIZE_PASS(Soaap, "soaap", "Soaap Pass", false, false);
-//static RegisterPass<Soaap> X("soaap", "Soaap Pass", false, false);
 
 static void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
   PM.add(new Soaap);
 }
-
-//RegisterStandardPasses S(PassManagerBuilder::EP_OptimizerLast, addPasses);

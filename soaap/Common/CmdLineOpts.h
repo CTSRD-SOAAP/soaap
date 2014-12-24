@@ -13,7 +13,7 @@ namespace soaap {
     None, Annotated, Capsicum, Seccomp
   };
   enum ReportOutputFormat {
-    Console, JSON
+    Text, HTML, JSON, XML
   };
   class CmdLineOpts {
     public:

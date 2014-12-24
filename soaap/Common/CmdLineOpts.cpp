@@ -97,8 +97,10 @@ static cl::list<ReportOutputFormat, list<ReportOutputFormat> > ClReportOutputFor
        cl::desc("Comma-separated list of report-output formats"),
        cl::value_desc("list of report-output formats"),
        cl::values(
-         clEnumValN(Console, "console", "Console"),
+         clEnumValN(Text, "text", "Text (on stdout)"),
          clEnumValN(JSON, "json", "JSON"),
+         clEnumValN(XML, "xml", "XML"),
+         clEnumValN(HTML, "html", "HTML"),
        clEnumValEnd),
        cl::CommaSeparated,
        cl::location(CmdLineOpts::ReportOutputFormats));
