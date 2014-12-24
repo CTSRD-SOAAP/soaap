@@ -179,6 +179,7 @@ void Soaap::processCmdLineArgs(Module& M) {
       case Text: {
         SDEBUG("soaap", 3, dbgs() << "Text selected\n");
         XO::create(XO_STYLE_TEXT, XOF_FLUSH);
+        Report::v()->addRenderer(new ConsoleRenderer);
         break;
       }
       case HTML: {
@@ -201,6 +202,7 @@ void Soaap::processCmdLineArgs(Module& M) {
         else {
           errs() << "Error creating JSON report file: " << strerror(errno) << "\n";
         }
+        Report::v()->addRenderer(new JSONRenderer);
         break;
       }
       case XML: {
