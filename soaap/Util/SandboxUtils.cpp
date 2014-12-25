@@ -40,6 +40,18 @@ string SandboxUtils::stringifySandboxNames(int sandboxNames) {
   return sandboxNamesStr;
 }
 
+SandboxVector SandboxUtils::convertNamesToVector(int sandboxNames, SandboxVector& sandboxes) {
+  SandboxVector vec;
+  int currIdx = 0;
+  for (currIdx=0; currIdx<=31; currIdx++) {
+    if (sandboxNames & (1 << currIdx)) {
+      string sandboxName = bitIdxToSandboxName[currIdx];
+      vec.push_back(getSandboxWithName(sandboxName, sandboxes));
+    }
+  }
+  return vec;
+}
+
 string SandboxUtils::stringifySandboxVector(SandboxVector& sandboxes) {
   string sandboxNamesStr = "[";
   bool first = true;

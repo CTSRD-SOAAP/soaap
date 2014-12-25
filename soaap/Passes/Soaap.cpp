@@ -52,6 +52,8 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Processing command-line options\n"; 
   processCmdLineArgs(M);
 
+  XO::open_container("soaap");
+
   llvm::CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
 
@@ -124,6 +126,9 @@ bool Soaap::runOnModule(Module& M) {
     buildRPCGraph(M);
   }
 
+  XO::close_container("soaap");
+  XO::finish();
+
   return false;
 }
 
@@ -186,6 +191,7 @@ void Soaap::processCmdLineArgs(Module& M) {
       case JSON: {
         SDEBUG("soaap", 3, dbgs() << "JSON selected\n");
         string filename = CmdLineOpts::ReportFilePrefix + ".json";
+        SDEBUG("soaap", 3, dbgs() << "Opening file \"" << filename << "\"\n");
         if (FILE* fp = fopen(filename.c_str(), "w")) {
           XO::create_to_file(fp, XO_STYLE_JSON, XOF_PRETTY | XOF_FLUSH);
         }
@@ -197,6 +203,7 @@ void Soaap::processCmdLineArgs(Module& M) {
       case XML: {
         SDEBUG("soaap", 3, dbgs() << "XML selected\n");
         string filename = CmdLineOpts::ReportFilePrefix + ".xml";
+        SDEBUG("soaap", 3, dbgs() << "Opening file \"" << filename << "\"\n");
         if (FILE* fp = fopen(filename.c_str(), "w")) {
           XO::create_to_file(fp, XO_STYLE_XML, XOF_PRETTY | XOF_FLUSH);
         }

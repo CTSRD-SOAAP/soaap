@@ -19,7 +19,7 @@ namespace soaap {
 
     private:
       FunctionSet privilegedMethods;
-      string findGlobalDeclaration(Module& M, GlobalVariable* G);
+      pair<string,int> findGlobalDeclaration(Module& M, GlobalVariable* G);
   };
 
 }
