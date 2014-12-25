@@ -14,10 +14,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
-extern "C" {
-  #include <libxo/xo.h>
-}
-
 #include <sstream>
 
 using namespace soaap;
