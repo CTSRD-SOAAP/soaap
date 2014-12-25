@@ -1,4 +1,5 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
+#include "Common/XO.h"
 #include "Util/ContextUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
@@ -72,13 +73,11 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   }
   */
 
+  XO::open_list("private_access");
   // check sandboxes
-  FunctionIntMap sandboxEntryPointToName;
   for (Sandbox* S : sandboxes) {
     FunctionVector sandboxedFuncs = S->getFunctions();
     int name = 1 << S->getNameIdx();
-    Function* entryPoint = S->getEntryPoint();
-    sandboxEntryPointToName[entryPoint] = name;
     for (Function* F : sandboxedFuncs) {
       SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_1 << "Function: " << F->getName() << "\n");
       for (BasicBlock& BB : F->getBasicBlockList()) {
@@ -90,18 +89,43 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value: "; v->dump(););
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
             if (!(state[S][v] == 0 || (state[S][v] & name) == state[S][v])) {
-              outs() << " *** Sandboxed method \"" << F->getName() << "\" read data value belonging to sandboxes: " << SandboxUtils::stringifySandboxNames(state[S][v]) << " but it executes in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << "\n";
+              XO::open_instance("private_access");
+              XO::emit("*** Sandboxed method \"{:function/%s}\" read data "
+                       "value belonging to sandboxes: {d:sandboxes_private/%s} "
+                       "but it executes in sandboxes: {d:sandboxes_access/%s}\n",
+                       F->getName().str().c_str(),
+                       SandboxUtils::stringifySandboxNames(state[S][v]).c_str(),
+                       SandboxUtils::stringifySandboxNames(name).c_str());
+              XO::open_list("sandbox_private");
+              for (Sandbox* S : SandboxUtils::convertNamesToVector(state[S][v], sandboxes)) {
+                XO::open_instance("sandbox_private");
+                XO::emit("{e:name/%s}", S->getName().c_str());
+                XO::close_instance("sandbox_private");
+              }
+              XO::close_list("sandbox_private");
+              XO::open_list("sandbox_access");
+              for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                XO::open_instance("sandbox_access");
+                XO::emit("{e:name/%s}", S->getName().c_str());
+                XO::close_instance("sandbox_access");
+              }
+              XO::close_list("sandbox_access");
               if (MDNode *N = I.getMetadata("dbg")) {
                 DILocation loc(N);
-                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                XO::emit(
+                  " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                  loc.getLineNumber(),
+                  loc.getFilename().str().c_str());
               }
-              outs() << "\n";
+              XO::emit("\n");
+              XO::close_instance("private_access");
             }
           }
         }
       }
     }
   }
+  XO::close_list("private_access");
 
   // Validate that data cannot leak out of a sandbox.
   // Currently, SOAAP looks for escapement via:
@@ -113,6 +137,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   //   5) Assignments to environment variables.
   //   6) Arguments to system calls.
   //   7) Return from the sandbox entrypoint.
+  XO::open_list("private_leak");
   for (Sandbox* S : sandboxes) {
     FunctionVector sandboxedFuncs = S->getFunctions();
     FunctionVector callgates = S->getCallgates();
@@ -131,12 +156,31 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               Value* rhs = store->getValueOperand();
               // if the rhs is private to the current sandbox, then flag an error
               if (state[S][rhs] & name) {
-                outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through global variable " << gv->getName() << "\n";
+                XO::open_instance("private_leak");
+                XO::emit("{e:type/%s}", "global_var");
+                XO::emit(" *** Sandboxed method \"{:function/%s}\" executing "
+                         "in sandboxes: {d:sandbox_access/%s} may leak "
+                         "private data through global variable "
+                         "{:var_name/%s}\n",
+                F->getName().str().c_str(),
+                SandboxUtils::stringifySandboxNames(name).c_str(),
+                gv->getName().str().c_str());
+                XO::open_list("sandbox_access");
+                for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                  XO::open_instance("sandbox_access");
+                  XO::emit("{e:name/%s}", S->getName().c_str());
+                  XO::close_instance("sandbox_access");
+                }
+                XO::close_list("sandbox_access");
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                  XO::emit(
+                    " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                    loc.getLineNumber(),
+                    loc.getFilename().str().c_str());
                 }
-                outs() << "\n";
+                XO::emit("\n");
+                XO::close_instance("private_leak");
               }
             }
           }
@@ -146,20 +190,36 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               if (Callee->isIntrinsic()) continue;
               if (Callee->getName() == "setenv") {
                 Value* arg = call->getArgOperand(1);
-              
                 if (state[S][arg] & name) {
-                  outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " << SandboxUtils::stringifySandboxNames(name) << " may leak private data through env var ";
+                  XO::open_instance("private_leak");
+                  XO::emit("{e:type/%s}", "env_var");
+                  XO::emit(" *** Sandboxed method \"{:function}\" executing "
+                           "in sandboxes: {d:sandboxes/%s} may leak private "
+                           "data through env var ",
+                           F->getName().str().c_str(),
+                           SandboxUtils::stringifySandboxNames(name).c_str());
                   if (GlobalVariable* envVarGlobal = dyn_cast<GlobalVariable>(call->getArgOperand(0)->stripPointerCasts())) {
                     ConstantDataArray* envVarArray = dyn_cast<ConstantDataArray>(envVarGlobal->getInitializer());
                     string envVarName = envVarArray->getAsString();
-                    outs() << "\"" << envVarName.c_str() << "\"";
+                    XO::emit("\"{:env_var/%s}\"", envVarName.c_str());
                   }
-                  outs() << "\n";
+                  XO::emit("\n");
+                  XO::open_list("sandbox_access");
+                  for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                    XO::open_instance("sandbox_access");
+                    XO::emit("{e:name/%s}", S->getName().c_str());
+                    XO::close_instance("sandbox_access");
+                  }
+                  XO::close_list("sandbox_access");
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
-                    outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                    XO::emit(
+                      " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                      loc.getLineNumber(),
+                      loc.getFilename().str().c_str());
                   }
-                  outs() << "\n";
+                  XO::emit("\n");
+                  XO::close_instance("private_leak");
                 }
               }
               else if (Callee->getBasicBlockList().empty()) {
@@ -168,12 +228,30 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
                   if (state[S][arg] & name) {
-                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through the extern function " << Callee->getName() << "\n";
+                    XO::open_instance("private_leak");
+                    XO::emit("{e:type/%s}", "extern");
+                    XO::emit(" *** Sandboxed method \"{:function}\" executing "
+                             "in sandboxes: {d:sandboxes/%s} may leak private "
+                             "data through the extern function \"{:callee/%s}\"\n",
+                             F->getName().str().c_str(),
+                             SandboxUtils::stringifySandboxNames(name).c_str(),
+                             Callee->getName().str().c_str());
+                    XO::open_list("sandbox_access");
+                    for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                      XO::open_instance("sandbox_access");
+                      XO::emit("{e:name/%s}", S->getName().c_str());
+                      XO::close_instance("sandbox_access");
+                    }
+                    XO::close_list("sandbox_access");
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
-                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                      XO::emit(
+                        " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                        loc.getLineNumber(),
+                        loc.getFilename().str().c_str());
                     }
-                    outs() << "\n";
+                    XO::emit("\n");
+                    XO::close_instance("private_leak");
                   }
                 }
               }
@@ -182,23 +260,63 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                   Value* arg = dyn_cast<Value>(AI->get());
                   if (state[S][arg] & name) {
-                    outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through callgate " << Callee->getName() << "\n";
+                    XO::open_instance("private_leak");
+                    XO::emit("{e:type/%s}", "callgate");
+                    XO::emit(" *** Sandboxed method \"{:function}\" executing "
+                             "in sandboxes: {d:sandboxes/%s} may leak private "
+                             "data through callgate \"{:callgate/%s}\"\n",
+                             F->getName().str().c_str(),
+                             SandboxUtils::stringifySandboxNames(name).c_str(),
+                             Callee->getName().str().c_str());
+                    XO::open_list("sandbox_access");
+                    for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                      XO::open_instance("sandbox_access");
+                      XO::emit("{e:name/%s}", S->getName().c_str());
+                      XO::close_instance("sandbox_access");
+                    }
+                    XO::close_list("sandbox_access");
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
-                      outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                      XO::emit(
+                        " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                        loc.getLineNumber(),
+                        loc.getFilename().str().c_str());
                     }
-                    outs() << "\n";
+                    XO::emit("\n");
+                    XO::close_instance("private_leak");
                   }
                 }
-                outs() << "\n";
+                XO::emit("\n");
               }
               else if (SandboxUtils::isSandboxEntryPoint(M, Callee)) { // possible cross-sandbox call
-                outs() << " *** Sandboxed method \"" << F->getName() << "\" executing in sandboxes: " <<      SandboxUtils::stringifySandboxNames(name) << " may leak private data through a cross-sandbox call into: " << SandboxUtils::stringifySandboxNames(sandboxEntryPointToName[Callee]) << "\n";
-                if (MDNode *N = I.getMetadata("dbg")) {
-                  DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                Sandbox* S2 = SandboxUtils::getSandboxForEntryPoint(Callee, sandboxes);
+                if (S != S2) {
+                  XO::open_instance("private_leak");
+                  XO::emit("{e:type/%s}", "cross_sandbox");
+                  XO::emit(" *** Sandboxed method \"{:function}\" executing "
+                           "in sandboxes: {d:sandboxes/%s} may leak private "
+                           "data through a cross-sandbox call into "
+                           "[{:callee_sandbox/%s}]\n",
+                           F->getName().str().c_str(),
+                           SandboxUtils::stringifySandboxNames(name).c_str(),
+                           S2->getName().c_str());
+                  XO::open_list("sandbox_access");
+                  for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                    XO::open_instance("sandbox_access");
+                    XO::emit("{e:name/%s}", S->getName().c_str());
+                    XO::close_instance("sandbox_access");
+                  }
+                  XO::close_list("sandbox_access");
+                  if (MDNode *N = I.getMetadata("dbg")) {
+                    DILocation loc(N);
+                    XO::emit(
+                      " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                      loc.getLineNumber(),
+                      loc.getFilename().str().c_str());
+                  }
+                  XO::emit("\n");
+                  XO::close_instance("private_leak");
                 }
-                outs() << "\n";
               }
             }
           }
@@ -207,7 +325,14 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             if (F == S->getEntryPoint()) {
               if (Value* retVal = ret->getReturnValue()) {
                 if (state[S][retVal] & name) {
-                  outs() << " *** Sandbox \"" << S->getName() << "\" may leak private data when returning a value from entrypoint \"" << F->getName() << "\"\n"; 
+                  XO::open_instance("private_leak");
+                  XO::emit("{e:type/%s}", "return_from_entrypoint");
+                  XO::emit(" *** Sandbox \"{:sandbox/%s}\" "
+                           "may leak private data when returning a value "
+                           "from entrypoint \"{:entrypoint/%s}\"\n",
+                           S->getName().c_str(),
+                           F->getName().str().c_str());
+                  XO::close_instance("private_leak");
                 }
               }
             }
@@ -216,6 +341,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
       }
     }
   }
+  XO::close_list("private_leak");
 }
 
 bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
