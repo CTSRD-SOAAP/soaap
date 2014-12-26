@@ -22,7 +22,7 @@ void dostuff1() {
   printf("leaking sandbox-private password to another sandbox\n");
 
   // CHECK: "dostuff1" executing in sandboxes: [get]
-  // CHECK: may leak private data through a cross-sandbox call into: [auth]
+  // CHECK: may leak private data through a cross-sandbox call into [auth]
   dostuff2(key);
 }
 

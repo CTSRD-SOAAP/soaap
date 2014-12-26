@@ -22,7 +22,7 @@ void dostuff() {
   int key __soaap_private("box");
   /*
    * CHECK: *** Sandboxed method "dostuff" executing in sandboxes: [box]
-   * CHECK:     may leak private data through callgate privfunc
+   * CHECK:     may leak private data through callgate "privfunc"
    */
   privfunc(key);
 }

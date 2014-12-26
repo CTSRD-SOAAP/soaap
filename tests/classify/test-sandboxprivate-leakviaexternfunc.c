@@ -22,7 +22,7 @@ void dostuff() {
   printf("leaking sandbox-private password via printf\n");
 
   // CHECK: "dostuff" executing in sandboxes: [box]
-  // CHECK: may leak private data through the extern function printf
+  // CHECK: may leak private data through the extern function "printf"
   printf("password is: %s\n", password);
 }
 

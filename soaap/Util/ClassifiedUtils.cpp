@@ -26,6 +26,18 @@ string ClassifiedUtils::stringifyClassNames(int classNames) {
   return classNamesStr;
 }
 
+StringVector ClassifiedUtils::convertNamesToVector(int classNames) {
+  StringVector vec;
+  int currIdx = 0;
+  for (currIdx=0; currIdx<=31; currIdx++) {
+    if (classNames & (1 << currIdx)) {
+      string className = bitIdxToClassName[currIdx];
+      vec.push_back(className);
+    }
+  }
+  return vec;
+}
+
 void ClassifiedUtils::assignBitIdxToClassName(string className) {
   if (classNameToBitIdx.find(className) == classNameToBitIdx.end()) {
     dbgs() << "    Assigning index " << nextClassNameBitIdx << " to class name \"" << className << "\"\n";

@@ -4,6 +4,7 @@
 #include "Common/CmdLineOpts.h"
 #include "Common/Debug.h"
 #include "Common/Sandbox.h"
+#include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
@@ -48,6 +49,7 @@ void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, Sa
 
 // check all system calls made within sandboxes
 void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
+  XO::open_list("syscall_warning");
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
@@ -77,19 +79,27 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
 
           // Show warning if system call is not allowed
           if (!sysCallAllowed) {
-            outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
-            outs() << " but it is not allowed to,\n";
-            outs() << " *** based on the current sandboxing restrictions.\n";
+            XO::open_instance("syscall_warning");
+            XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
+                     "\"{:syscall/%s}\" but it is not allowed to,\n"
+                     " *** based on the current sandboxing restrictions.\n",
+                     S->getName().c_str(),
+                     funcName.c_str());
             if (MDNode *N = C->getMetadata("dbg")) {
               DILocation loc(N);
-              outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+              XO::emit(
+                " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                loc.getLineNumber(),
+                loc.getFilename().str().c_str());
             }
-            outs() << "\n";
+            XO::emit("\n");
+            XO::close_instance("syscall_warning");
           }
         }
       }
     }
   }
+  XO::close_list("syscall_warning");
 }
 
 bool SysCallsAnalysis::allowedToPerformNamedSystemCallAtSandboxedPoint(Instruction* I, string sysCall) {

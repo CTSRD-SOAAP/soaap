@@ -31,7 +31,7 @@ void domorestuff() {
   printf("secret is: %d\n", z);
   /*
    * CHECK-NOT: *** Sandboxed method "domorestuff" executing in sandboxes: [box2]
-   * CHECK-NOT:     may leak private data through the extern function printf
+   * CHECK-NOT:     may leak private data through the extern function "printf"
    */
 }
 
@@ -41,6 +41,6 @@ void dostuff() {
   printf("secret y is: %d\n", y);
   /*
    * CHECK: *** Sandboxed method "dostuff" executing in sandboxes: [network]
-   * CHECK:     may leak private data through the extern function printf
+   * CHECK:     may leak private data through the extern function "printf"
    */
 }
