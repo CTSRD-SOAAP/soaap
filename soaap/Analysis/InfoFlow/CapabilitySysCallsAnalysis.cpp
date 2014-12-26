@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
+#include "Common/XO.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/TypeUtils.h"
@@ -149,6 +150,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
   //
   // TODO: check that error messages appropriate for both types of annotations
   //
+  XO::open_list("cap_rights_warning");
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
@@ -190,19 +192,28 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
             }
 
             if (noRights) {
-              outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
-              outs() << " but is not allowed to for the given fd arg.\n";
+              XO::open_instance("cap_rights_warning");
+              XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
+                       "\"{:syscall/%s}\" but is not allowed to for the "
+                       "given fd arg.\n",
+              S->getName().c_str(),
+              funcName.c_str());
               if (MDNode *N = C->getMetadata("dbg")) {
                 DILocation loc(N);
-                outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                XO::emit(
+                  " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                  loc.getLineNumber(),
+                  loc.getFilename().str().c_str());
               }
-              outs() << "\n";
+              XO::emit("\n");
+              XO::close_instance("cap_rights_warning");
             }
           }
         }
       }
     }
   }
+  XO::close_list("cap_rights_warning");
 }
 
 string CapabilitySysCallsAnalysis::stringifyFact(BitVector vector) {

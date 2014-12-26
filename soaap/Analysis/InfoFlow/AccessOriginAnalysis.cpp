@@ -4,6 +4,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
 #include "Common/Debug.h"
+#include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
@@ -29,26 +30,32 @@ void AccessOriginAnalysis::initialise(ValueContextPairList& worklist, Module& M,
 
 void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // check that no untrusted function pointers are called in privileged methods
+  XO::open_list("access_origin_warning");
   for (Function* F : privilegedMethods) {
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (C->getCalledFunction() == NULL) {
           if (state[ContextUtils::PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
-            outs() << " *** Untrusted function pointer call in " << F->getName() << "\n";
-            if (MDNode *N = C->getMetadata("dbg")) {  // Here I is an LLVM instruction
-              DILocation loc(N);                      // DILocation is in DebugInfo.h
-              unsigned line = loc.getLineNumber();
-              StringRef file = loc.getFilename();
-              StringRef dir = loc.getDirectory();
-              outs() << " +++ Line " << line << " of file " << file << "\n";
+            XO::open_instance("access_origin_warning");
+            XO::emit(" *** Untrusted function pointer call in "
+                     "\"{:function/%s}\"\n",
+                     F->getName().str().c_str());
+            if (MDNode *N = C->getMetadata("dbg")) {
+              DILocation loc(N);
+              XO::emit(
+                " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                loc.getLineNumber(),
+                loc.getFilename().str().c_str());
             }
-            outs() << "\n";
-            ppPrivilegedPathToInstruction(C, M);
+            XO::emit("\n");
+            //ppPrivilegedPathToInstruction(C, M);
+            XO::close_instance("access_origin_warning");
           }
         }
       }
     }
   }
+  XO::close_list("access_origin_warning");
 }
 
 
