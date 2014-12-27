@@ -33,6 +33,7 @@ namespace soaap {
       static bool DumpRPCGraph;
       static SandboxPlatformName SandboxPlatform;
       static bool DumpDOTCallGraph;
+      static bool PrintCallGraph;
       static list<ReportOutputFormat> ReportOutputFormats;
       static string ReportFilePrefix;
   };

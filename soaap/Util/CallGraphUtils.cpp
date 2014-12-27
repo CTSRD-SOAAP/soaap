@@ -1,6 +1,7 @@
 #include "Analysis/InfoFlow/FPAnnotatedTargetsAnalysis.h"
 #include "Analysis/InfoFlow/FPInferredTargetsAnalysis.h"
 #include "Common/CmdLineOpts.h"
+#include "Common/XO.h"
 #include "Passes/Soaap.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
@@ -185,6 +186,39 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
   // and now turn on caching so future calls to getCallees and getCallers read from the caches.
   populateCallCalleeCaches(M);
   caching = true;
+
+  if (CmdLineOpts::PrintCallGraph) {
+    XO::emit("Outputting Callgraph...\n");
+    map<Function*,map<Function*,int> > funcToCalleeCallCounts;
+    for (pair<const CallInst*,FunctionSet> p : callToCallees) {
+      const CallInst* C = p.first;
+      Function* F = (Function*)C->getParent()->getParent();
+      for (Function* G : p.second) {
+        funcToCalleeCallCounts[F][G]++;
+      }
+    }
+    XO::open_list("callgraph_record");
+    for (pair<Function*,map<Function*,int> > p : funcToCalleeCallCounts) {
+      XO::open_instance("callgraph_record");
+      Function* caller = p.first;
+      XO::emit("{:caller/%s}\n", caller->getName().str().c_str());
+      XO::open_list("callee_count");
+      for (pair<Function*,int> p2 : p.second) {
+        XO::open_instance("callee_count");
+        Function* callee = p2.first;
+        int callCount = p2.second;
+        XO::emit("  -> {:callee/%s}, {:call_count/%d}\n",
+                 callee->getName().str().c_str(),
+                 callCount);
+        XO::close_instance("callee_count");
+      }
+      XO::close_list("callee_count");
+      XO::emit("\n");
+      XO::close_instance("callgraph_record");
+    }
+    XO::close_list("callgrap_record");
+  }
+
 }
 
 FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {

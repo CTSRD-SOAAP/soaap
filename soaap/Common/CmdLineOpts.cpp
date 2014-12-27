@@ -92,6 +92,11 @@ static cl::opt<bool, true> ClDumpDOTCallGraph("soaap-dump-dot-callgraph",
        cl::desc("Dump DOT CallGraph"),
        cl::location(CmdLineOpts::DumpDOTCallGraph));
 
+bool CmdLineOpts::PrintCallGraph;
+static cl::opt<bool, true> ClPrintCallGraph("soaap-print-callgraph",
+       cl::desc("Print CallGraph"),
+       cl::location(CmdLineOpts::PrintCallGraph));
+
 list<ReportOutputFormat> CmdLineOpts::ReportOutputFormats;
 static cl::list<ReportOutputFormat, list<ReportOutputFormat> > ClReportOutputFormats("soaap-report-output-formats",
        cl::desc("Comma-separated list of report-output formats"),
