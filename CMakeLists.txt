@@ -7,9 +7,8 @@ set(LLVM_MAIN_INCLUDE_DIR "" CACHE PATH "Path to llvm/include")
 set(LLVM_BINARY_DIR "" CACHE PATH "Path to LLVM build tree")
 set(LLVM_MAIN_SRC_DIR "" CACHE PATH "Path to LLVM source tree")
 
-find_package(LLVM REQUIRED NO_CMAKE_PATH)
-list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
+find_package(LLVM REQUIRED NO_CMAKE_PATH) # config mode search
+message(STATUS "Found LLVM: ${LLVM_DIR}")
 
 foreach(v
     TOOLS_BINARY_DIR
@@ -26,8 +25,16 @@ endforeach()
 include(AddLLVM)
 add_definitions(${LLVM_DEFINITIONS})
 
+set(CMAKE_C_COMPILER ${LLVM_BINARY_DIR}/bin/clang CACHE FILE "C compiler" FORCE)
+set(CMAKE_CXX_COMPILER ${LLVM_BINARY_DIR}/bin/clang++ CACHE FILE "C++ compiler" FORCE)
+message(STATUS "Setting C compiler to ${CMAKE_C_COMPILER}")
+message(STATUS "Setting C++ compiler to ${CMAKE_CXX_COMPILER}")
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
 
 # Default to libc++ if installed
 find_package(LibCXX)
