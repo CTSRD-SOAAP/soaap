@@ -22,6 +22,9 @@ foreach(v
   endif()
 endforeach()
 
+list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
+
 include(AddLLVM)
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -32,9 +35,6 @@ message(STATUS "Setting C++ compiler to ${CMAKE_CXX_COMPILER}")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
-
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
 
 # Default to libc++ if installed
 find_package(LibCXX)
