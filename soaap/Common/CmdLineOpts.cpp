@@ -113,4 +113,5 @@ static cl::list<ReportOutputFormat, list<ReportOutputFormat> > ClReportOutputFor
 string CmdLineOpts::ReportFilePrefix;
 static cl::opt<string, true> ClReportFilePrefix("soaap-report-file-prefix",
        cl::desc("Prefix for report-output filenames"),
-       cl::location(CmdLineOpts::ReportFilePrefix));
+       cl::location(CmdLineOpts::ReportFilePrefix),
+       cl::init("soaap-output"));
