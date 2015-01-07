@@ -435,19 +435,20 @@ namespace soaap {
     FunctionSet callees = CallGraphUtils::getCallees(CI, M);
     SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "callees: " << CallGraphUtils::stringifyFunctionSet(callees) << "\n");
 
-    for (int argIdx=0; argIdx<CI->getNumArgOperands(); argIdx++) {
-      if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
-        const Value* V2 = NULL;
-        for (Function* callee : callees) {
-          if (callee->isDeclaration()) continue;
-          Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
-          SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n"
-                    << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
-          Function::ArgumentListType& params = callee->getArgumentList();
+    for (Function* callee : callees) {
+      if (callee->isDeclaration()) continue;
+      Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
+      SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n"
+                << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
+      Function::ArgumentListType& params = callee->getArgumentList();
+      for (int argIdx=0; argIdx<CI->getNumArgOperands(); argIdx++) {
+        if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
+          const Value* V2 = NULL;
+          bool isVarArg = argIdx >= callee->arg_size();
           
           // check if value being propagated is a var arg, and propagate
           // accordingly
-          if (argIdx >= callee->getFunctionType()->getNumParams()) { // var arg
+          if (isVarArg) { // var arg
             BasicBlock& EntryBB = callee->getEntryBlock();
             
             // find va_list var, it will have type [1 x %struct.__va_list_tag]*
@@ -483,21 +484,43 @@ namespace soaap {
             if (mustAnalysis) {
               FactType meet;
               bool first = true;
-              // To be sound, we need to take the meet of all values passed in for each
-              // parameter that we are propagating to (i.e. from all other call sites and
-              // not only CI). Otherwise, must analyses will lead to incorrect results.
+              // To be sound, we need to take the meet of all values passed in
+              // for each parameter that we are propagating to (i.e. from all
+              // other call sites and not only CI). Otherwise, must analyses
+              // will lead to incorrect results.
+              // Note, callers will also include CI.
+              //
+              // We conflate the dataflow information of all varargs for a
+              // callee. Thus, in the case that argIdx is a vararg and this is
+              // a must analysis, we need to take the meet of all vararg args
+              // for all callers.
               CallInstSet callers = CallGraphUtils::getCallers(callee, M);
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_6 << "Taking meet of all arg idx " << argIdx << " values from all callers\n");
               for (CallInst* caller : callers) { // CI will be in callers
                 if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
                   SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_6 << "Caller: " << *caller << " (enclosing func: " << caller->getParent()->getParent()->getName() << ")\n");
-                  Value* V3 = caller->getArgOperand(argIdx);
-                  if (first) {
-                    meet = state[C][V3];
-                    first = false;
+                  if (isVarArg) {
+                    // take meet of all vararg args
+                    for (int varArgIdx=callee->arg_size(); varArgIdx<caller->getNumArgOperands(); varArgIdx++) {
+                      Value* V3 = caller->getArgOperand(varArgIdx);
+                      if (first) {
+                        meet = state[C][V3];
+                        first = false;
+                      }
+                      else {
+                        performMeet(state[C][V3], meet);
+                      }
+                    }
                   }
                   else {
-                    performMeet(state[C][V3], meet);
+                    Value* V3 = caller->getArgOperand(argIdx);
+                    if (first) {
+                      meet = state[C][V3];
+                      first = false;
+                    }
+                    else {
+                      performMeet(state[C][V3], meet);
+                    }
                   }
                 }
               }
@@ -511,6 +534,9 @@ namespace soaap {
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "Adding (V2,C2) to worklist\n"
                         << "state[C2][V2]: " << stringifyFact(state[C2][V2]) << "\n");
               addToWorklist(V2, C2, worklist);
+            }
+            if (isVarArg && mustAnalysis) {
+              break; // we have already processed all remaining arguments
             }
           }
         }
