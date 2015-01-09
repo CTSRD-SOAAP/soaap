@@ -524,7 +524,7 @@ namespace soaap {
                   }
                 }
               }
-              state[C2][V2] = meet;
+              //state[C2][V2] = meet;
               change = propagateToValue(meet, V2, C2, M);
             }
             else {
