@@ -451,15 +451,26 @@ void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privil
     if (!(privileged && SandboxUtils::isSandboxEntryPoint(M, N->getFunction()))
         && !(!privileged && SandboxUtils::isSandboxEntryPoint(M, N->getFunction()) && N->getFunction() != S->getEntryPoint())){
       for (CallGraphNode::iterator I=N->begin(), E=N->end(); I!=E; I++) {
-        CallGraphNode* SuccN = I->second;
-        if (Function* SuccFunc = SuccN->getFunction()) {
-          SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
-          if (distanceFromMain[SuccN] > distanceFromMain[N]+1) {
-            distanceFromMain[SuccN] = distanceFromMain[N]+1;
-            pred[SuccN] = N;
-            SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Call inst: " << *(I->first))
-            call[SuccN] = dyn_cast<CallInst>(I->first);
-            worklist.enqueue(SuccN);
+        // skip non-main root node
+        if (I->first != NULL) {
+          CallGraphNode* SuccN = I->second;
+          if (Function* SuccFunc = SuccN->getFunction()) {
+            SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
+            if (distanceFromMain[SuccN] > distanceFromMain[N]+1) {
+              distanceFromMain[SuccN] = distanceFromMain[N]+1;
+              pred[SuccN] = N;
+              SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Call inst: " << *(I->first))
+              if (I->first == NULL) {
+                dbgs() << "I->first (call inst) is NULL!\n";
+                dbgs() << "Skipping\n";
+                continue;
+                //N->dump();
+                //dbgs() << "Function: " << N->getFunction()->getName() << "\n";
+                //dbgs() << "Succ func: " << SuccFunc->getName() << "\n";
+              }
+              call[SuccN] = dyn_cast<CallInst>(I->first);
+              worklist.enqueue(SuccN);
+            }
           }
         }
       }
@@ -500,15 +511,76 @@ InstTrace CallGraphUtils::findPrivilegedPathToFunction(Function* Target, Module&
 }
 
 InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox* S, Module& M) {
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding privileged path to function \"" << Target->getName() << "\" (from main)\n");
-  Function* F = S->getEntryPoint();
-  if (funcToShortestCallPaths[F].empty()) {
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << "populating short call paths (from " << F->getName() << ") cache\n");
-    calculateShortestCallPathsFromFunc(F, false, S, M);
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path to function \"" << Target->getName() << "\" (from main)\n");
+  InstTrace privStack;
+  InstTrace sboxStack;
+  if (Function* F = S->getEntryPoint()) {
+    SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path for function-level sandbox\n");
+    if (funcToShortestCallPaths[F].empty()) {
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << "populating short call paths (from " << F->getName() << ") cache\n");
+      calculateShortestCallPathsFromFunc(F, false, S, M);
+    }
+    // Find path to Target (in sandbox S) from main() and via S's entrypoint
+    privStack = findPrivilegedPathToFunction(F,M);
+    sboxStack = funcToShortestCallPaths[F][Target];
   }
-  // Find path to Target (in sandbox S) from main() and via S's entrypoint
-  InstTrace privStack = findPrivilegedPathToFunction(S->getEntryPoint(), M);
-  InstTrace sboxStack = funcToShortestCallPaths[F][Target];
+  else {
+    SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path for sandboxed region\n");
+    Function* enclosingFunc = S->getEnclosingFunc();
+    privStack = findPrivilegedPathToFunction(enclosingFunc, M);
+    CallInstVector calls = S->getTopLevelCalls();
+    map<CallInst*,FunctionSet> callToPotentialSrcs;
+    // Find those call insts within the region (and immediate callees
+    // that can reach Target). In the next phase, we will find the shortest
+    // such path.
+    for (CallInst* C : calls) {
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << "Call: " << *C << "\n");
+      FunctionSet callees = getCallees(C, M);
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << "Callees: " << stringifyFunctionSet(callees) << "\n");
+      for (Function* callee : getCallees(C, M)) {
+        if (funcToShortestCallPaths[callee].empty()) {
+          SDEBUG("soaap.util.callgraph", 3, dbgs() << "populating short call paths (from " << callee->getName() << ") cache\n");
+          calculateShortestCallPathsFromFunc(callee, false, S, M);
+        }
+        if (funcToShortestCallPaths[callee].find(Target) != funcToShortestCallPaths[callee].end()) {
+          callToPotentialSrcs[C].insert(callee);
+        }
+      }
+    }
+
+    SDEBUG("soaap.util.callgraph", 3, dbgs() << "Finding shortest path from sandboxed region to \"" << Target->getName() << "\""); 
+    // Next, find the shortest path from a call inst in the sandboxed region
+    // to Target
+    tuple<CallInst*,Function*,int> minCallSrc(NULL,NULL,INT_MAX);
+    for (CallInst* C : calls) {
+      for (Function* src : callToPotentialSrcs[C]) {
+        int stackSize = funcToShortestCallPaths[src][Target].size();
+        if (stackSize < get<2>(minCallSrc)) {
+          minCallSrc = make_tuple(C, src, stackSize);
+        }
+      }
+    }
+
+    if (get<2>(minCallSrc) == INT_MAX) {
+      dbgs() << "ERROR: minimum call stack size is still INT_MAX!\n";
+    }
+    else {
+      CallInst* call = get<0>(minCallSrc);
+      Function* src = get<1>(minCallSrc);
+      int size = get<2>(minCallSrc);
+      SDEBUG("soaap.util.callgraph", 3, 
+             dbgs() << "Shortest path found from sandboxed region via "
+                    << "\"" << src->getName() << "\" to "
+                    << "\"" << Target->getName() << "\", size: "
+                    << size << "\n");
+      // construct sbox stack
+      for (Instruction* I : funcToShortestCallPaths[src][Target]) {
+        sboxStack.push_back(I);
+      }
+      sboxStack.push_back(call);
+    }
+  }
+
   // join the two together
   for (Instruction* I : privStack) {
     sboxStack.push_back(I);

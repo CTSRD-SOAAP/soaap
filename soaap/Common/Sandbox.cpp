@@ -61,6 +61,14 @@ Function* Sandbox::getEntryPoint() {
   return entryPoint;
 }
 
+Function* Sandbox::getEnclosingFunc() {
+  if (entryPoint == NULL) {
+    Instruction* firstI = region.front();
+    return firstI->getParent()->getParent();
+  }
+  return NULL;
+} 
+
 bool Sandbox::isRegionWithin(Function* F) {
   if (entryPoint == NULL) {
     Instruction* firstI = region.front();
@@ -80,6 +88,10 @@ int Sandbox::getNameIdx() {
 
 FunctionVector Sandbox::getFunctions() {
   return functionsVec;
+}
+
+CallInstVector Sandbox::getTopLevelCalls() {
+  return tlCallInsts;
 }
 
 CallInstVector Sandbox::getCalls() {
@@ -212,10 +224,19 @@ void Sandbox::findSandboxedCalls() {
     }
   }
   // if this sandbox doesn't have an entrypoint then search region instructions also
+  // At the same time also record top-level call insts
   if (entryPoint == NULL) {
     for (Instruction* I : region) {
       if (CallInst* C = dyn_cast<CallInst>(I)) {
         callInsts.push_back(C);
+        tlCallInsts.push_back(C);
+      }
+    }
+  }
+  else {
+    for (inst_iterator I=inst_begin(entryPoint), E=inst_end(entryPoint); I!=E; I++) {
+      if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+        tlCallInsts.push_back(C);
       }
     }
   }

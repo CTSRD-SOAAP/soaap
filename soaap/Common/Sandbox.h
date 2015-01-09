@@ -17,9 +17,11 @@ namespace soaap {
       string getName();
       int getNameIdx();
       Function* getEntryPoint();
+      Function* getEnclosingFunc();
       bool isRegionWithin(Function* F);
       FunctionVector getFunctions();
       CallInstVector getCalls();
+      CallInstVector getTopLevelCalls();
       GlobalVariableIntMap getGlobalVarPerms();
       ValueFunctionSetMap getCapabilities();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
@@ -48,6 +50,7 @@ namespace soaap {
       FunctionVector callgates;
       FunctionVector functionsVec;
       DenseSet<Function*> functionsSet;
+      CallInstVector tlCallInsts;
       CallInstVector callInsts;
       CallInstVector creationPoints;
       CallInstVector sysCallLimitPoints;
