@@ -32,6 +32,7 @@ namespace soaap {
       static Function* extractFunctionFromThunk(Function* F);
       static void ppClassHierarchy(ClassHierarchy& classHierarchy);
       static void ppClassHierarchyHelper(GlobalVariable* c, ClassHierarchy& classHierarchy, int nesting);
+      static Value* getMDNodeOperandValue(MDNode* N, unsigned I);
   };
 }
 

@@ -79,7 +79,7 @@ SandboxPlatformName CmdLineOpts::SandboxPlatform;
 static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platform",
        cl::desc("Sandbox platform to model"),
        cl::values(
-         clEnumValN(None, "none", "None"),
+         clEnumValN(SandboxPlatformName::None, "none", "None"),
          clEnumValN(Annotated, "annotated", "Annotated"),
          clEnumValN(Capsicum, "capsicum", "Capsicum (default)"),
          clEnumValN(Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),

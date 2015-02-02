@@ -270,13 +270,14 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
           // be from this class or any subclass.
           if (MDNode* N = I->getMetadata("soaap_defining_vtable_var")) {
             SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_defining_vtable_var\n");
-            definingTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+            definingTypeVTableVar = cast<GlobalVariable>(getMDNodeOperandValue(N, 0));
             definingTypeTIVar = vTableToTypeInfo[definingTypeVTableVar];
             hasMetadata = true;
           }
           else if (MDNode* N = I->getMetadata("soaap_defining_vtable_name")) {
             SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_defining_vtable_name\n");
-            ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
+
+            ConstantDataArray* definingTypeVTableConstant = cast<ConstantDataArray>(getMDNodeOperandValue(N, 0));
             string definingTypeVTableConstantStr = definingTypeVTableConstant->getAsString().str();
             string definingTypeTIStr = "_ZTI" + definingTypeVTableConstantStr.substr(4);
             definingTypeTIVar = M.getGlobalVariable(definingTypeTIStr);
@@ -295,13 +296,13 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
           }
           if (MDNode* N = I->getMetadata("soaap_static_vtable_var")) {
             SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_static_vtable_var\n");
-            staticTypeVTableVar = cast<GlobalVariable>(N->getOperand(0));
+            staticTypeVTableVar = cast<GlobalVariable>(getMDNodeOperandValue(N, 0));
             staticTypeTIVar = vTableToTypeInfo[staticTypeVTableVar];
             hasMetadata = true;
           }
           else if (MDNode* N = I->getMetadata("soaap_static_vtable_name")) {
             SDEBUG("soaap.util.classhierarchy", 3, dbgs() << "soaap_static_vtable_name\n");
-            ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(N->getOperand(0));
+            ConstantDataArray* staticTypeVTableConstant = cast<ConstantDataArray>(getMDNodeOperandValue(N, 0));
             string staticTypeVTableConstantStr = staticTypeVTableConstant->getAsString().str();
             string staticTypeTIStr = "_ZTI" + staticTypeVTableConstantStr.substr(4);
             staticTypeTIVar = M.getGlobalVariable(staticTypeTIStr);
@@ -639,4 +640,10 @@ Function* ClassHierarchyUtils::extractFunctionFromThunk(Function* F) {
     }
   }
   return F;
+}
+
+Value* ClassHierarchyUtils::getMDNodeOperandValue(MDNode* N, unsigned I) {
+  Metadata* MD = N->getOperand(I);
+  ValueAsMetadata* VMD = cast<ValueAsMetadata>(MD);
+  return VMD->getValue();
 }
