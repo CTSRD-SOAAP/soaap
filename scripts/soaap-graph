@@ -25,6 +25,7 @@ annotations = collections.defaultdict(set)
 annotated_functions = set()
 status = []
 warnings = set()
+vtable_errors = 0
 
 
 
@@ -48,6 +49,8 @@ class StartState(State):
     """
 
     annotated_fn = re.compile('^\s+Found annotated function (.*)\n$')
+    vtable_error = re.compile(
+        '^definingVTableVar is not null, but staticTypeVTableVar is NULL')
     status_line = re.compile('^\* (.*)\n$')
 
     def parse(self, line):
@@ -71,6 +74,13 @@ class StartState(State):
         if m:
             (line,) = m.groups()
             status.append(line)
+            return True
+
+        m = StartState.vtable_error.match(line)
+        if m:
+            global vtable_errors
+
+            vtable_errors += 1
             return True
 
         return False
