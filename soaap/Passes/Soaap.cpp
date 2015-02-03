@@ -282,7 +282,3 @@ void Soaap::buildRPCGraph(Module& M) {
 
 char Soaap::ID = 0;
 INITIALIZE_PASS(Soaap, "soaap", "Soaap Pass", false, false);
-
-static void addPasses(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  PM.add(new Soaap);
-}
