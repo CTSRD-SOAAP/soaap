@@ -134,7 +134,7 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
 bool CapabilitySysCallsAnalysis::performMeet(BitVector fromVal, BitVector& toVal) {
   BitVector oldToVal = toVal;
   toVal &= fromVal;
-  SDEBUG("soaap.analysis.infoflow.capsyscalls", 4, dbgs() << "fromVal: " << stringifyFact(fromVal) << ", old toVal: " << stringifyFact(oldToVal) << ", new toVal: " << stringifyFact(toVal) << "\n");
+  //SDEBUG("soaap.analysis.infoflow.capsyscalls", 4, dbgs() << "fromVal: " << stringifyFact(fromVal) << ", old toVal: " << stringifyFact(oldToVal) << ", new toVal: " << stringifyFact(toVal) << "\n");
   return toVal != oldToVal;
 }
 
