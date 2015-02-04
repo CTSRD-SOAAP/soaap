@@ -12,6 +12,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <unordered_map>
 
 #include "Analysis/InfoFlow/Context.h"
 
@@ -24,7 +25,7 @@ namespace soaap {
   typedef map<Function*,int> FunctionIntMap;
   typedef SmallVector<CallInst*,16> CallInstVector;
   typedef SmallSet<CallInst*,16> CallInstSet;
-  typedef map<const Value*,int> ValueIntMap;
+  typedef unordered_map<const Value*,int> ValueIntMap;
   typedef map<const Value*,FunctionSet> ValueFunctionSetMap;
   typedef SmallVector<string,16> StringVector;
   typedef set<string> StringSet;

@@ -3,6 +3,7 @@
 
 #include <map>
 #include <list>
+#include <unordered_map>
 
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/raw_ostream.h"
@@ -40,7 +41,7 @@ namespace soaap {
   template<class FactType>
   class InfoFlowAnalysis : public Analysis {
     public:
-      typedef map<const Value*, FactType> DataflowFacts;
+      typedef unordered_map<const Value*, FactType> DataflowFacts;
       typedef pair<const Value*, Context*> ValueContextPair;
       typedef QueueSet<ValueContextPair> ValueContextPairList;
       InfoFlowAnalysis(bool c = false, bool m = false) : contextInsensitive(c), mustAnalysis(m) { }
@@ -437,6 +438,7 @@ namespace soaap {
     FunctionSet callees = CallGraphUtils::getCallees(CI, M);
     SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "callees: " << CallGraphUtils::stringifyFunctionSet(callees) << "\n");
     
+    DataflowFacts& contextFacts = state[C];
     for (int argIdx=0; argIdx<CI->getNumArgOperands(); argIdx++) {
       if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
         for (Function* callee : callees) {
@@ -507,22 +509,22 @@ namespace soaap {
                     for (int varArgIdx=callee->arg_size(); varArgIdx<caller->getNumArgOperands(); varArgIdx++) {
                       Value* V3 = caller->getArgOperand(varArgIdx);
                       if (first) {
-                        meet = state[C][V3];
+                        meet = contextFacts[V3];
                         first = false;
                       }
                       else {
-                        performMeet(state[C][V3], meet);
+                        performMeet(contextFacts[V3], meet);
                       }
                     }
                   }
                   else {
                     Value* V3 = caller->getArgOperand(argIdx);
                     if (first) {
-                      meet = state[C][V3];
+                      meet = contextFacts[V3];
                       first = false;
                     }
                     else {
-                      performMeet(state[C][V3], meet);
+                      performMeet(contextFacts[V3], meet);
                     }
                   }
                 //}
@@ -539,6 +541,9 @@ namespace soaap {
               addToWorklist(V2, C2, worklist);
             }
           }
+        }
+        if (!propagateAllArgs) {
+          break;
         }
       }
     }
