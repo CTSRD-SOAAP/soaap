@@ -50,6 +50,7 @@ namespace soaap {
       map<Context*, DataflowFacts> state;
       bool contextInsensitive;
       bool mustAnalysis;
+      map<Function*,map<Context*,CallInstSet> > inContextCallers;
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) = 0;
       virtual void performDataFlowAnalysis(ValueContextPairList&, SandboxVector& sandboxes, Module& M);
       // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
@@ -66,6 +67,7 @@ namespace soaap {
       virtual string stringifyFact(FactType f) = 0;
       virtual string stringifyValue(const Value* V);
       virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState);
+      virtual CallInstSet getCallersInContext(Function* callee, Context* C, SandboxVector& sandboxes, Module& M);
       virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
   };
 
@@ -434,20 +436,20 @@ namespace soaap {
 
     FunctionSet callees = CallGraphUtils::getCallees(CI, M);
     SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "callees: " << CallGraphUtils::stringifyFunctionSet(callees) << "\n");
-
-    for (Function* callee : callees) {
-      if (callee->isDeclaration()) continue;
-      Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
-      SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n"
-                << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
-      Function::ArgumentListType& params = callee->getArgumentList();
-      for (int argIdx=0; argIdx<CI->getNumArgOperands(); argIdx++) {
-        if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
+    
+    for (int argIdx=0; argIdx<CI->getNumArgOperands(); argIdx++) {
+      if (propagateAllArgs || CI->getArgOperand(argIdx) == V) {
+        for (Function* callee : callees) {
+          if (callee->isDeclaration()) continue;
+          Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
+          SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n"
+                    << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
+          Function::ArgumentListType& params = callee->getArgumentList();
           const Value* V2 = NULL;
           bool isVarArg = argIdx >= callee->arg_size();
           
-          // check if value being propagated is a var arg, and propagate
-          // accordingly
+          // Obtain Value* to propagate to.
+          // Note: in the case of a var arg, propagate to va_list var
           if (isVarArg) { // var arg
             BasicBlock& EntryBB = callee->getEntryBlock();
             
@@ -494,10 +496,11 @@ namespace soaap {
               // callee. Thus, in the case that argIdx is a vararg and this is
               // a must analysis, we need to take the meet of all vararg args
               // for all callers.
-              CallInstSet callers = CallGraphUtils::getCallers(callee, M);
+              CallInstSet callers = getCallersInContext(callee, C, sandboxes, M);
+              //CallGraphUtils::getCallers(callee, M);
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_6 << "Taking meet of all arg idx " << argIdx << " values from all callers\n");
               for (CallInst* caller : callers) { // CI will be in callers
-                if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
+                //if (ContextUtils::isInContext(caller, C, contextInsensitive, sandboxes, M)) {
                   SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_6 << "Caller: " << *caller << " (enclosing func: " << caller->getParent()->getParent()->getName() << ")\n");
                   if (isVarArg) {
                     // take meet of all vararg args
@@ -522,7 +525,7 @@ namespace soaap {
                       performMeet(state[C][V3], meet);
                     }
                   }
-                }
+                //}
               }
               //state[C2][V2] = meet;
               change = propagateToValue(meet, V2, C2, M);
@@ -534,9 +537,6 @@ namespace soaap {
               SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "Adding (V2,C2) to worklist\n"
                         << "state[C2][V2]: " << stringifyFact(state[C2][V2]) << "\n");
               addToWorklist(V2, C2, worklist);
-            }
-            if (isVarArg && mustAnalysis) {
-              break; // we have already processed all remaining arguments
             }
           }
         }
@@ -655,6 +655,20 @@ namespace soaap {
   // default behaviour is to do nothing
   template<typename FactType>
   void InfoFlowAnalysis<FactType>::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState) {
+  }
+
+  template<typename FactType>
+  CallInstSet InfoFlowAnalysis<FactType>::getCallersInContext(Function* callee, Context* C, SandboxVector& sandboxes, Module& M) {
+    if (inContextCallers.count(callee) == 0) {
+      CallInstSet callers = CallGraphUtils::getCallers(callee, M);
+      for (CallInst* call : callers) {
+        ContextVector contexts = ContextUtils::getContextsForInstruction(call, contextInsensitive, sandboxes, M);
+        for (Context* C2 : contexts) {
+          inContextCallers[callee][C2].insert(call);
+        }
+      }
+    }
+    return inContextCallers[callee][C];
   }
 }
 
