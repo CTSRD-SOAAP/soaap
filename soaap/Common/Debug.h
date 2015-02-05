@@ -1,6 +1,7 @@
 #ifndef SOAAP_COMMON_DEBUG_H
 #define SOAAP_COMMON_DEBUG_H
 
+#include "Common/CmdLineOpts.h"
 #include "Util/DebugUtils.h"
 
 #include "llvm/Support/Debug.h"
@@ -9,11 +10,14 @@
 #define SDEBUG(NAME,VERBOSITY,X)
 #else
 #define SDEBUG(NAME,VERBOSITY,X)  \
-  if (debugging(NAME,VERBOSITY,__FUNCTION__)) { \
-    do { \
-         showPreamble(NAME, __FUNCTION__); \
-         X; \
-       } while (0); \
+  if (!CmdLineOpts::DebugModule.empty() && VERBOSITY <= CmdLineOpts::DebugVerbosity) {\
+    if (soaap::matches(NAME, CmdLineOpts::DebugModule) \
+        && (CmdLineOpts::DebugFunction.empty() || soaap::matches(__FUNCTION__, CmdLineOpts::DebugFunction))) {\
+      do { \
+        showPreamble(NAME, __FUNCTION__); \
+        X; \
+      } while (0); \
+    }\
   }
 #endif
 
