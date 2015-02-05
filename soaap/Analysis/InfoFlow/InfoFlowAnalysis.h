@@ -5,6 +5,7 @@
 #include <list>
 #include <unordered_map>
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Pass.h"
@@ -41,7 +42,7 @@ namespace soaap {
   template<class FactType>
   class InfoFlowAnalysis : public Analysis {
     public:
-      typedef unordered_map<const Value*, FactType> DataflowFacts;
+      typedef DenseMap<const Value*, FactType> DataflowFacts;
       typedef pair<const Value*, Context*> ValueContextPair;
       typedef QueueSet<ValueContextPair> ValueContextPairList;
       InfoFlowAnalysis(bool c = false, bool m = false) : contextInsensitive(c), mustAnalysis(m) { }
