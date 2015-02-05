@@ -78,7 +78,7 @@ void ClassHierarchyUtils::findClassHierarchy(Module& M) {
         }
       }
       else {
-        dbgs() << "WARNING: VTable " << VT->getName() << " does not have initializer\n";
+        SDEBUG("soaap.util.classhierarchy", 1, dbgs() << "WARNING: VTable " << VT->getName() << " does not have initializer\n");
       }
     }
   }
@@ -213,7 +213,7 @@ void ClassHierarchyUtils::processTypeInfo(GlobalVariable* TI, Module& M) {
       }
     }
     else {
-      dbgs() << "WARNING: TI " + TI->getName() + " does not have initializer\n";
+      SDEBUG("soaap.util.classhierarhcy", 1, dbgs() << "WARNING: TI " + TI->getName() + " does not have initializer\n");
     }
   }
 }
