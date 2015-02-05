@@ -423,9 +423,9 @@ void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privil
 
   // Find privileged path to instruction I, via a function that calls a sandboxed callee
   QueueSet<CallGraphNode*> worklist;
-  map<CallGraphNode*,int> distanceFromMain;
-  map<CallGraphNode*,CallGraphNode*> pred;
-  map<CallGraphNode*,CallInst*> call;
+  unordered_map<CallGraphNode*,int> distanceFromMain;
+  unordered_map<CallGraphNode*,CallGraphNode*> pred;
+  unordered_map<CallGraphNode*,CallInst*> call;
 
   worklist.enqueue(MainNode);
   distanceFromMain[MainNode] = 0;
