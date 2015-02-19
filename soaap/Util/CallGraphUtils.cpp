@@ -216,7 +216,7 @@ void CallGraphUtils::loadAnnotatedCallGraphEdges(Module& M) {
       XO::emit("\n");
       XO::close_instance("callgraph_record");
     }
-    XO::close_list("callgrap_record");
+    XO::close_list("callgraph_record");
   }
 
 }
