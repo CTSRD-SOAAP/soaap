@@ -1,4 +1,4 @@
-link_directories("/home/kg365/workspace/gperftools/install/lib")
+#link_directories("/home/kg365/workspace/gperftools/install/lib")
 
 add_llvm_executable(soaap
   soaap.cpp
@@ -24,4 +24,4 @@ llvm_map_components_to_libnames(LLVM_LIBS
 )                                                                                                   
 
 target_link_libraries(soaap ${LLVM_LIBS} SOAAP)
-target_link_libraries(soaap profiler)
+#target_link_libraries(soaap profiler)
