@@ -83,14 +83,14 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     declareLocStr.c_str());
                   if (declareLoc.second != -1) {
                     XO::open_container("declare_loc");
-                    XO::emit("{e:line_number/%d}{e:filename/%s}",
+                    XO::emit("{e:line/%d}{e:file/%s}",
                              declareLoc.second, declareLoc.first.c_str());
                     XO::close_container("declare_loc");
                   }
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     XO::emit(
-                      " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                      " +++ Line {:line/%d} of file {:file/%s}\n",
                       loc.getLineNumber(),
                       loc.getFilename().str().c_str());
                   }

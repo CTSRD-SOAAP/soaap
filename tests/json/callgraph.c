@@ -14,6 +14,7 @@ void baz();
 
 int main(int argc, char** argv) {
   foo();
+  bar();
 }
 
 void foo() {
