@@ -105,7 +105,7 @@ for vuln in soaap['vulnerability_warning']:
 
     key = (fn, sandbox)
     if key in functions:
-        old = functions[key]
+        callee = functions[key]
 
     else:
         callee = functions[key] = Function(
@@ -125,10 +125,9 @@ for vuln in soaap['vulnerability_warning']:
                 location = t['location'] if 'location' in t else t
             )
 
-        if callee:
-            callee.callers.add(caller)
-            caller.callees.add(callee)
-            calls[(caller, callee)] += 1
+        callee.callers.add(caller)
+        caller.callees.add(callee)
+        calls[(caller, callee)] += 1
 
         callee = caller
 
