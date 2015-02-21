@@ -6,6 +6,9 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <iostream>
+#include <fstream>
+
 using namespace soaap;
 
 void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, Module& M) {
@@ -106,7 +109,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
    * Connect sends to receives and thus build the RPC graph!
    */
   for (map<Sandbox*,SmallVector<CallInst*,16>>::iterator I=senderToCalls.begin(), E=senderToCalls.end(); I!= E; I++) {
-    Sandbox* S = I->first;
+    Sandbox* S = I->first; // NULL is the privileged context
     SmallVector<CallInst*,16>& calls = I->second;
     for (CallInst* C : calls) {
       // dissect args
@@ -155,4 +158,60 @@ void RPCGraph::dump() {
       outs() << ")\n";
     }
   }
+  
+  // output clusters
+  map<Sandbox*,set<Function*> > sandboxToSendRecvFuncs;
+  for (map<Sandbox*,SmallVector<RPCCallRecord,16>>::iterator I=rpcLinks.begin(), E=rpcLinks.end(); I!=E; I++) {
+    Sandbox* S = I->first;
+    SmallVector<RPCCallRecord,16> Calls = I->second;
+    for (RPCCallRecord R : Calls) {
+      CallInst* Call = get<0>(R);
+      Function* Source = Call->getParent()->getParent();
+      sandboxToSendRecvFuncs[S].insert(Source);
+      if (Function* Handler = get<3>(R)) {
+        Sandbox* Dest = get<2>(R);
+        sandboxToSendRecvFuncs[Dest].insert(Handler);
+      }
+    }
+  }
+  
+  ofstream myfile;
+  myfile.open ("rpcgraph.dot");
+  myfile << "digraph G {\n";
+  
+  int clusterCount = 0;
+  int nextFuncId = 0;
+  map<Sandbox*, map<Function*,int> > funcToId;
+  for (map<Sandbox*,set<Function*> >::iterator I=sandboxToSendRecvFuncs.begin(), E=sandboxToSendRecvFuncs.end(); I!=E; I++) {
+    Sandbox* S = I->first;
+    myfile << "\tsubgraph cluster_" << clusterCount++ << " {\n";
+    myfile << "\t\tlabel = \"" << (S == NULL ? "<privileged>" : S->getName()) << "\"\n";
+    for (Function* F : I->second) {
+      if (funcToId[S].find(F) == funcToId[S].end()) {
+        funcToId[S][F] = nextFuncId++;
+      }
+      myfile << "\t\tn" << funcToId[S][F] << " [label=\"" << F->getName().str() << "\"];\n";
+    }
+    myfile << "\t}\n";
+  }
+
+  myfile << "\n";
+
+  for (map<Sandbox*,SmallVector<RPCCallRecord,16>>::iterator I=rpcLinks.begin(), E=rpcLinks.end(); I!=E; I++) {
+    Sandbox* S = I->first;
+    SmallVector<RPCCallRecord,16> Calls = I->second;
+    for (RPCCallRecord R : Calls) {
+      CallInst* Call = get<0>(R);
+      Function* Source = Call->getParent()->getParent();
+      string MsgType = get<1>(R);
+      Sandbox* Dest = get<2>(R);
+      Function* Handler = get<3>(R);
+      if (Handler) {
+        myfile << "\tn" << funcToId[S][Source] << " -> n" << funcToId[Dest][Handler] << " [label=\"" << MsgType << "\"];\n";
+      }
+    }
+  }
+  
+  myfile << "}\n";
+  myfile.close();
 }
