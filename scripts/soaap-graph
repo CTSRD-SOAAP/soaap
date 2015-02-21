@@ -85,6 +85,7 @@ def dotattrs(attrs):
 args = argparse.ArgumentParser()
 args.add_argument('filename')
 args.add_argument('-o', '--output', default = '-')
+args.add_argument('-s', '--simplify', action = 'store_true')
 
 args = args.parse_args()
 
@@ -137,6 +138,47 @@ for vuln in soaap['vulnerability_warning']:
 
 functions = functions.values()
 cluster_key = lambda node: node.filename()
+#
+# Simplify the graph (if requested):
+#
+if args.simplify:
+    visited = set()
+
+    def walk(root):
+        if root in visited: return
+        visited.add(root)
+
+        if len(root.callees) == 1:
+            (callee,) = root.callees
+            weight = calls[(root, callee)]
+
+            caller = root
+
+            while (len(callee.callers) == len(callee.callees) == 1
+                    and root.cve == callee.cve
+                    and cluster_key(root) == cluster_key(callee)):
+
+                calls.pop((caller, callee))
+                caller = callee
+                (callee,) = callee.callees
+
+            if caller != root:
+                calls.pop((caller, callee))
+                calls[(root, callee)] = weight
+
+            walk(callee)
+
+        else:
+            for callee in root.callees:
+                walk(callee)
+
+    # Walk all of the callgraph roots.
+    for fn in functions:
+        if len(fn.callers) == 0:
+            walk(fn)
+
+    dropped = set(functions) - visited
+    functions = visited
 
 
 #
@@ -189,11 +231,15 @@ for (cluster, group) in itertools.groupby(functions, key = cluster_key):
     out.write('    }\n\n')
 
 for ((source, dest), weight) in calls.items():
-    if weight == 0:
-        continue
+    assert source in functions
+    assert dest in functions
+    assert weight > 0
+
+    label = ('' if args.simplify else
+             '%s:%d' % (source.location['file'], source.location['line']))
 
     attrs = dotattrs({
-        'label': '%s:%d' % (source.location['file'], source.location['line']),
+        'label': label,
         'lhead': clusters[cluster_key(source)],
         'ltail': clusters[cluster_key(dest)],
         'penwidth': weight,
