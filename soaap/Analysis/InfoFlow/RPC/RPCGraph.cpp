@@ -137,8 +137,16 @@ void RPCGraph::dump() {
 
     for (RPCCallRecord R : Calls) {
       Sandbox* Dest = get<2>(R);
+      Function* Handler = get<3>(R);
       outs() << ((S == NULL) ? "<privileged>" : S->getName()) << " -- " << get<1>(R) << " --> ";
-      outs() << ((Dest == NULL) ? "<privileged>" : Dest->getName()) << " (handled by " << get<3>(R)->getName() << ")\n";
+      outs() << ((Dest == NULL) ? "<privileged>" : Dest->getName()) << " (";
+      if (Handler == NULL) {
+        outs() << "handler missing";
+      }
+      else {
+        outs() << "handled by " << Handler->getName();
+      }
+      outs() << ")\n";
     }
   }
 }
