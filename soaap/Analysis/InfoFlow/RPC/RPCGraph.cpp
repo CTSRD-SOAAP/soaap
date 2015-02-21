@@ -136,9 +136,11 @@ void RPCGraph::dump() {
     SmallVector<RPCCallRecord,16> Calls = I->second;
 
     for (RPCCallRecord R : Calls) {
+      CallInst* Call = get<0>(R);
+      Function* Source = Call->getParent()->getParent();
       Sandbox* Dest = get<2>(R);
       Function* Handler = get<3>(R);
-      outs() << ((S == NULL) ? "<privileged>" : S->getName()) << " -- " << get<1>(R) << " --> ";
+      outs() << Source->getName() << " (" << ((S == NULL) ? "<privileged>" : S->getName()) << ") -- " << get<1>(R) << " --> ";
       outs() << ((Dest == NULL) ? "<privileged>" : Dest->getName()) << " (";
       if (Handler == NULL) {
         outs() << "handler missing";
