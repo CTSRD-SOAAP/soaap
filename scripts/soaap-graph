@@ -2,243 +2,203 @@
 
 import argparse
 import collections
-import dot
+import itertools
+import json
 import re
 import sys
 
-def enum(*sequential, **named):
-    enums = dict(zip(sequential, enumerate(sequential)), **named)
-    return type('Enum', (), enums)
 
-# Possible consequences of errors that SOAAP detects.
-Consequence = enum('AmbientAuthority', 'DataLeak', 'LostWrite', 'Unknown')
+class Function:
+    """
+    Nodes in the callgraph are functions and methods.
+    """
+
+    def __init__(self, fn, sandbox, location, cve = None):
+        self.parameters = fn[ fn.find('(') + 1 : fn.find(')') + 1][:-1]
+        fn = fn.split('(')[0]
+
+        # Ignore template parameters.
+        fn = re.sub(r'<.*>', '', fn)
+
+        components = fn.split('::')
+        self.namespace_ = '::'.join(components[:-2])
+        self.fn = '::'.join(components[-2:])
+
+        self.sandbox_name = sandbox
+        self.location = location
+        assert location is not None
+        if 'file' not in self.location:
+            raise ValueError, self.location
+        assert 'file' in self.location
+        self.cve = cve
+
+        self.callers = set()
+        self.callees = set()
+
+    def filename(self):
+        if not self.location:
+            return ''
+
+        return self.location['file']
+
+    def fqname(self):
+        """ Fully-qualified function name """
+        return '::'.join(( self.namespace_, self.fn ))
+
+    def label(self):
+        return self.fn
+
+    def name(self):
+        return self.fn + (' <<%s>>' % self.sandbox_name if self.sandbox_name else '')
+
+    def namespace(self):
+        return self.namespace_
+
+    def sandbox(self):
+        return self.sandbox_name
+
+    def __str__(self):
+        return '%s (%s)' % (self.fqname(), self.location)
 
 
+def dotattrs(attrs):
+    """
+    Convert a Python dictionary into a dot-style attribute list:
+    [ foo = "x", bar = "y" ]
+    """
+
+    return (
+        '[ '
+        + ', '.join([
+                '%s = "%s"' % i for i in attrs.items()
+            ])
+        + ' ]'
+    )
+
+
+
+#
+# Parse command-line arguments and open the JSON input.
+#
 args = argparse.ArgumentParser()
-args.add_argument('input')
-args.add_argument('-o', '--output')
+args.add_argument('filename')
+args.add_argument('-o', '--output', default = '-')
 
 args = args.parse_args()
 
+out = open(args.output, 'w') if args.output != '-' else sys.stdout
 
-annotations = collections.defaultdict(set)
-annotated_functions = set()
-status = []
-warnings = set()
-vtable_errors = 0
+f = open(args.filename, 'r')
+soaap = json.load(f)['soaap']
 
 
+#
+# Parse vulnerability information from SOAAP.
+#
+functions = {}
+calls = collections.defaultdict(int)
 
-class State(object):
-    """
-    SOAAP output requires a stateful parser. This is the base class for
-    parser states, which attempt to parse a single line and set self.next
-    to the next parser state.
-    """
+for vuln in soaap['vulnerability_warning']:
+    fn = vuln['function']
+    sandbox = vuln['sandbox']
+    if sandbox == '"none"': sandbox = None
 
-    def parse(self, line):
-        assert False
+    key = (fn, sandbox)
+    if key in functions:
+        old = functions[key]
 
-
-class StartState(State):
-    """
-    Start state for the parser. Parses "Found annotated function" lines and
-    SOAAP status lines (e.g., "* Running Soaap Pass"). Switches to the
-    error message parsing state when it encounters an error line
-    (e.g., "*** Function "foo" has past-vulnerability annotations").
-    """
-
-    annotated_fn = re.compile('^\s+Found annotated function (.*)\n$')
-    vtable_error = re.compile(
-        '^definingVTableVar is not null, but staticTypeVTableVar is NULL')
-    status_line = re.compile('^\* (.*)\n$')
-
-    def parse(self, line):
-        self.next = self
-
-        # This is an ugly construction. We might be able to do something
-        # more declarative, but that's not a high priority right now.
-        m = StartState.annotated_fn.match(line)
-        if m:
-            (fn,) = m.groups()
-            annotated_functions.add(fn)
-            return True
-
-        m = ErrorMessage.regex.match(line)
-        if m:
-            (msg,) = m.groups()
-            self.next = ErrorMessage(msg)
-            return True
-
-        m = StartState.status_line.match(line)
-        if m:
-            (line,) = m.groups()
-            status.append(line)
-            return True
-
-        m = StartState.vtable_error.match(line)
-        if m:
-            global vtable_errors
-
-            vtable_errors += 1
-            return True
-
-        return False
+    else:
+        callee = functions[key] = Function(
+            fn, sandbox, location = vuln['location'], cve = vuln['cve'])
 
 
-class ErrorMessage(State):
-    """
-    Parser state for parsing error messages. Switches to error trace parser
-    state on encountering the first line that doesn't start with "***".
-    """
+    for t in vuln['trace']:
+        key = (t['function'], sandbox)
 
-    regex = re.compile('^ \*\*\* (.*)\n$')
-    past_vuln = re.compile(
-            '.*Function "(.*)" has past-vulnerability annotations for "(.*)".*')
-    trace_header = re.compile('^\s+Possible trace:')
+        if key in functions:
+            caller = functions[key]
 
-    def __init__(self, message):
-        m = ErrorMessage.past_vuln.match(message)
-        if m:
-            (name,vulns) = m.groups()
+        else:
+            caller = functions[key] = Function(
+                fn = t['function'],
+                sandbox = sandbox,
+                location = t['location'] if 'location' in t else t
+            )
 
-            name = name.split('(')[0]
-            vulns = set(vulns[1:-1].split(','))
+        if callee:
+            callee.callers.add(caller)
+            caller.callees.add(callee)
+            calls[(caller, callee)] += 1
 
-            annotations[name].update(vulns)
-            self.vulns = vulns
-
-        self.message = message
-        self.consequence = Consequence.Unknown
-
-    def parse(self, line):
-        m = ErrorMessage.regex.match(line)
-        if m:
-            (msg,) = m.groups()
-
-            if msg.startswith('Another vulnerability here would leak ambient authority'):
-                self.consequence = Consequence.AmbientAuthority
-            else:
-                self.message = self.message + ' ' + msg
-
-            self.next = self
-            return True
-
-        m = ErrorMessage.trace_header.match(line)
-        if m:
-            self.next = ErrorTrace(self.message, self.consequence, self.vulns)
-            return True
-
-class ErrorTrace(State):
-    """
-    Parser state for parsing SOAAP backtraces.
-    """
-
-    method = re.compile('(.*)\((.*)\)(.*)\(([_a-zA-Z0-9\.]+):([0-9]+)\)')
-    main = re.compile('(.*)\(([_a-zA-Z0-9\.]+):([0-9]+)\)')
-
-    def __init__(self, message, consequence, vulns):
-        self.message = message
-        self.consequence = consequence
-        self.backtrace = []
-        self.vulns = tuple(vulns)
-
-    def parse(self, line):
-        m = ErrorTrace.method.match(line)
-        if m:
-            (name, parameters, cv, filename, line) = m.groups()
-            self.backtrace.append(
-                    Backtrace(
-                        name, parameters.split(', '), cv.split(' '),
-                        filename, line))
-
-            self.next = self
-            return True
-
-        m = ErrorTrace.main.match(line)
-        if m:
-            (name, filename, line) = m.groups()
-            name = name.strip()
-
-            self.backtrace.append(Backtrace(name, [], [], filename, line))
-            self.next = self
-            return True
-
-        warnings.add(
-            (self.message, self.consequence, self.vulns, tuple(self.backtrace)))
-
-        m = ErrorMessage.regex.match(line)
-        if m:
-            (msg,) = m.groups()
-            self.next = ErrorMessage(msg)
-            return True
-
-        self.next = StartState()
-        return False
-
-
-class Backtrace(object):
-    """
-    A stack trace output by SOAAP.
-    """
-
-    def __init__(self, name, parameters, cv, filename, line):
-        self.name = name.strip()
-        self.parameters = tuple(parameters)
-        self.cv = tuple(cv)
-        self.filename = filename.strip()
-        self.line = int(line)
-
-    def __str__(self):
-        return '%s:%d %s(%s)%s' % (
-            self.filename, self.line, self.name,
-            ', '.join(self.parameters), ' '.join(self.cv))
-
-    def __repr__(self):
-        return self.__str__()
+        callee = caller
 
 
 
+functions = functions.values()
+cluster_key = lambda node: node.filename()
 
 
-with open(args.input, 'r') as f:
-    state = StartState()
+#
+# Convert call graph into GraphViz .dot format.
+#
+out.write('''
+digraph {
+    node [ fontname = "Inconsolata" ];
+    edge [ fontname = "Avenir" ];
 
-    for line in f:
-        if not state.parse(line) and len(line.split()) != 0:
-            raise ValueError('%s could not parse line' % state, line)
+    labeljust = "l";
+    labelloc = "b";
+    rankdir = "BT";
 
-        state = state.next
+''')
 
+clusters = {}
+functions = sorted(functions, key = cluster_key)
 
+for (cluster, group) in itertools.groupby(functions, key = cluster_key):
+    name = 'cluster_%d' % (len(clusters) + 1)
+    clusters[cluster] = name
 
-# Convert the backtraces into a dot graph.
-nodes = set()
-edges = collections.defaultdict(int)
+    out.write('    subgraph %s {\n' % name)
+    out.write('        bgcolor = "#cccccc33";\n')
+    out.write('        label = "%s";\n' % cluster)
+    out.write('\n')
 
-for (number,w) in enumerate(warnings):
-    (message, consequence, vulns, backtrace) = w
+    for node in group:
+        if node.cve and node.sandbox_name:
+            color = '#ffff66cc'
 
-    consequence = (consequence[1], consequence[1])
+        elif node.cve:
+            color = '#ff9999cc'
 
-    for v in vulns:
-        v = (v, v)
-        edges[(v, consequence)] += 1
+        elif node.sandbox_name:
+            color = '#99ff9999'
 
-    destination = [ (v, v) for v in vulns ]
-    for t in backtrace:
-        node = (t.name, t.name[:60])
-        nodes.add(node)
+        else:
+            color = ''
 
-        try:
-            edges[(node, destination)] += 1
+        attributes = dotattrs({
+            'fillcolor': color,
+            'label': node.fn[:80],
+            'style': 'filled',
+        })
 
-        except TypeError:
-            for d in destination:
-                edges[(node, d)] += 1
+        out.write('        "%s" %s;\n' % (node.name(), attributes))
 
-        destination = node
+    out.write('    }\n\n')
 
+for ((source, dest), weight) in calls.items():
+    if weight == 0:
+        continue
 
-dot.write_directed_graph(nodes, edges,
-    out = open(args.output, 'w') if args.output else sys.stdout)
+    attrs = dotattrs({
+        'label': '%s:%d' % (source.location['file'], source.location['line']),
+        'lhead': clusters[cluster_key(source)],
+        'ltail': clusters[cluster_key(dest)],
+        'penwidth': weight,
+        'weight': weight,
+    })
+
+    out.write('    "%s" -> "%s" %s\n' % (source.name(), dest.name(), attrs))
+
+out.write('}\n')
