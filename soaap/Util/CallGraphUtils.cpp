@@ -415,6 +415,34 @@ void CallGraphUtils::dumpDOTGraph() {
   WriteGraph(LLVMAnalyses::getCallGraphAnalysis(), "callgraph");
 }
 
+bool CallGraphUtils::isReachableFrom(Function* Source, Function* Dest, Sandbox* Ctx, Module& M) {
+  return isReachableFromHelper(Source, Source, Dest, Ctx, set<Function*>(), M);
+}
+
+bool CallGraphUtils::isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*> visited, Module& M) {
+  if (Curr == Dest) {
+    return true;
+  }
+  else if (visited.count(Curr) > 0) {
+    return false;
+  }
+  else if (SandboxUtils::isSandboxEntryPoint(M, Curr) && (Ctx != NULL && Ctx->getEntryPoint() != Curr)) {
+    return false;
+  }
+  else {
+    visited.insert(Curr);
+    llvm::CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
+    CallGraphNode* CurrNode = (*CG)[Curr];
+    for (llvm::CallGraphNode::iterator I=CurrNode->begin(), E=CurrNode->end(); I!= E; I++) {
+      CallGraphNode* N = I->second;
+      if (isReachableFromHelper(Source, N->getFunction(), Dest, Ctx, visited, M)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
 void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M) {
   // we use Dijkstra's algorithm
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "calculating shortest paths from " << F->getName() << " cache");

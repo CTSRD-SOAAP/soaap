@@ -276,7 +276,7 @@ void Soaap::buildRPCGraph(Module& M) {
   RPCGraph G;
   G.build(sandboxes, privilegedMethods, M);
   if (CmdLineOpts::DumpRPCGraph) {
-    G.dump();
+    G.dump(M);
   }
 }
 

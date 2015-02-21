@@ -28,6 +28,8 @@ namespace soaap {
       static void dumpDOTGraph();
       static InstTrace findPrivilegedPathToFunction(Function* Target, Module& M);
       static InstTrace findSandboxedPathToFunction(Function* Target, Sandbox* S, Module& M);
+      static bool isReachableFrom(Function* Source, Function* Dest, Sandbox* Ctx, Module& M);
+
     
     private:
       static map<const CallInst*, FunctionSet> callToCallees;
@@ -38,6 +40,7 @@ namespace soaap {
       static bool caching;
       static void populateCallCalleeCaches(Module& M);
       static void calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M);
+      static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*> visited, Module& M);
   };
 }
 namespace llvm {

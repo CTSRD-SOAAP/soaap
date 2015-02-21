@@ -15,7 +15,7 @@ namespace soaap {
   class RPCGraph {
     public:
       void build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, Module& M);
-      void dump();
+      void dump(Module& M);
 
     private:
       map<Sandbox*,SmallVector<RPCCallRecord, 16>> rpcLinks;

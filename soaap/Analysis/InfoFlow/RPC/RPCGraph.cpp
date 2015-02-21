@@ -1,5 +1,6 @@
 #include "Analysis/InfoFlow/RPC/RPCGraph.h"
 #include "Common/Debug.h"
+#include "Util/CallGraphUtils.h"
 #include "Util/SandboxUtils.h"
 
 #include "llvm/IR/Constants.h"
@@ -135,7 +136,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
 }
 
 
-void RPCGraph::dump() {
+void RPCGraph::dump(Module& M) {
   //map<Sandbox*,SmallVector<RPCCallRecord, 16>>
   //typedef std::tuple<CallInst*,string,Sandbox*,Function*> RPCCallRecord;
   for (map<Sandbox*,SmallVector<RPCCallRecord,16>>::iterator I=rpcLinks.begin(), E=rpcLinks.end(); I!=E; I++) {
@@ -190,9 +191,22 @@ void RPCGraph::dump() {
       if (funcToId[S].find(F) == funcToId[S].end()) {
         funcToId[S][F] = nextFuncId++;
       }
-      myfile << "\t\tn" << funcToId[S][F] << " [label=\"" << F->getName().str() << "\"];\n";
+      myfile << "\t\tn" << funcToId[S][F] << " [label=\"" << F->getName().str() << "\"";
+      if (S != NULL && S->getEntryPoint() == F) {
+        myfile << ",style=\"bold\"";
+      }
+      myfile << "];\n";
     }
     myfile << "\t}\n";
+    for (Function* F1 : I->second) {
+      for (Function* F2 : I->second) {
+        if (F1 != F2) {
+          if (CallGraphUtils::isReachableFrom(F1, F2, S, M)) {
+            myfile << "\tn" << funcToId[S][F1] << " -> n" << funcToId[S][F2] << " [constraint=false];\n";
+          }
+        }
+      }
+    }
   }
 
   myfile << "\n";
@@ -207,7 +221,7 @@ void RPCGraph::dump() {
       Sandbox* Dest = get<2>(R);
       Function* Handler = get<3>(R);
       if (Handler) {
-        myfile << "\tn" << funcToId[S][Source] << " -> n" << funcToId[Dest][Handler] << " [label=\"" << MsgType << "\"];\n";
+        myfile << "\tn" << funcToId[S][Source] << " -> n" << funcToId[Dest][Handler] << " [label=\"" << MsgType << "\",style=\"dashed\"];\n";
       }
     }
   }
