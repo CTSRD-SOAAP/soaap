@@ -22,6 +22,9 @@ foreach(v
   endif()
 endforeach()
 
+include(FeatureSummary)
+
+
 list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
 
@@ -38,7 +41,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 
 # Default to libc++ if installed
 find_package(LibCXX)
+set_package_properties(LibCXX PROPERTIES TYPE OPTIONAL URL "http://libcxx.llvm.org/"
+                              PURPOSE "Use LLVM libc++ instead of GNU libstdc++")
 if (LIBCXX_FOUND)
+#message(FATAL_ERROR "LIBCXX_FOUND")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
   include_directories(${LIBCXX_INCLUDE_DIRS})
   foreach(lib ${LIBCXX_LIBRARIES})
@@ -69,3 +75,5 @@ add_subdirectory(include)
 add_subdirectory(soaap)
 add_subdirectory(tests)
 add_subdirectory(tools)
+
+feature_summary(FATAL_ON_MISSING_REQUIRED_PACKAGES WHAT ALL)
