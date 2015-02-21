@@ -36,6 +36,7 @@ namespace soaap {
       static bool PrintCallGraph;
       static list<ReportOutputFormat> ReportOutputFormats;
       static string ReportFilePrefix;
+      static bool SysCallTraces;
   };
 }
 
