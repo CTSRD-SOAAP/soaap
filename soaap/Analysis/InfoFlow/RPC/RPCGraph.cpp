@@ -29,15 +29,11 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
   }
   // sandboxed functions
   for (Sandbox* S : sandboxes) {
-    for (Function* F : S->getFunctions()) {
-      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (Function* callee = C->getCalledFunction()) {
-            if (callee->getName().startswith("__soaap_rpc_send_helper")) {
-              SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Send in sandbox " << S->getName() << ": " << *C << "\n");
-              senderToCalls[S].push_back(C);
-            }
-          }
+    for (CallInst* C : S->getCalls()) { 
+      if (Function* callee = C->getCalledFunction()) {
+        if (callee->getName().startswith("__soaap_rpc_send_helper")) {
+          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Send in sandbox " << S->getName() << ": " << *C << "\n");
+          senderToCalls[S].push_back(C);
         }
       }
     }
@@ -52,7 +48,8 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (Function* callee = C->getCalledFunction()) {
-          if (callee->getName().startswith("__soaap_rpc_recv_helper")) {
+          if (callee->getName().startswith("__soaap_rpc_recv_helper") 
+             || callee->getName().startswith("__soaap_rpc_recv_sync_helper")) {
             SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Receive in <privileged>: " << *C << "\n");
             // extract args
             string msgType = "";
@@ -62,7 +59,12 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
                 msgType = msgTypeStrArray->getAsCString();
               }
             }
-            msgHandler = dyn_cast<Function>(C->getArgOperand(2)->stripPointerCasts());
+            if (callee->getName().startswith("__soaap_rpc_recv_helper")) {
+              msgHandler = dyn_cast<Function>(C->getArgOperand(2)->stripPointerCasts());
+            }
+            else {
+              msgHandler = F;
+            }
             receiverToMsgTypeHandler[NULL][msgType] = msgHandler;
             SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg type: " << msgType << "\n");
             SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg handler: " << msgHandler->getName() << "\n");
@@ -73,26 +75,28 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
   }
   // sandboxed functions
   for (Sandbox* S : sandboxes) {
-    for (Function* F : S->getFunctions()) {
-      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-          if (Function* callee = C->getCalledFunction()) {
-            if (callee->getName().startswith("__soaap_rpc_recv_helper")) {
-              SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Receive in sandbox " << S->getName() << ": " << *C << "\n");
-              // extract args
-              string msgType = "";
-              Function* msgHandler = NULL;
-              if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(1)->stripPointerCasts())) {
-                if (ConstantDataArray* msgTypeStrArray = dyn_cast<ConstantDataArray>(msgTypeStrGlobal->getInitializer())) {
-                  msgType = msgTypeStrArray->getAsCString();
-                }
-              }
-              msgHandler = dyn_cast<Function>(C->getArgOperand(2)->stripPointerCasts());
-              receiverToMsgTypeHandler[S][msgType] = msgHandler;
-              SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg type: " << msgType << "\n");
-              SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg handler: " << msgHandler->getName() << "\n");
+    for (CallInst* C : S->getCalls()) {
+      if (Function* callee = C->getCalledFunction()) {
+        if (callee->getName().startswith("__soaap_rpc_recv_helper")
+            || callee->getName().startswith("__soaap_rpc_recv_sync_helper")) {
+          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Receive in sandbox " << S->getName() << ": " << *C << "\n");
+          // extract args
+          string msgType = "";
+          Function* msgHandler = NULL;
+          if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(1)->stripPointerCasts())) {
+            if (ConstantDataArray* msgTypeStrArray = dyn_cast<ConstantDataArray>(msgTypeStrGlobal->getInitializer())) {
+              msgType = msgTypeStrArray->getAsCString();
             }
           }
+          if (callee->getName().startswith("__soaap_rpc_recv_helper")) {
+            msgHandler = dyn_cast<Function>(C->getArgOperand(2)->stripPointerCasts());
+          }
+          else {
+            msgHandler = C->getParent()->getParent();
+          }
+          receiverToMsgTypeHandler[S][msgType] = msgHandler;
+          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg type: " << msgType << "\n");
+          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "msg handler: " << msgHandler->getName() << "\n");
         }
       }
     }
