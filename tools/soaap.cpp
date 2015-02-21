@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <memory>
 #include "Passes/Soaap.h"
+#include "Common/CmdLineOpts.h"
 
 using namespace llvm;
 
@@ -93,6 +94,7 @@ int main(int argc, char **argv) {
   initializeTarget(Registry);
   initializeSoaapPass(Registry);
 
+  cl::HideUnrelatedOptions(soaap::CmdLineOpts::SoaapCategory);
   cl::ParseCommandLineOptions(argc, argv,
     "llvm .bc -> .bc modular optimizer and analysis printer\n");
 
