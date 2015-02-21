@@ -58,7 +58,7 @@ class Function:
         return self.sandbox_name
 
     def __str__(self):
-        return '%s (%s)' % (self.fqname(), self.location)
+        return '%s (%s:%d)' % (self.name(), self.filename(), self.location['line'])
 
 
 def dotattrs(attrs):
