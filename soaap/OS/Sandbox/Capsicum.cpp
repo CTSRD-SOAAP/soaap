@@ -618,6 +618,7 @@ Capsicum::Capsicum() {
   ////
   //// Always allow process termination with sys_exit(2).
   ////
+  addPermittedSysCall("exit");
   addPermittedSysCall("sys_exit");
 
   ////
