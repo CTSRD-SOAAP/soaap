@@ -177,13 +177,14 @@ __attribute__((noinline)) static void __soaap_rpc_send_recv_helper(char* recipie
   __soaap_rpc_send_helper(RECIPIENT, #MESSAGE_TYPE);
 #define __soaap_rpc_send_with_params(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
   __soaap_rpc_send_helper(RECIPIENT, #MESSAGE_TYPE, PARAMS);
-#define __soaap_rpc_send_recv_sync(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
-  __soaap_rpc_send_recv_helper(RECIPIENT, #MESSAGE_TYPE, PARAMS);
+//#define __soaap_rpc_send_recv_sync(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
+//  __soaap_rpc_send_recv_helper(RECIPIENT, #MESSAGE_TYPE, PARAMS);
 
 __attribute__((noinline)) static void __soaap_rpc_recv_helper(char* sender, char* message_type, void* handler) { }
+__attribute__((noinline)) static void __soaap_rpc_recv_sync_helper(char* sender, char* message_type) { }
 #define __soaap_rpc_recv(SENDER, MESSAGE_TYPE, HANDLER) \
   __soaap_rpc_recv_helper(SENDER, #MESSAGE_TYPE, HANDLER);
 #define __soaap_rpc_recv_sync(SENDER, MESSAGE_TYPE) \
-  __soaap_rpc_recv_helper(SENDER, #MESSAGE_TYPE, NULL);
+  __soaap_rpc_recv_sync_helper(SENDER, #MESSAGE_TYPE);
 
 #endif /* SOAAP_H */
