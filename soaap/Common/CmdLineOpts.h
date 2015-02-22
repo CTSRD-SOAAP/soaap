@@ -37,6 +37,7 @@ namespace soaap {
       static list<ReportOutputFormat> ReportOutputFormats;
       static string ReportFilePrefix;
       static bool SysCallTraces;
+      static cl::OptionCategory SoaapCategory;
   };
 }
 
