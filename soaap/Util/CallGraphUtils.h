@@ -29,8 +29,11 @@ namespace soaap {
       static InstTrace findPrivilegedPathToFunction(Function* Target, Module& M);
       static InstTrace findSandboxedPathToFunction(Function* Target, Sandbox* S, Module& M);
       static bool isReachableFrom(Function* Source, Function* Dest, Sandbox* Ctx, Module& M);
-
-    
+      /**
+       * emits a call trace to @p Target for the given sandbox @p S.
+       * If @p S is null then a privileged call graph will be emitted instead.
+       */
+      static void emitCallTrace(Function* Target, Sandbox* S, Module& M);
     private:
       static map<const CallInst*, FunctionSet> callToCallees;
       static map<const Function*, CallInstSet> calleeToCalls;
