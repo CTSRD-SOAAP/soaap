@@ -2,6 +2,7 @@
 #include "Common/Debug.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/SandboxUtils.h"
+#include "Common/XO.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
@@ -139,6 +140,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
 void RPCGraph::dump(Module& M) {
   //map<Sandbox*,SmallVector<RPCCallRecord, 16>>
   //typedef std::tuple<CallInst*,string,Sandbox*,Function*> RPCCallRecord;
+  XO::open_list("rpc_call");
   for (map<Sandbox*,SmallVector<RPCCallRecord,16>>::iterator I=rpcLinks.begin(), E=rpcLinks.end(); I!=E; I++) {
     Sandbox* S = I->first;
     SmallVector<RPCCallRecord,16> Calls = I->second;
@@ -148,18 +150,27 @@ void RPCGraph::dump(Module& M) {
       Function* Source = Call->getParent()->getParent();
       Sandbox* Dest = get<2>(R);
       Function* Handler = get<3>(R);
-      outs() << Source->getName() << " (" << ((S == NULL) ? "<privileged>" : S->getName()) << ") -- " << get<1>(R) << " --> ";
-      outs() << ((Dest == NULL) ? "<privileged>" : Dest->getName()) << " (";
-      if (Handler == NULL) {
-        outs() << "handler missing";
+      XO::open_instance("rpc_call");
+      XO::emit("{:sender_func/%s} ({:sender_sandbox/%s}) ---{:message_type/%s}--> ",
+        Source->getName().str().c_str(), Sandbox::getName(S).str().c_str(),
+        get<1>(R).c_str());
+      // if there is no handler because a matching __soaap_rpc_recv is missing set receiver_sandbox
+      // to be the empty string and print <handler missing>
+      if (Handler) {
+        XO::emit("{:receiver_sandbox/%s} (handled by {:receiver_func/%s})\n",
+          Sandbox::getName(Dest).str().c_str(), Handler->getName().str().c_str());
       }
       else {
-        outs() << "handled by " << Handler->getName();
+        XO::emit("<handler missing>\n");
       }
-      outs() << ")\n";
+      if (CmdLineOpts::SysCallTraces) {
+        CallGraphUtils::emitCallTrace(Source, S, M);
+      }
+      XO::close_instance("rpc_call");
     }
   }
-  
+  XO::close_list("rpc_call");
+
   // output clusters
   map<Sandbox*,set<Function*> > sandboxToSendRecvFuncs;
   for (map<Sandbox*,SmallVector<RPCCallRecord,16>>::iterator I=rpcLinks.begin(), E=rpcLinks.end(); I!=E; I++) {
