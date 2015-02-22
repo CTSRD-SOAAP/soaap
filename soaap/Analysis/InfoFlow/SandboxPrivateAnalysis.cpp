@@ -46,8 +46,8 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
 }
 
 void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  // validate that sandbox-private data is never accessed in other sandboxed contexts
-  /*
+  XO::open_list("private_access");
+  // validate that sandbox-private data is never accessed in other contexts
   for (Function* F : privilegedMethods) {
     for (BasicBlock& BB : F->getBasicBlockList()) {
       for (Instruction& I : BB.getInstList()) {
@@ -58,22 +58,37 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
           Value* v = load->getPointerOperand()->stripPointerCasts();
           SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value:\n");
           SDEBUG("soaap.analysis.infoflow.private", 3, v->dump());
-          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << state[v] << ", " << SandboxUtils::stringifySandboxNames(state[v]) << "\n");
-          if (state[v] != 0) {
-            outs() << " *** Privileged method " << F->getName() << " read data value private to sandboxes: " << SandboxUtils::stringifySandboxNames(state[v]) << "\n";
+          SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << state[ContextUtils::PRIV_CONTEXT][v] << ", " << SandboxUtils::stringifySandboxNames(state[ContextUtils::PRIV_CONTEXT][v]) << "\n");
+          if (state[ContextUtils::PRIV_CONTEXT][v] != 0) {
+            XO::open_instance("private_access");
+            XO::emit(" *** Privileged method \"{:function/%s}\" read data "
+                     "value belonging to sandboxes: {d:sandboxes_private/%s}\n",
+                     F->getName().str().c_str(),
+                     SandboxUtils::stringifySandboxNames(state[ContextUtils::PRIV_CONTEXT][v]).c_str());
+            XO::open_list("sandbox_private");
+            for (Sandbox* S : SandboxUtils::convertNamesToVector(state[ContextUtils::PRIV_CONTEXT][v], sandboxes)) {
+              XO::open_instance("sandbox_private");
+              XO::emit("{e:name/%s}", S->getName().c_str());
+              XO::close_instance("sandbox_private");
+            }
+            XO::close_list("sandbox_private");
+            XO::open_container("location");
             if (MDNode *N = I.getMetadata("dbg")) {
               DILocation loc(N);
-              outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+              XO::emit(
+                " +++ Line {:line/%d} of file {:file/%s}\n",
+                loc.getLineNumber(),
+                loc.getFilename().str().c_str());
             }
-            outs() << "\n";
+            XO::close_container("location");
+            XO::emit("\n");
+            XO::close_instance("private_access");
           }
         }
       }
     }
   }
-  */
 
-  XO::open_list("private_access");
   // check sandboxes
   for (Sandbox* S : sandboxes) {
     FunctionVector sandboxedFuncs = S->getFunctions();
@@ -90,7 +105,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
             if (!(state[S][v] == 0 || (state[S][v] & name) == state[S][v])) {
               XO::open_instance("private_access");
-              XO::emit("*** Sandboxed method \"{:function/%s}\" read data "
+              XO::emit(" *** Sandboxed method \"{:function/%s}\" read data "
                        "value belonging to sandboxes: {d:sandboxes_private/%s} "
                        "but it executes in sandboxes: {d:sandboxes_access/%s}\n",
                        F->getName().str().c_str(),
@@ -110,13 +125,15 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 XO::close_instance("sandbox_access");
               }
               XO::close_list("sandbox_access");
+              XO::open_container("location");
               if (MDNode *N = I.getMetadata("dbg")) {
                 DILocation loc(N);
                 XO::emit(
-                  " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                  " +++ Line {:line/%d} of file {:file/%s}\n",
                   loc.getLineNumber(),
                   loc.getFilename().str().c_str());
               }
+              XO::close_container("location");
               XO::emit("\n");
               XO::close_instance("private_access");
             }
@@ -175,7 +192,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 if (MDNode *N = I.getMetadata("dbg")) {
                   DILocation loc(N);
                   XO::emit(
-                    " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                    " +++ Line {:line/%d} of file {:file/%s}\n",
                     loc.getLineNumber(),
                     loc.getFilename().str().c_str());
                 }
@@ -214,7 +231,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     XO::emit(
-                      " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                      " +++ Line {:line/%d} of file {:file/%s}\n",
                       loc.getLineNumber(),
                       loc.getFilename().str().c_str());
                   }
@@ -246,7 +263,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       XO::emit(
-                        " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                        " +++ Line {:line/%d} of file {:file/%s}\n",
                         loc.getLineNumber(),
                         loc.getFilename().str().c_str());
                     }
@@ -268,17 +285,10 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              F->getName().str().c_str(),
                              SandboxUtils::stringifySandboxNames(name).c_str(),
                              Callee->getName().str().c_str());
-                    XO::open_list("sandbox_access");
-                    for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                      XO::open_instance("sandbox_access");
-                      XO::emit("{e:name/%s}", S->getName().c_str());
-                      XO::close_instance("sandbox_access");
-                    }
-                    XO::close_list("sandbox_access");
                     if (MDNode *N = I.getMetadata("dbg")) {
                       DILocation loc(N);
                       XO::emit(
-                        " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                        " +++ Line {:line/%d} of file {:file/%s}\n",
                         loc.getLineNumber(),
                         loc.getFilename().str().c_str());
                     }
@@ -310,7 +320,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   if (MDNode *N = I.getMetadata("dbg")) {
                     DILocation loc(N);
                     XO::emit(
-                      " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                      " +++ Line {:line/%d} of file {:file/%s}\n",
                       loc.getLineNumber(),
                       loc.getFilename().str().c_str());
                   }

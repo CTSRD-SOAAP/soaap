@@ -666,6 +666,10 @@ void Sandbox::findPrivateData() {
         if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
           if (sandboxName == name) {
+            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 
+                                                   << "Found private data annotation for "
+                                                   << "sandbox \"" << name << "\" for variable "
+                                                   << "\"" << annotatedVar->getName() << "\"");
             privateData.insert(annotateCall);
           }
         }
