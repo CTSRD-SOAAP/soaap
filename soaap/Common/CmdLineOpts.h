@@ -25,6 +25,7 @@ namespace soaap {
       static bool InferFPTargets;
       static bool ListFPTargets;
       static bool ListAllFuncs;
+      static bool SkipGlobalVariableAnalysis;
       static bool Pedantic;
       static string DebugModule;
       static string DebugFunction;

@@ -55,6 +55,12 @@ static cl::opt<bool, true> ClListAllFuncs("soaap-list-all-funcs",
        cl::desc("List all functions"),
        cl::location(CmdLineOpts::ListAllFuncs));
 
+bool CmdLineOpts::SkipGlobalVariableAnalysis;
+static cl::opt<bool, true> ClSkipGlobalVariableAnalysis("soaap-skip-global-variable-analysis",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Skip the analysis of global variable reads/writes"),
+       cl::location(CmdLineOpts::SkipGlobalVariableAnalysis));
+
 bool CmdLineOpts::Pedantic;
 static cl::opt<bool, true> ClPedantic("soaap-pedantic",
        cl::cat(CmdLineOpts::SoaapCategory),
