@@ -81,6 +81,26 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 loc.getFilename().str().c_str());
             }
             XO::close_container("location");
+            XO::open_list("trace");
+            InstTrace callStack = CallGraphUtils::findPrivilegedPathToFunction(F, M);
+            for (Instruction* I : callStack) {
+              if (MDNode *N = I->getMetadata("dbg")) {
+                DILocation Loc(N);
+                Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
+                unsigned Line = Loc.getLineNumber();
+                StringRef File = Loc.getFilename();
+                unsigned FileOnlyIdx = File.find_last_of("/");
+                StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+
+                XO::open_instance("trace");
+                XO::emit("{e:function/%s}", EnclosingFunc->getName().str().c_str());
+                XO::open_container("location");
+                XO::emit("{e:file/%s}{e:line/%d}", FileOnly.str().c_str(), Line);
+                XO::close_container("location");
+                XO::close_instance("trace");
+              }
+            }
+            XO::close_list("trace");
             XO::emit("\n");
             XO::close_instance("private_access");
           }
@@ -134,6 +154,26 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   loc.getFilename().str().c_str());
               }
               XO::close_container("location");
+              XO::open_list("trace");
+              InstTrace callStack = CallGraphUtils::findSandboxedPathToFunction(F, S, M);
+              for (Instruction* I : callStack) {
+                if (MDNode *N = I->getMetadata("dbg")) {
+                  DILocation Loc(N);
+                  Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
+                  unsigned Line = Loc.getLineNumber();
+                  StringRef File = Loc.getFilename();
+                  unsigned FileOnlyIdx = File.find_last_of("/");
+                  StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+
+                  XO::open_instance("trace");
+                  XO::emit("{e:function/%s}", EnclosingFunc->getName().str().c_str());
+                  XO::open_container("location");
+                  XO::emit("{e:file/%s}{e:line/%d}", FileOnly.str().c_str(), Line);
+                  XO::close_container("location");
+                  XO::close_instance("trace");
+                }
+              }
+              XO::close_list("trace");
               XO::emit("\n");
               XO::close_instance("private_access");
             }
