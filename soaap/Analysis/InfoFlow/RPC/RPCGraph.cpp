@@ -186,6 +186,7 @@ void RPCGraph::dump(Module& M) {
   for (map<Sandbox*,set<Function*> >::iterator I=sandboxToSendRecvFuncs.begin(), E=sandboxToSendRecvFuncs.end(); I!=E; I++) {
     Sandbox* S = I->first;
     myfile << "\tsubgraph cluster_" << clusterCount++ << " {\n";
+    myfile << "\t\trankdir=TB\n";
     myfile << "\t\tlabel = \"" << (S == NULL ? "<privileged>" : S->getName()) << "\"\n";
     for (Function* F : I->second) {
       if (funcToId[S].find(F) == funcToId[S].end()) {
@@ -197,6 +198,16 @@ void RPCGraph::dump(Module& M) {
       }
       myfile << "];\n";
     }
+    
+    // add invisible edges to achieve a top-to-bottom layout
+    Function* Prev = NULL;
+    for (Function* F : I->second) {
+      if (Prev != NULL) {
+        myfile << "\t\tn" << funcToId[S][Prev] << " -> n" << funcToId[S][F] << " [style=invis];\n";
+      }
+      Prev = F;
+    }
+
     myfile << "\t}\n";
     for (Function* F1 : I->second) {
       for (Function* F2 : I->second) {
