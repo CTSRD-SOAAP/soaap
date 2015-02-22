@@ -13,6 +13,11 @@ import soaap
 args = argparse.ArgumentParser()
 args.add_argument('filename')
 args.add_argument('-o', '--output', default = '-')
+args.add_argument('-c', '--cluster-by', default = '',
+                  help = ("Cluster functions in the output graph by"
+                          + " 'filename', 'namespace' or 'sandbox',"
+                          + " or, using a comma-separated list, by"
+                          + " several of these."))
 args.add_argument('-s', '--simplify', action = 'store_true')
 
 args = args.parse_args()
@@ -23,7 +28,31 @@ out = open(args.output, 'w') if args.output != '-' else sys.stdout
 data = json.load(f)['soaap']
 (functions, calls) = soaap.parse_vulnerabilities(data)
 
-cluster_key = lambda node: node.filename()
+#
+# How do we want to group nodes into subgraphs?
+#
+if args.cluster_by == '':
+    # Put everything together in one big cluster called 'Callgraph'
+    cluster_key = lambda node: 'Callgraph'
+
+else:
+    cluster_by = args.cluster_by.split(',')
+    keys = []
+
+    if 'filename' in cluster_by:
+        keys.append(lambda fn: 'filename: %s' % fn.filename())
+
+    if 'namespace' in cluster_by:
+        keys.append(lambda fn: 'namespace: %s' % fn.namespace())
+
+    if 'sandbox' in cluster_by:
+        keys.append(lambda fn: 'sandbox: %s' % fn.sandbox())
+
+    assert len(keys) == len(cluster_by), '%s -> %s' % (cluster_by, keys)
+
+    def cluster_key(node):
+        return ', '.join([ str(k(node)) for k in keys ])
+
 
 if args.simplify:
     (functions, calls) = callgraph.simplify(functions, calls, cluster_key)
