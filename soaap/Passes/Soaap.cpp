@@ -97,9 +97,10 @@ bool Soaap::runOnModule(Module& M) {
     // do the checks statically
     outs() << "* Calculating privileged methods\n";
     calculatePrivilegedMethods(M);
-    
-    outs() << "* Checking global variable accesses\n";
-    checkGlobalVariables(M);
+    if (!CmdLineOpts::SkipGlobalVariableAnalysis) {
+      outs() << "* Checking global variable accesses\n";
+      checkGlobalVariables(M);
+    }
 
     //outs() << "* Checking file descriptor accesses\n";
     //checkFileDescriptors(M);
@@ -109,7 +110,7 @@ bool Soaap::runOnModule(Module& M) {
 
     outs() << "* Checking propagation of data from sandboxes to privileged components\n";
     checkOriginOfAccesses(M);
-    
+
     outs() << "* Checking propagation of classified data\n";
     checkPropagationOfClassifiedData(M);
 
