@@ -120,7 +120,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
         if (ConstantDataArray* recipientStrArray = dyn_cast<ConstantDataArray>(recipientStrGlobal->getInitializer())) {
           SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Recipient (string): " << recipientStrArray->getAsCString() << "\n");
           recipient = SandboxUtils::getSandboxWithName(recipientStrArray->getAsCString(), sandboxes);
-          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Recipient (obtained): " << (recipient == NULL ? "<privileged>" : recipient->getName()) << "\n");
+          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Recipient (obtained): " << Sandbox::getName(recipient) << "\n");
         }
       }
       if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(1)->stripPointerCasts())) {
@@ -187,7 +187,7 @@ void RPCGraph::dump(Module& M) {
     Sandbox* S = I->first;
     myfile << "\tsubgraph cluster_" << clusterCount++ << " {\n";
     myfile << "\t\trankdir=TB\n";
-    myfile << "\t\tlabel = \"" << (S == NULL ? "<privileged>" : S->getName()) << "\"\n";
+    myfile << "\t\tlabel = \"" << Sandbox::getName(S).str() << "\"\n";
     for (Function* F : I->second) {
       if (funcToId[S].find(F) == funcToId[S].end()) {
         funcToId[S][F] = nextFuncId++;

@@ -38,6 +38,8 @@ namespace soaap {
       bool containsInstruction(Instruction* I);
       bool hasCallgate(Function* F);
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
+      /** The same as getName(), but returns @c "<privileged>" if @p S is nullptr. */
+      static inline StringRef getName(Sandbox* S) { return S ? S->getName() : "<privileged>"; }
 
     private:
       Module& module;
