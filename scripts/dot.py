@@ -2,6 +2,22 @@ import math
 import sys
 
 
+def attribute_list(attrs):
+    """
+    Convert a Python dictionary into a dot-style attribute list:
+    [ foo = "x", bar = "y" ]
+    """
+
+    return (
+        '[ '
+        + ', '.join([
+                '%s = "%s"' % i for i in attrs.items()
+            ])
+        + ' ]'
+    )
+
+
+
 def write_directed_graph(nodes, edges, out = sys.stdout):
     """
     Write a directed graph (in GraphViz Dot format) to an output stream.
