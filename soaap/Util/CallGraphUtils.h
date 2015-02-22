@@ -40,7 +40,7 @@ namespace soaap {
       static bool caching;
       static void populateCallCalleeCaches(Module& M);
       static void calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M);
-      static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*> visited, Module& M);
+      static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*>& visited, Module& M);
   };
 }
 namespace llvm {

@@ -416,10 +416,11 @@ void CallGraphUtils::dumpDOTGraph() {
 }
 
 bool CallGraphUtils::isReachableFrom(Function* Source, Function* Dest, Sandbox* Ctx, Module& M) {
-  return isReachableFromHelper(Source, Source, Dest, Ctx, set<Function*>(), M);
+  set<Function*> visited;
+  return isReachableFromHelper(Source, Source, Dest, Ctx, visited, M);
 }
 
-bool CallGraphUtils::isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*> visited, Module& M) {
+bool CallGraphUtils::isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*>& visited, Module& M) {
   if (Curr == Dest) {
     return true;
   }
