@@ -6,7 +6,7 @@ class Function:
     Nodes in the callgraph are functions and methods.
     """
 
-    def __init__(self, fn, sandbox, location, cve = None):
+    def __init__(self, fn, sandbox, location, cve = None, owner = None):
         assert 'file' in location
         assert 'line' in location
 
@@ -23,6 +23,7 @@ class Function:
         self.sandbox_name = sandbox
         self.location = location
         self.cve = cve
+        self.owner = owner
 
         self.callers = set()
         self.callees = set()

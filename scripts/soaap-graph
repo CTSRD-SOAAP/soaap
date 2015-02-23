@@ -13,6 +13,9 @@ import soaap
 args = argparse.ArgumentParser()
 args.add_argument('filename')
 args.add_argument('-o', '--output', default = '-')
+args.add_argument('-a', '--analysis', default = 'vulnerability_warning',
+                  help = ("Which SOAAP analysis output to parse. Options are: "
+                          + ', '.join(soaap.analyses.keys()) + '.'))
 args.add_argument('-c', '--cluster-by', default = '',
                   help = ("Cluster functions in the output graph by"
                           + " 'filename', 'namespace' or 'sandbox',"
@@ -26,14 +29,14 @@ f = open(args.filename, 'r')
 out = open(args.output, 'w') if args.output != '-' else sys.stdout
 
 data = json.load(f)['soaap']
-(functions, calls) = soaap.parse_vulnerabilities(data)
+(functions, calls) = soaap.parse(data, args.analysis)
 
 #
 # How do we want to group nodes into subgraphs?
 #
 if args.cluster_by == '':
-    # Put everything together in one big cluster called 'Callgraph'
-    cluster_key = lambda node: 'Callgraph'
+    # Put everything together in one big cluster.
+    cluster_key = lambda node: ''
 
 else:
     cluster_by = args.cluster_by.split(',')
@@ -61,6 +64,38 @@ if args.simplify:
 #
 # Convert call graph into GraphViz .dot format.
 #
+style = {
+    'default': {
+        'label': 'Unsandboxed',
+        'fillcolor': '#cccccccc',
+    },
+
+    'mitigated': {
+        'label': 'Mitigated',
+        'fillcolor': '#ffff66cc',
+        'shape': 'octagon'
+    },
+
+    'prev_vuln': {
+        'label': 'Previously vulnerable',
+        'fillcolor': '#ff9999cc',
+        'shape': 'doubleoctagon'
+    },
+
+    'private': {
+        'label': 'Private',
+        'fillcolor': '#ff99cccc',
+        'shape': 'invhouse'
+    },
+
+    'sandboxed': {
+        'label': 'Sandboxed',
+        'fillcolor': '#99ff9999',
+        'style': 'dashed,filled',
+    },
+}
+
+
 out.write('''
 digraph {
     node [ fontname = "Inconsolata" ];
@@ -70,7 +105,28 @@ digraph {
     labelloc = "b";
     rankdir = "BT";
 
-''')
+    subgraph cluster_legend {
+        label = "Legend";
+
+        edge [ style = "invis" ];
+        ''')
+
+
+for (index, name) in enumerate(style):
+    attrs = {
+        'fontname': 'Avenir',
+        'fontsize': '48',
+        'style': 'filled',
+    }
+    attrs.update(style[name])
+
+    out.write('      legend_%d %s\n' % (index, dot.attribute_list(attrs)))
+
+for i in xrange(1, len(style)):
+    out.write('      legend_%d -> legend_%d;\n' % (i - 1, i))
+
+out.write('}\n\n')
+
 
 clusters = {}
 functions = sorted(functions, key = cluster_key)
@@ -79,33 +135,38 @@ for (cluster, group) in itertools.groupby(functions, key = cluster_key):
     name = 'cluster_%d' % (len(clusters) + 1)
     clusters[cluster] = name
 
-    out.write('    subgraph %s {\n' % name)
-    out.write('        bgcolor = "#cccccc33";\n')
-    out.write('        label = "%s";\n' % cluster)
-    out.write('\n')
+    if cluster:
+        out.write('    subgraph %s {\n' % name)
+        out.write('        bgcolor = "#cccccc33";\n')
+        out.write('        label = "%s";\n' % cluster)
+        out.write('\n')
 
     for node in group:
         if node.cve and node.sandbox_name:
-            color = '#ffff66cc'
+            attributes = style['mitigated']
 
         elif node.cve:
-            color = '#ff9999cc'
+            attributes = style['prev_vuln']
+
+        elif node.owner:
+            attributes = style['private']
 
         elif node.sandbox_name:
-            color = '#99ff9999'
+            attributes = style['sandboxed']
 
         else:
-            color = ''
+            attributes = style['default']
 
-        attributes = dot.attribute_list({
-            'fillcolor': color,
-            'label': node.fn[:80],
-            'style': 'filled',
-        })
+        attributes['label'] = node.fn[:80]
+        if 'style' not in attributes:
+            attributes['style'] = 'filled'
+
+        attributes = dot.attribute_list(attributes)
 
         out.write('        "%s" %s;\n' % (node.name(), attributes))
 
-    out.write('    }\n\n')
+    if cluster:
+        out.write('    }\n\n')
 
 for ((source, dest), weight) in calls.items():
     assert source in functions
