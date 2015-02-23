@@ -115,7 +115,7 @@ digraph {
 for (index, name) in enumerate(style):
     attrs = {
         'fontname': 'Avenir',
-        'fontsize': '24',
+        'fontsize': '48',
         'style': 'filled',
     }
     attrs.update(style[name])
