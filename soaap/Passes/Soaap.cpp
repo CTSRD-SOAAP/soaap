@@ -108,7 +108,9 @@ bool Soaap::runOnModule(Module& M) {
     if (CmdLineOpts::Mode == Vuln || CmdLineOpts::Mode == All) {
       outs() << "* Checking rights leaked by past vulnerable code\n";
       checkLeakedRights(M);
-      goto finished;
+      if (CmdLineOpts::Mode == Vuln) {
+        goto finished;
+      }
     }
     if (CmdLineOpts::Mode == Correct || CmdLineOpts::Mode == All) {
       if (!CmdLineOpts::SkipGlobalVariableAnalysis) {
@@ -125,7 +127,9 @@ bool Soaap::runOnModule(Module& M) {
       outs() << "* Checking for calls to privileged functions from sandboxes\n";
       checkPrivilegedCalls(M);
 
-      goto finished;
+      if (CmdLineOpts::Mode == Correct) {
+        goto finished;
+      }
     }
     if (CmdLineOpts::Mode == InfoFlow || CmdLineOpts::Mode == All) {
       outs() << "* Checking propagation of data from sandboxes to privileged components\n";
