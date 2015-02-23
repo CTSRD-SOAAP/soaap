@@ -88,6 +88,13 @@ bool Soaap::runOnModule(Module& M) {
     outs() << "* Listing sandboxed functions\n";
     SandboxUtils::outputSandboxedFunctions(sandboxes);
   }
+  
+  outs() << "* Building RPC graph\n";
+  buildRPCGraph(M);
+
+  if (CmdLineOpts::Mode == Null) {
+    return false;
+  }
 
   if (CmdLineOpts::EmPerf) {
     outs() << "* Instrumenting sandbox emulation calls\n";
@@ -97,35 +104,45 @@ bool Soaap::runOnModule(Module& M) {
     // do the checks statically
     outs() << "* Calculating privileged methods\n";
     calculatePrivilegedMethods(M);
-    if (!CmdLineOpts::SkipGlobalVariableAnalysis) {
-      outs() << "* Checking global variable accesses\n";
-      checkGlobalVariables(M);
+    
+    if (CmdLineOpts::Mode == Vuln || CmdLineOpts::Mode == All) {
+      outs() << "* Checking rights leaked by past vulnerable code\n";
+      checkLeakedRights(M);
+      goto finished;
+    }
+    if (CmdLineOpts::Mode == Correct || CmdLineOpts::Mode == All) {
+      if (!CmdLineOpts::SkipGlobalVariableAnalysis) {
+        outs() << "* Checking global variable accesses\n";
+        checkGlobalVariables(M);
+      }
+
+      //outs() << "* Checking file descriptor accesses\n";
+      //checkFileDescriptors(M);
+
+      outs() << "* Checking system calls\n";
+      checkSysCalls(M);
+    
+      outs() << "* Checking for calls to privileged functions from sandboxes\n";
+      checkPrivilegedCalls(M);
+
+      goto finished;
+    }
+    if (CmdLineOpts::Mode == InfoFlow || CmdLineOpts::Mode == All) {
+      outs() << "* Checking propagation of data from sandboxes to privileged components\n";
+      checkOriginOfAccesses(M);
+
+      outs() << "* Checking propagation of classified data\n";
+      checkPropagationOfClassifiedData(M);
+
+      outs() << "* Checking propagation of sandbox-private data\n";
+      checkPropagationOfSandboxPrivateData(M);
+
+      goto finished;
     }
 
-    //outs() << "* Checking file descriptor accesses\n";
-    //checkFileDescriptors(M);
-
-    outs() << "* Checking system calls\n";
-    checkSysCalls(M);
-
-    outs() << "* Checking propagation of data from sandboxes to privileged components\n";
-    checkOriginOfAccesses(M);
-
-    outs() << "* Checking propagation of classified data\n";
-    checkPropagationOfClassifiedData(M);
-
-    outs() << "* Checking propagation of sandbox-private data\n";
-    checkPropagationOfSandboxPrivateData(M);
-
-    outs() << "* Checking rights leaked by past vulnerable code\n";
-    checkLeakedRights(M);
-
-    outs() << "* Checking for calls to privileged functions from sandboxes\n";
-    checkPrivilegedCalls(M);
-
-    outs() << "* Building RPC graph\n";
-    buildRPCGraph(M);
   }
+
+finished:
 
   XO::close_container("soaap");
   XO::finish();

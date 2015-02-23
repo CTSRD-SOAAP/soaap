@@ -149,3 +149,17 @@ static cl::opt<bool, true> ClSysCallTraces("soaap-syscall-traces",
        cl::cat(CmdLineOpts::SoaapCategory),
        cl::desc("Show traces for system call warnings"),
        cl::location(CmdLineOpts::SysCallTraces));
+
+SoaapMode CmdLineOpts::Mode;
+static cl::opt<SoaapMode, true> ClMode("soaap-mode",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Mode to run SOAAP in"),
+       cl::values(
+         clEnumValN(Null, "null", "Null"),
+         clEnumValN(Vuln, "vulnerable", "Vulnerability Analysis"),
+         clEnumValN(Correct, "correct", "Sandbox Correctness"),
+         clEnumValN(InfoFlow, "infoflow", "Information Flow Analysis"),
+         clEnumValN(All, "all", "All"),
+       clEnumValEnd),
+       cl::location(CmdLineOpts::Mode),
+       cl::init(All)); // default value is All

@@ -15,6 +15,9 @@ namespace soaap {
   enum ReportOutputFormat {
     Text, HTML, JSON, XML
   };
+  enum SoaapMode {
+    Null, Vuln, Correct, InfoFlow, All
+  };
   class CmdLineOpts {
     public:
       static bool EmPerf;
@@ -39,6 +42,7 @@ namespace soaap {
       static string ReportFilePrefix;
       static bool SysCallTraces;
       static cl::OptionCategory SoaapCategory;
+      static SoaapMode Mode;
   };
 }
 
