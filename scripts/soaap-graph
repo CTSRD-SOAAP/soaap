@@ -35,8 +35,8 @@ data = json.load(f)['soaap']
 # How do we want to group nodes into subgraphs?
 #
 if args.cluster_by == '':
-    # Put everything together in one big cluster called 'Callgraph'
-    cluster_key = lambda node: 'Callgraph'
+    # Put everything together in one big cluster.
+    cluster_key = lambda node: ''
 
 else:
     cluster_by = args.cluster_by.split(',')
@@ -64,6 +64,38 @@ if args.simplify:
 #
 # Convert call graph into GraphViz .dot format.
 #
+style = {
+    'default': {
+        'label': 'Unsandboxed',
+        'fillcolor': '#cccccccc',
+    },
+
+    'mitigated': {
+        'label': 'Mitigated',
+        'fillcolor': '#ffff66cc',
+        'shape': 'octagon'
+    },
+
+    'prev_vuln': {
+        'label': 'Previously vulnerable',
+        'fillcolor': '#ff9999cc',
+        'shape': 'doubleoctagon'
+    },
+
+    'private': {
+        'label': 'Private',
+        'fillcolor': '#ff99cccc',
+        'shape': 'invhouse'
+    },
+
+    'sandboxed': {
+        'label': 'Sandboxed',
+        'fillcolor': '#99ff9999',
+        'style': 'dashed,filled',
+    },
+}
+
+
 out.write('''
 digraph {
     node [ fontname = "Inconsolata" ];
@@ -73,7 +105,28 @@ digraph {
     labelloc = "b";
     rankdir = "BT";
 
-''')
+    subgraph cluster_legend {
+        label = "Legend";
+
+        edge [ style = "invis" ];
+        ''')
+
+
+for (index, name) in enumerate(style):
+    attrs = {
+        'fontname': 'Avenir',
+        'fontsize': '24',
+        'style': 'filled',
+    }
+    attrs.update(style[name])
+
+    out.write('      legend_%d %s\n' % (index, dot.attribute_list(attrs)))
+
+for i in xrange(1, len(style)):
+    out.write('      legend_%d -> legend_%d;\n' % (i - 1, i))
+
+out.write('}\n\n')
+
 
 clusters = {}
 functions = sorted(functions, key = cluster_key)
@@ -89,25 +142,25 @@ for (cluster, group) in itertools.groupby(functions, key = cluster_key):
 
     for node in group:
         if node.cve and node.sandbox_name:
-            color = '#ffff66cc'
+            attributes = style['mitigated']
 
         elif node.cve:
-            color = '#ff9999cc'
+            attributes = style['prev_vuln']
 
         elif node.owner:
-            color = '#ff99ffcc'
+            attributes = style['private']
 
         elif node.sandbox_name:
-            color = '#99ff9999'
+            attributes = style['sandboxed']
 
         else:
-            color = ''
+            attributes = style['default']
 
-        attributes = dot.attribute_list({
-            'fillcolor': color,
-            'label': node.fn[:80],
-            'style': 'filled',
-        })
+        attributes['label'] = node.fn[:80]
+        if 'style' not in attributes:
+            attributes['style'] = 'filled'
+
+        attributes = dot.attribute_list(attributes)
 
         out.write('        "%s" %s;\n' % (node.name(), attributes))
 
