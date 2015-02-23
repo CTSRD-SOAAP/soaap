@@ -2,30 +2,72 @@ import callgraph
 import collections
 
 
-def parse_vulnerabilities(soaap):
+
+def get(key, containers, default = None, exclude = ('"none"',)):
     """
-    Parse information about calls to previously-vulnerable code.
+    Retrieve a value from one of a number of containers.
+    """
+
+    for container in containers:
+        if key in container:
+            value = container[key]
+
+            if value not in exclude:
+                return value
+
+    return default
+
+
+analyses = {
+    'private_access': (
+        lambda fn, details: (fn, details['sandbox']),
+        lambda x, prev = {}: {
+            'owner': tuple(
+                [ s['name'] for s in get('sandbox_private', [ x, prev ], []) ]
+            ),
+            'sandbox': tuple(
+                [ s['name'] for s in get('sandbox_access', [ x ], []) ]
+                or get('sandbox', [ prev ], [])
+            ),
+        },
+    ),
+
+    'vulnerability_warning': (
+        lambda fn, details: (fn, details['sandbox']),
+        lambda x, prev = {}: {
+            'cve': x['cve'] if 'cve' in x else None,
+            'sandbox': get('sandbox', [ x, prev ]),
+        },
+    ),
+}
+
+
+def parse(soaap, analysis = 'vulnerabilities'):
+    """
+    Parse the results of a SOAAP analysis.
     """
 
     functions = {}
     calls = collections.defaultdict(int)
 
-    for vuln in soaap['vulnerability_warning']:
-        fn = vuln['function']
-        sandbox = vuln['sandbox']
-        if sandbox == '"none"': sandbox = None
+    (key_fn, get_details) = analyses[analysis]
 
-        key = (fn, sandbox)
+    for warning in soaap[analysis]:
+        fn = warning['function']
+        details = get_details(warning)
+
+        key = key_fn(fn, details)
         if key in functions:
             callee = functions[key]
 
         else:
             callee = functions[key] = callgraph.Function(
-                fn, sandbox, location = vuln['location'], cve = vuln['cve'])
+                fn, location = warning['location'], **details)
 
 
-        for t in vuln['trace']:
-            key = (t['function'], sandbox)
+        for t in warning['trace']:
+            details = get_details(t, details)
+            key = key_fn(t['function'], details)
 
             if key in functions:
                 caller = functions[key]
@@ -33,8 +75,8 @@ def parse_vulnerabilities(soaap):
             else:
                 caller = functions[key] = callgraph.Function(
                     fn = t['function'],
-                    sandbox = sandbox,
-                    location = t['location'] if 'location' in t else t
+                    location = t['location'] if 'location' in t else t,
+                    **details
                 )
 
             callee.callers.add(caller)
