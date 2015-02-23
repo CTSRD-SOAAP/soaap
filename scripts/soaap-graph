@@ -135,10 +135,11 @@ for (cluster, group) in itertools.groupby(functions, key = cluster_key):
     name = 'cluster_%d' % (len(clusters) + 1)
     clusters[cluster] = name
 
-    out.write('    subgraph %s {\n' % name)
-    out.write('        bgcolor = "#cccccc33";\n')
-    out.write('        label = "%s";\n' % cluster)
-    out.write('\n')
+    if cluster:
+        out.write('    subgraph %s {\n' % name)
+        out.write('        bgcolor = "#cccccc33";\n')
+        out.write('        label = "%s";\n' % cluster)
+        out.write('\n')
 
     for node in group:
         if node.cve and node.sandbox_name:
@@ -164,7 +165,8 @@ for (cluster, group) in itertools.groupby(functions, key = cluster_key):
 
         out.write('        "%s" %s;\n' % (node.name(), attributes))
 
-    out.write('    }\n\n')
+    if cluster:
+        out.write('    }\n\n')
 
 for ((source, dest), weight) in calls.items():
     assert source in functions
