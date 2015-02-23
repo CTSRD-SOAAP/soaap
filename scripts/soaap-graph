@@ -91,6 +91,9 @@ for (cluster, group) in itertools.groupby(functions, key = cluster_key):
         elif node.cve:
             color = '#ff9999cc'
 
+        elif node.owner:
+            color = '#ff99ffcc'
+
         elif node.sandbox_name:
             color = '#99ff9999'
 
