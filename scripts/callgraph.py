@@ -42,10 +42,7 @@ class Function:
         return self.fn
 
     def name(self):
-        return '%s <<%s>> (%s:%d)' % (
-            self.fn, self.sandbox_name,
-            self.location['file'], self.location['line']
-        )
+        return u'%s <<%s>>' % (self.fn, self.sandbox_name)
 
     def namespace(self):
         return self.namespace_
