@@ -6,6 +6,7 @@
 #include "Common/Debug.h"
 #include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/InstUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/SandboxUtils.h"
@@ -40,13 +41,7 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
             XO::emit(" *** Untrusted function pointer call in "
                      "\"{:function/%s}\"\n",
                      F->getName().str().c_str());
-            if (MDNode *N = C->getMetadata("dbg")) {
-              DILocation loc(N);
-              XO::emit(
-                " +++ Line {:line_number/%d} of file {:filename/%s}\n",
-                loc.getLineNumber(),
-                loc.getFilename().str().c_str());
-            }
+            InstUtils::EmitInstLocation(C);
             XO::emit("\n");
             //ppPrivilegedPathToInstruction(C, M);
             XO::close_instance("access_origin_warning");

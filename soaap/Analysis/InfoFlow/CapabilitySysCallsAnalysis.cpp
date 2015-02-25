@@ -8,6 +8,7 @@
 
 #include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
 #include "Common/XO.h"
+#include "Util/InstUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/TypeUtils.h"
@@ -198,15 +199,9 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
                        "given fd arg.\n",
               S->getName().c_str(),
               funcName.c_str());
-              if (MDNode *N = C->getMetadata("dbg")) {
-                DILocation loc(N);
-                XO::emit(
-                  " +++ Line {:line_number/%d} of file {:filename/%s}\n",
-                  loc.getLineNumber(),
-                  loc.getFilename().str().c_str());
-              }
+              InstUtils::EmitInstLocation(C);
               if (CmdLineOpts::SysCallTraces) {
-                CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+                CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
               }
               XO::emit("\n");
               XO::close_instance("cap_rights_warning");

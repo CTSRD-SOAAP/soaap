@@ -7,6 +7,7 @@
 #include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
+#include "Util/InstUtils.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
@@ -87,15 +88,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              declareLoc.second, declareLoc.first.c_str());
                     XO::close_container("declare_loc");
                   }
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                    XO::open_container("location");
-                    DILocation loc(N);
-                    XO::emit(
-                      " +++ Line {:line/%d} of file {:file/%s}\n",
-                      loc.getLineNumber(),
-                      loc.getFilename().str().c_str());
-                    XO::close_container("location");
-                  }
+                  InstUtils::EmitInstLocation(&I);
                   alreadyReportedReads.push_back(gv);
                   XO::emit("\n");
                   XO::close_instance("global_access_warning");
@@ -139,15 +132,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              declareLoc.second, declareLoc.first.c_str());
                     XO::close_container("declare_loc");
                   }
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                    XO::open_container("location");
-                    DILocation loc(N);
-                    XO::emit(
-                      " +++ Line {:line/%d} of file {:file/%s}\n",
-                      loc.getLineNumber(),
-                      loc.getFilename().str().c_str());
-                    XO::close_container("location");
-                  }
+                  InstUtils::EmitInstLocation(&I);
                   alreadyReportedWrites.push_back(gv);
                   XO::emit("\n");
                   XO::close_instance("global_access_warning");
@@ -216,15 +201,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                            declareLoc.second, declareLoc.first.c_str());
                   XO::close_container("declare_loc");
                 }
-                if (MDNode *N = I.getMetadata("dbg")) {
-                  XO::open_container("location");
-                  DILocation loc(N);
-                  XO::emit(
-                    " +++ Line {:line/%d} of file {:file/%s}\n",
-                    loc.getLineNumber(),
-                    loc.getFilename().str().c_str());
-                  XO::close_container("location");
-                }
+                InstUtils::EmitInstLocation(&I);
                 alreadyReported.push_back(gv);
                 XO::emit("\n");
                 XO::close_instance("global_lost_update");

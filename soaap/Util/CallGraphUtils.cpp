@@ -618,7 +618,7 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
   return sboxStack;
 }
 
-void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M)
+void CallGraphUtils::EmitCallTrace(Function* Target, Sandbox* S, Module& M)
 {
   XO::open_list("trace");
   XO::emit(" Possible trace:\n");

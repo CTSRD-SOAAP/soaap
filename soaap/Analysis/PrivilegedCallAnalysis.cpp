@@ -4,6 +4,7 @@
 #include "Common/XO.h"
 #include "Common/CmdLineOpts.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/InstUtils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/Support/Debug.h"
@@ -49,15 +50,9 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                      "__soaap_callgates annotation.\n",
                      S->getName().c_str(),
                      privilegedFunc->getName().str().c_str());
-            if (MDNode *N = C->getMetadata("dbg")) {
-              DILocation loc(N);
-              XO::emit(
-                " +++ Line {:line_number/%d} of file {:filename/%s}\n",
-                loc.getLineNumber(),
-                loc.getFilename().str().c_str());
-            }
+            InstUtils::EmitInstLocation(C);
             if (CmdLineOpts::SysCallTraces) {
-              CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+              CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
             }
             XO::close_instance("privileged_call");
           }

@@ -7,6 +7,7 @@
 #include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
+#include "Util/InstUtils.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
@@ -89,16 +90,10 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
                      " *** based on the current sandboxing restrictions.\n",
                      S->getName().c_str(),
                      funcName.c_str());
-            if (MDNode *N = C->getMetadata("dbg")) {
-              DILocation loc(N);
-              XO::emit(
-                " +++ Line {:line_number/%d} of file {:filename/%s}\n",
-                loc.getLineNumber(),
-                loc.getFilename().str().c_str());
-            }
+            InstUtils::EmitInstLocation(C);
             // output trace
             if (CmdLineOpts::SysCallTraces) {
-              CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+              CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
             }
             XO::emit("\n");
             XO::close_instance("syscall_warning");

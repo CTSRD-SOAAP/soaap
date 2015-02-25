@@ -2,6 +2,7 @@
 #include "Common/XO.h"
 #include "Util/ContextUtils.h"
 #include "Util/DebugUtils.h"
+#include "Util/InstUtils.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfo.h"
@@ -72,15 +73,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               XO::close_instance("sandbox_private");
             }
             XO::close_list("sandbox_private");
-            XO::open_container("location");
-            if (MDNode *N = I.getMetadata("dbg")) {
-              DILocation loc(N);
-              XO::emit(
-                " +++ Line {:line/%d} of file {:file/%s}\n",
-                loc.getLineNumber(),
-                loc.getFilename().str().c_str());
-            }
-            XO::close_container("location");
+            InstUtils::EmitInstLocation(&I);
             XO::open_list("trace");
             InstTrace callStack = CallGraphUtils::findPrivilegedPathToFunction(F, M);
             for (Instruction* I : callStack) {
@@ -145,15 +138,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 XO::close_instance("sandbox_access");
               }
               XO::close_list("sandbox_access");
-              XO::open_container("location");
-              if (MDNode *N = I.getMetadata("dbg")) {
-                DILocation loc(N);
-                XO::emit(
-                  " +++ Line {:line/%d} of file {:file/%s}\n",
-                  loc.getLineNumber(),
-                  loc.getFilename().str().c_str());
-              }
-              XO::close_container("location");
+              InstUtils::EmitInstLocation(&I);
               XO::open_list("trace");
               InstTrace callStack = CallGraphUtils::findSandboxedPathToFunction(F, S, M);
               for (Instruction* I : callStack) {
@@ -229,13 +214,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   XO::close_instance("sandbox_access");
                 }
                 XO::close_list("sandbox_access");
-                if (MDNode *N = I.getMetadata("dbg")) {
-                  DILocation loc(N);
-                  XO::emit(
-                    " +++ Line {:line/%d} of file {:file/%s}\n",
-                    loc.getLineNumber(),
-                    loc.getFilename().str().c_str());
-                }
+                InstUtils::EmitInstLocation(&I);
+                CallGraphUtils::EmitCallTrace(F, S, M);
                 XO::emit("\n");
                 XO::close_instance("private_leak");
               }
@@ -268,13 +248,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::close_instance("sandbox_access");
                   }
                   XO::close_list("sandbox_access");
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                    DILocation loc(N);
-                    XO::emit(
-                      " +++ Line {:line/%d} of file {:file/%s}\n",
-                      loc.getLineNumber(),
-                      loc.getFilename().str().c_str());
-                  }
+                  InstUtils::EmitInstLocation(&I);
+                  CallGraphUtils::EmitCallTrace(F, S, M);
                   XO::emit("\n");
                   XO::close_instance("private_leak");
                 }
@@ -300,13 +275,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::close_instance("sandbox_access");
                     }
                     XO::close_list("sandbox_access");
-                    if (MDNode *N = I.getMetadata("dbg")) {
-                      DILocation loc(N);
-                      XO::emit(
-                        " +++ Line {:line/%d} of file {:file/%s}\n",
-                        loc.getLineNumber(),
-                        loc.getFilename().str().c_str());
-                    }
+                    InstUtils::EmitInstLocation(&I);
+                    CallGraphUtils::EmitCallTrace(F, S, M);
                     XO::emit("\n");
                     XO::close_instance("private_leak");
                   }
@@ -325,13 +295,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              F->getName().str().c_str(),
                              SandboxUtils::stringifySandboxNames(name).c_str(),
                              Callee->getName().str().c_str());
-                    if (MDNode *N = I.getMetadata("dbg")) {
-                      DILocation loc(N);
-                      XO::emit(
-                        " +++ Line {:line/%d} of file {:file/%s}\n",
-                        loc.getLineNumber(),
-                        loc.getFilename().str().c_str());
-                    }
+                    InstUtils::EmitInstLocation(&I);
+                    CallGraphUtils::EmitCallTrace(F, S, M);
                     XO::emit("\n");
                     XO::close_instance("private_leak");
                   }
@@ -357,13 +322,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::close_instance("sandbox_access");
                   }
                   XO::close_list("sandbox_access");
-                  if (MDNode *N = I.getMetadata("dbg")) {
-                    DILocation loc(N);
-                    XO::emit(
-                      " +++ Line {:line/%d} of file {:file/%s}\n",
-                      loc.getLineNumber(),
-                      loc.getFilename().str().c_str());
-                  }
+                  InstUtils::EmitInstLocation(&I);
+                  CallGraphUtils::EmitCallTrace(F, S, M);
                   XO::emit("\n");
                   XO::close_instance("private_leak");
                 }
@@ -382,6 +342,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                            "from entrypoint \"{:entrypoint/%s}\"\n",
                            S->getName().c_str(),
                            F->getName().str().c_str());
+                  InstUtils::EmitInstLocation(&I);
+                  CallGraphUtils::EmitCallTrace(F, S, M);
                   XO::close_instance("private_leak");
                 }
               }

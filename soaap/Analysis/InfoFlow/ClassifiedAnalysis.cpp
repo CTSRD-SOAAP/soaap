@@ -109,13 +109,15 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
               XO::close_instance("clearance");
             }
             XO::close_list("clearance");
+            XO::open_container("location");
             if (MDNode *N = I.getMetadata("dbg")) {
               DILocation loc(N);
               XO::emit(
-                " +++ Line {:line_number/%d} of file {:filename/%s}\n",
+                " +++ Line {:line/%d} of file {:file/%s}\n",
                 loc.getLineNumber(),
                 loc.getFilename().str().c_str());
             }
+            XO::close_container("location");
             XO::emit("\n");
             XO::close_instance("classified_warning");
           }

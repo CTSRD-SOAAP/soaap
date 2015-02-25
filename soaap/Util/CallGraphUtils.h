@@ -33,7 +33,7 @@ namespace soaap {
        * emits a call trace to @p Target for the given sandbox @p S.
        * If @p S is null then a privileged call graph will be emitted instead.
        */
-      static void emitCallTrace(Function* Target, Sandbox* S, Module& M);
+      static void EmitCallTrace(Function* Target, Sandbox* S, Module& M);
     private:
       static map<const CallInst*, FunctionSet> callToCallees;
       static map<const Function*, CallInstSet> calleeToCalls;
