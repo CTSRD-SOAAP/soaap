@@ -13,8 +13,8 @@ import soaap
 args = argparse.ArgumentParser()
 args.add_argument('filename')
 args.add_argument('-o', '--output', default = '-')
-args.add_argument('-a', '--analysis', default = 'vulnerability_warning',
-                  help = ("Which SOAAP analysis output to parse. Options are: "
+args.add_argument('-a', '--analyses', default = 'vulnerability_warning',
+                  help = ("Which SOAAP analysis outputs to parse. Options are: "
                           + ', '.join(soaap.analyses.keys()) + '.'))
 args.add_argument('-c', '--cluster-by', default = '',
                   help = ("Cluster functions in the output graph by"
@@ -29,7 +29,18 @@ f = open(args.filename, 'r')
 out = open(args.output, 'w') if args.output != '-' else sys.stdout
 
 data = json.load(f)['soaap']
-(functions, calls) = soaap.parse(data, args.analysis)
+
+functions = set()
+
+for analysis in args.analyses.split(','):
+    (f,c) = soaap.parse(data, analysis)
+
+    if functions:
+        functions = functions.union(f)
+        calls.update(c)
+
+    else:
+        (functions, calls) = (f,c)
 
 #
 # How do we want to group nodes into subgraphs?

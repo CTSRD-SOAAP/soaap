@@ -20,15 +20,15 @@ def get(key, containers, default = None, exclude = ('"none"',)):
 
 analyses = {
     'private_access': (
-        lambda fn, details: (fn, details['sandbox']),
+        lambda fn, details: (fn, get('sandbox', [ details ])),
         lambda x, prev = {}: {
             'owner': tuple(
                 [ s['name'] for s in get('sandbox_private', [ x, prev ], []) ]
             ),
-            'sandbox': tuple(
+            'sandbox': (
                 [ s['name'] for s in get('sandbox_access', [ x ], []) ]
-                or get('sandbox', [ prev ], [])
-            ),
+                or [ get('sandbox', [ prev ]) ]
+            )[0],
         },
     ),
 
@@ -85,4 +85,4 @@ def parse(soaap, analysis = 'vulnerabilities'):
 
             callee = caller
 
-    return (functions.values(), calls)
+    return (set(functions.values()), calls)
