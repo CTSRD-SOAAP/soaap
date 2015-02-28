@@ -306,26 +306,37 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               else if (SandboxUtils::isSandboxEntryPoint(M, Callee)) { // possible cross-sandbox call
                 Sandbox* S2 = SandboxUtils::getSandboxForEntryPoint(Callee, sandboxes);
                 if (S != S2) {
-                  XO::open_instance("private_leak");
-                  XO::emit("{e:type/%s}", "cross_sandbox");
-                  XO::emit(" *** Sandboxed method \"{:function}\" executing "
-                           "in sandboxes: {d:sandboxes/%s} may leak private "
-                           "data through a cross-sandbox call into "
-                           "[{:callee_sandbox/%s}]\n",
-                           F->getName().str().c_str(),
-                           SandboxUtils::stringifySandboxNames(name).c_str(),
-                           S2->getName().c_str());
-                  XO::open_list("sandbox_access");
-                  for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                    XO::open_instance("sandbox_access");
-                    XO::emit("{e:name/%s}", S->getName().c_str());
-                    XO::close_instance("sandbox_access");
+                  bool privateArg = false;
+                  for (int i=0; i<call->getNumArgOperands(); i++) {
+                    Value* arg = call->getArgOperand(i);
+                    if (state[S][arg] & name) {
+                      privateArg = true;
+                      break;
+                    }
                   }
-                  XO::close_list("sandbox_access");
-                  InstUtils::EmitInstLocation(&I);
-                  CallGraphUtils::EmitCallTrace(F, S, M);
-                  XO::emit("\n");
-                  XO::close_instance("private_leak");
+                  
+                  if (privateArg) {
+                    XO::open_instance("private_leak");
+                    XO::emit("{e:type/%s}", "cross_sandbox");
+                    XO::emit(" *** Sandboxed method \"{:function}\" executing "
+                             "in sandboxes: {d:sandboxes/%s} may leak private "
+                             "data through a cross-sandbox call into "
+                             "[{:callee_sandbox/%s}]\n",
+                             F->getName().str().c_str(),
+                             SandboxUtils::stringifySandboxNames(name).c_str(),
+                             S2->getName().c_str());
+                    XO::open_list("sandbox_access");
+                    for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
+                      XO::open_instance("sandbox_access");
+                      XO::emit("{e:name/%s}", S->getName().c_str());
+                      XO::close_instance("sandbox_access");
+                    }
+                    XO::close_list("sandbox_access");
+                    InstUtils::EmitInstLocation(&I);
+                    CallGraphUtils::EmitCallTrace(F, S, M);
+                    XO::emit("\n");
+                    XO::close_instance("private_leak");
+                  }
                 }
               }
             }
