@@ -89,6 +89,9 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::close_container("declare_loc");
                   }
                   InstUtils::EmitInstLocation(&I);
+                  if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
+                    CallGraphUtils::EmitCallTrace(F, S, M);
+                  }
                   alreadyReportedReads.push_back(gv);
                   XO::emit("\n");
                   XO::close_instance("global_access_warning");
@@ -133,6 +136,9 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::close_container("declare_loc");
                   }
                   InstUtils::EmitInstLocation(&I);
+                  if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
+                    CallGraphUtils::EmitCallTrace(F, S, M);
+                  }
                   alreadyReportedWrites.push_back(gv);
                   XO::emit("\n");
                   XO::close_instance("global_access_warning");

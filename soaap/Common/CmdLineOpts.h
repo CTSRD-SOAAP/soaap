@@ -9,14 +9,17 @@ using namespace llvm;
 using namespace std;
 
 namespace soaap {
-  enum SandboxPlatformName {
+  enum class SandboxPlatformName {
     None, Annotated, Capsicum, Seccomp
   };
-  enum ReportOutputFormat {
+  enum class ReportOutputFormat {
     Text, HTML, JSON, XML
   };
-  enum SoaapMode {
-    Null, Vuln, Correct, InfoFlow, All
+  enum class SoaapMode {
+    Null, Vuln, Correct, InfoFlow, Custom, All
+  };
+  enum class SoaapAnalysis {
+    None, Vuln, Globals, SysCalls, PrivCalls, InfoFlow, All
   };
   class CmdLineOpts {
     public:
@@ -43,7 +46,15 @@ namespace soaap {
       static bool SysCallTraces;
       static cl::OptionCategory SoaapCategory;
       static SoaapMode Mode;
+      static list<SoaapAnalysis> OutputTraces;
+      static list<SoaapAnalysis> SoaapAnalyses;
+  
+      template<typename T>
+      static bool isSelected(T opt, list<T> optsList) {
+        return find(optsList.begin(), optsList.end(), opt) != optsList.end();
+      }
   };
+
 }
 
 #endif

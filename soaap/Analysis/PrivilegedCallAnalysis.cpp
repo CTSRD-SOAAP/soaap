@@ -51,7 +51,7 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                      S->getName().c_str(),
                      privilegedFunc->getName().str().c_str());
             InstUtils::EmitInstLocation(C);
-            if (CmdLineOpts::SysCallTraces) {
+            if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::OutputTraces)) {
               CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
             }
             XO::close_instance("privileged_call");

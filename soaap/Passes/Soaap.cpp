@@ -92,10 +92,6 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Building RPC graph\n";
   buildRPCGraph(M);
 
-  if (CmdLineOpts::Mode == Null) {
-    return false;
-  }
-
   if (CmdLineOpts::EmPerf) {
     outs() << "* Instrumenting sandbox emulation calls\n";
     instrumentPerfEmul(M);
@@ -105,33 +101,30 @@ bool Soaap::runOnModule(Module& M) {
     outs() << "* Calculating privileged methods\n";
     calculatePrivilegedMethods(M);
     
-    if (CmdLineOpts::Mode == Vuln || CmdLineOpts::Mode == All) {
+    if (CmdLineOpts::isSelected(SoaapAnalysis::Vuln, CmdLineOpts::SoaapAnalyses)) {
       outs() << "* Checking rights leaked by past vulnerable code\n";
       checkLeakedRights(M);
-      if (CmdLineOpts::Mode == Vuln) {
-        goto finished;
-      }
     }
-    if (CmdLineOpts::Mode == Correct || CmdLineOpts::Mode == All) {
-      if (!CmdLineOpts::SkipGlobalVariableAnalysis) {
-        outs() << "* Checking global variable accesses\n";
-        checkGlobalVariables(M);
-      }
+    
+    if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking global variable accesses\n";
+      checkGlobalVariables(M);
+    }
 
-      //outs() << "* Checking file descriptor accesses\n";
-      //checkFileDescriptors(M);
+    //outs() << "* Checking file descriptor accesses\n";
+    //checkFileDescriptors(M);
 
+    if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::SoaapAnalyses)) {
       outs() << "* Checking system calls\n";
       checkSysCalls(M);
-    
+    }
+  
+    if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::SoaapAnalyses)) {
       outs() << "* Checking for calls to privileged functions from sandboxes\n";
       checkPrivilegedCalls(M);
-
-      if (CmdLineOpts::Mode == Correct) {
-        goto finished;
-      }
     }
-    if (CmdLineOpts::Mode == InfoFlow || CmdLineOpts::Mode == All) {
+
+    if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::SoaapAnalyses)) {
       outs() << "* Checking propagation of data from sandboxes to privileged components\n";
       checkOriginOfAccesses(M);
 
@@ -140,13 +133,9 @@ bool Soaap::runOnModule(Module& M) {
 
       outs() << "* Checking propagation of sandbox-private data\n";
       checkPropagationOfSandboxPrivateData(M);
-
-      goto finished;
     }
 
   }
-
-finished:
 
   XO::close_container("soaap");
   XO::finish();
@@ -162,7 +151,6 @@ void Soaap::processCmdLineArgs(Module& M) {
   }
 
   // process ClSandboxPlatform
-  SDEBUG("soaap", 3, dbgs() << "Sandboxing model: " << CmdLineOpts::SandboxPlatform << "\n");
   switch (CmdLineOpts::SandboxPlatform) {
     case SandboxPlatformName::None: {
       // no sandboxing
@@ -182,7 +170,7 @@ void Soaap::processCmdLineArgs(Module& M) {
       break;
     }
     default: {
-      errs() << "Unrecognised Sandbox Platform " << CmdLineOpts::SandboxPlatform << "\n";
+      errs() << "Unrecognised Sandbox Platform\n";
     }
   }
 
@@ -190,16 +178,16 @@ void Soaap::processCmdLineArgs(Module& M) {
   // default value is text
   // TODO: not sure how to specify this in the option itself
   if (CmdLineOpts::ReportOutputFormats.empty()) { 
-    CmdLineOpts::ReportOutputFormats.push_back(Text);
+    CmdLineOpts::ReportOutputFormats.push_back(ReportOutputFormat::Text);
   }
   for (ReportOutputFormat r : CmdLineOpts::ReportOutputFormats) {
     switch (r) {
-      case Text: {
+      case ReportOutputFormat::Text: {
         SDEBUG("soaap", 3, dbgs() << "Text selected\n");
         XO::create(XO_STYLE_TEXT, XOF_FLUSH);
         break;
       }
-      case HTML: {
+      case ReportOutputFormat::HTML: {
         SDEBUG("soaap", 3, dbgs() << "HTML selected\n");
         string filename = CmdLineOpts::ReportFilePrefix + ".html";
         if (FILE* fp = fopen(filename.c_str(), "w")) {
@@ -210,7 +198,7 @@ void Soaap::processCmdLineArgs(Module& M) {
         }
         break;
       }
-      case JSON: {
+      case ReportOutputFormat::JSON: {
         SDEBUG("soaap", 3, dbgs() << "JSON selected\n");
         string filename = CmdLineOpts::ReportFilePrefix + ".json";
         SDEBUG("soaap", 3, dbgs() << "Opening file \"" << filename << "\"\n");
@@ -222,7 +210,7 @@ void Soaap::processCmdLineArgs(Module& M) {
         }
         break;
       }
-      case XML: {
+      case ReportOutputFormat::XML: {
         SDEBUG("soaap", 3, dbgs() << "XML selected\n");
         string filename = CmdLineOpts::ReportFilePrefix + ".xml";
         SDEBUG("soaap", 3, dbgs() << "Opening file \"" << filename << "\"\n");
@@ -232,6 +220,52 @@ void Soaap::processCmdLineArgs(Module& M) {
         else {
           errs() << "Error creating XML report file: " << strerror(errno) << "\n";
         }
+        break;
+      }
+      default: { }
+    }
+  }
+
+  if (CmdLineOpts::OutputTraces.empty()) {
+    // "vulnerability" is the default
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::Vuln);
+  }
+  else if (CmdLineOpts::isSelected(SoaapAnalysis::All, CmdLineOpts::OutputTraces)) {
+    // expand "all" to all analyses
+    CmdLineOpts::OutputTraces.clear();
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::Vuln);
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::Globals);
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::SysCalls);
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::PrivCalls);
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::InfoFlow);
+  }
+
+  if (CmdLineOpts::SoaapAnalyses.empty()
+     || CmdLineOpts::isSelected(SoaapAnalysis::All, CmdLineOpts::SoaapAnalyses)) {
+    // "all" is the default, also expand "all" to all analyses
+    CmdLineOpts::SoaapAnalyses.clear();
+    CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Vuln);
+    CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Globals);
+    CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SysCalls);
+    CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::PrivCalls);
+    CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::InfoFlow);
+  }
+
+  if (CmdLineOpts::Mode != SoaapMode::Custom) {
+    CmdLineOpts::SoaapAnalyses.clear();
+    switch (CmdLineOpts::Mode) {
+      case SoaapMode::Vuln: {
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Vuln);
+        break;
+      }
+      case SoaapMode::Correct: {
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Globals);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SysCalls);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::PrivCalls);
+        break;
+      }
+      case SoaapMode::InfoFlow: {
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::InfoFlow);
         break;
       }
       default: { }

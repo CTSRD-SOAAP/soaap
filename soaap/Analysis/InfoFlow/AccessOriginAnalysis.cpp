@@ -42,6 +42,9 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
                      "\"{:function/%s}\"\n",
                      F->getName().str().c_str());
             InstUtils::EmitInstLocation(C);
+            if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
+              CallGraphUtils::EmitCallTrace(F, NULL, M);
+            }
             XO::emit("\n");
             //ppPrivilegedPathToInstruction(C, M);
             XO::close_instance("access_origin_warning");

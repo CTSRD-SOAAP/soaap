@@ -103,12 +103,12 @@ static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platf
        cl::desc("Sandbox platform to model"),
        cl::values(
          clEnumValN(SandboxPlatformName::None, "none", "None"),
-         clEnumValN(Annotated, "annotated", "Annotated"),
-         clEnumValN(Capsicum, "capsicum", "Capsicum (default)"),
-         clEnumValN(Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),
+         clEnumValN(SandboxPlatformName::Annotated, "annotated", "Annotated"),
+         clEnumValN(SandboxPlatformName::Capsicum, "capsicum", "Capsicum (default)"),
+         clEnumValN(SandboxPlatformName::Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),
        clEnumValEnd),
        cl::location(CmdLineOpts::SandboxPlatform),
-       cl::init(Capsicum)); // default value is Capsicum
+       cl::init(SandboxPlatformName::Capsicum)); // default value is Capsicum
 
 bool CmdLineOpts::DumpDOTCallGraph;
 static cl::opt<bool, true> ClDumpDOTCallGraph("soaap-dump-dot-callgraph",
@@ -128,10 +128,10 @@ static cl::list<ReportOutputFormat, list<ReportOutputFormat> > ClReportOutputFor
        cl::desc("Comma-separated list of report-output formats"),
        cl::value_desc("list of report-output formats"),
        cl::values(
-         clEnumValN(Text, "text", "Text (on stdout)"),
-         clEnumValN(JSON, "json", "JSON"),
-         clEnumValN(XML, "xml", "XML"),
-         clEnumValN(HTML, "html", "HTML"),
+         clEnumValN(ReportOutputFormat::Text, "text", "Text (on stdout)"),
+         clEnumValN(ReportOutputFormat::JSON, "json", "JSON"),
+         clEnumValN(ReportOutputFormat::XML, "xml", "XML"),
+         clEnumValN(ReportOutputFormat::HTML, "html", "HTML"),
        clEnumValEnd),
        cl::CommaSeparated,
        cl::location(CmdLineOpts::ReportOutputFormats));
@@ -155,11 +155,46 @@ static cl::opt<SoaapMode, true> ClMode("soaap-mode",
        cl::cat(CmdLineOpts::SoaapCategory),
        cl::desc("Mode to run SOAAP in"),
        cl::values(
-         clEnumValN(Null, "null", "Null"),
-         clEnumValN(Vuln, "vulnerable", "Vulnerability Analysis"),
-         clEnumValN(Correct, "correct", "Sandbox Correctness"),
-         clEnumValN(InfoFlow, "infoflow", "Information Flow Analysis"),
-         clEnumValN(All, "all", "All"),
+         clEnumValN(SoaapMode::Null, "null", "Null"),
+         clEnumValN(SoaapMode::Vuln, "vulnerable", "Vulnerability Analysis"),
+         clEnumValN(SoaapMode::Correct, "correct", "Sandbox Correctness"),
+         clEnumValN(SoaapMode::InfoFlow, "infoflow", "Information Flow Analysis"),
+         clEnumValN(SoaapMode::Custom, "custom", "As per -soaap-analyses option (default)"),
+         clEnumValN(SoaapMode::All, "all", "All"),
        clEnumValEnd),
        cl::location(CmdLineOpts::Mode),
-       cl::init(All)); // default value is All
+       cl::init(SoaapMode::Custom)); // default value is Custom
+
+list<SoaapAnalysis> CmdLineOpts::OutputTraces;
+static cl::list<SoaapAnalysis, list<SoaapAnalysis> > ClOutputTraces("soaap-output-traces",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Comma-separated list of analyses for which to output traces"),
+       cl::value_desc("list of analyses"),
+       cl::values(
+         clEnumValN(SoaapAnalysis::None, "none", "No Analysis"),
+         clEnumValN(SoaapAnalysis::Vuln, "vulnerability", "Vulnerability Analysis (default)"),
+         clEnumValN(SoaapAnalysis::Globals, "globals", "Global Variable Analysis"),
+         clEnumValN(SoaapAnalysis::SysCalls, "syscalls", "System Call Analyses"),
+         clEnumValN(SoaapAnalysis::PrivCalls, "privcalls", "Privileged Calls Analysis"),
+         clEnumValN(SoaapAnalysis::InfoFlow, "infoflow", "Information Flow Analyses"),
+         clEnumValN(SoaapAnalysis::All, "all", "All"),
+       clEnumValEnd),
+       cl::CommaSeparated,
+       cl::location(CmdLineOpts::OutputTraces));
+
+list<SoaapAnalysis> CmdLineOpts::SoaapAnalyses;
+static cl::list<SoaapAnalysis, list<SoaapAnalysis> > ClSoaapAnalyses("soaap-analyses",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Comma-separated list of analyses to perform"),
+       cl::value_desc("list of analyses"),
+       cl::values(
+         clEnumValN(SoaapAnalysis::None, "none", "No Analysis"),
+         clEnumValN(SoaapAnalysis::Vuln, "vulnerability", "Vulnerability Analysis"),
+         clEnumValN(SoaapAnalysis::Globals, "globals", "Global Variable Analysis"),
+         clEnumValN(SoaapAnalysis::SysCalls, "syscalls", "System Call Analyses"),
+         clEnumValN(SoaapAnalysis::PrivCalls, "privcalls", "Privileged Calls Analysis"),
+         clEnumValN(SoaapAnalysis::InfoFlow, "infoflow", "Information Flow Analyses"),
+         clEnumValN(SoaapAnalysis::All, "all", "All (default)"),
+       clEnumValEnd),
+       cl::CommaSeparated,
+       cl::location(CmdLineOpts::SoaapAnalyses));

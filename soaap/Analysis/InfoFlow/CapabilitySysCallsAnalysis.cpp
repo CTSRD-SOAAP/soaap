@@ -200,7 +200,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
               S->getName().c_str(),
               funcName.c_str());
               InstUtils::EmitInstLocation(C);
-              if (CmdLineOpts::SysCallTraces) {
+              if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
               }
               XO::emit("\n");

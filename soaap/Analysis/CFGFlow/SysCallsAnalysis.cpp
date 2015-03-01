@@ -92,7 +92,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
                      funcName.c_str());
             InstUtils::EmitInstLocation(C);
             // output trace
-            if (CmdLineOpts::SysCallTraces) {
+            if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
               CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
             }
             XO::emit("\n");
