@@ -21,6 +21,15 @@ using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
+  init();
+}
+
+Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
+  : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
+  init();
+}
+
+void Sandbox::init() {
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed functions\n");
   findSandboxedFunctions();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed calls\n");
@@ -29,8 +38,10 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   findSharedGlobalVariables();
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
   findCallgates();
-	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding capabilities\n");
-  findCapabilities();
+  if (entryPoint) {
+	  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding capabilities\n");
+    findCapabilities();
+  }
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
   findCreationPoints();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
@@ -38,23 +49,21 @@ Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int
   findPrivateData();
 }
 
-Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
-  : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
-	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed functions\n");
-  findSandboxedFunctions();
-  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding sandboxed calls\n");
-  findSandboxedCalls();
-	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding shared global variables\n");
-  findSharedGlobalVariables();
-	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
-  findCallgates();
-	//SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding capabilities\n");
-  //findCapabilities();
-  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
-  findCreationPoints();
-  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
-  findAllowedSysCalls();
-  findPrivateData();
+void Sandbox::reInit() {
+  // clear everything
+  callgates.clear();
+  functionsVec.clear();
+  functionsSet.clear();
+  tlCallInsts.clear();
+  callInsts.clear();
+  creationPoints.clear();
+  sysCallLimitPoints.clear();
+  sysCallLimitPointToAllowedSysCalls.clear();
+  sharedVarToPerms.clear();
+  caps.clear();
+  privateData.clear();
+
+  init();
 }
 
 Function* Sandbox::getEntryPoint() {

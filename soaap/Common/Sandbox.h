@@ -14,6 +14,7 @@ namespace soaap {
     public:
       Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
       Sandbox(string n, int i, InstVector& region, bool p, Module& m);
+      void reInit();
       string getName();
       int getNameIdx();
       Function* getEntryPoint();
@@ -62,6 +63,7 @@ namespace soaap {
       int overhead;
       ValueSet privateData;
       
+      void init();
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(Function* F);
       void findSandboxedCalls();
