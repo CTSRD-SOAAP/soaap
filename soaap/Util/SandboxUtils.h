@@ -39,8 +39,8 @@ namespace soaap {
       static int nextSandboxNameBitIdx;
       static FunctionSet privilegedMethods;
       static SmallSet<Function*,16> sandboxEntryPoints;
-      static void calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
-      static void calculatePrivilegedMethods(Module& M, CallGraphNode* Node);
+      static void calculateSandboxedMethods(Function* F, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
+      static void calculatePrivilegedMethods(Module& M, Function* F);
       static void findAllSandboxedInstructions(Instruction* I, string sboxName, InstVector& insts);
   };
 }

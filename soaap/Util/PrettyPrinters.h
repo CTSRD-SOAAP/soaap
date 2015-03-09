@@ -16,7 +16,6 @@ namespace soaap {
       static void ppPrivilegedPathToFunction(Function* F, Module& M);
       static void ppTaintSource(CallInst* C);
       static void ppTrace(InstTrace& trace);
-      static InstTrace findPathToFunc(Function* From, Function* To, ValueIntMap* shadow, int taint);
     
     private:
       static void ppInstruction(Instruction* I);

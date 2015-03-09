@@ -1,4 +1,5 @@
 #include "Common/Debug.h"
+#include "Util/CallGraphUtils.h"
 #include "Util/ClassifiedUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
@@ -223,18 +224,15 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSand
 
 FunctionVector SandboxUtils::getSandboxedMethods(SandboxVector& sandboxes) {
   FunctionVector sandboxedMethods;
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Sandbox* S : sandboxes) {
     Function* F = S->getEntryPoint();
-    CallGraphNode* Node = CG->getOrInsertFunction(F);
     int sandboxName = S->getNameIdx();
-    calculateSandboxedMethods(Node, sandboxName, F, sandboxedMethods);
+    calculateSandboxedMethods(F, sandboxName, F, sandboxedMethods);
   }
   return sandboxedMethods;
 }
 
-void SandboxUtils::calculateSandboxedMethods(CallGraphNode* node, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods) {
-  Function* F = node->getFunction();
+void SandboxUtils::calculateSandboxedMethods(Function* F, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods) {
   SDEBUG("soaap.util.sandbox", 3, dbgs() << "Visiting " << F->getName() << "\n");
    
   if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
@@ -245,49 +243,42 @@ void SandboxUtils::calculateSandboxedMethods(CallGraphNode* node, int sandboxNam
   sandboxedMethods.push_back(F);
 
 //      outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
-  for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
-    Value* V = I->first;
-    CallGraphNode* calleeNode = I->second;
-    if (Function* calleeFunc = calleeNode->getFunction()) {
-      //TODO: If an entry point, update sandboxName and entryPoint
-      /*if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
-        SDEBUG("soaap.util.sandbox", 3, dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
-        sandboxName = sandboxEntryPointToName[calleeFunc];
-        entryPoint = calleeFunc;
-      }*/
-      calculateSandboxedMethods(calleeNode, sandboxName, entryPoint, sandboxedMethods);
-    }
+  Module* M = F->getParent();
+  for (Function* SuccFunc : CallGraphUtils::getCallees(F, *M)) {
+    //TODO: If an entry point, update sandboxName and entryPoint
+    /*if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
+      SDEBUG("soaap.util.sandbox", 3, dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
+      sandboxName = sandboxEntryPointToName[calleeFunc];
+      entryPoint = calleeFunc;
+    }*/
+    calculateSandboxedMethods(SuccFunc, sandboxName, entryPoint, sandboxedMethods);
   }
 }
 
 FunctionSet SandboxUtils::getPrivilegedMethods(Module& M) {
   if (privilegedMethods.empty()) {
-    CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     if (Function* MainFunc = M.getFunction("main")) {
-      CallGraphNode* MainNode = (*CG)[MainFunc];
-      calculatePrivilegedMethods(M, MainNode);
+      calculatePrivilegedMethods(M, MainFunc);
     }
   }
   return privilegedMethods;
 }
 
-void SandboxUtils::calculatePrivilegedMethods(Module& M, CallGraphNode* Node) {
-  if (Function* F = Node->getFunction()) {
-    // if a sandbox entry point, then ignore
-    if (isSandboxEntryPoint(M, F))
-      return;
-    
-    // if already visited this function, then ignore as cycle detected
-    if (privilegedMethods.count(F) > 0)
-      return;
+void SandboxUtils::calculatePrivilegedMethods(Module& M, Function* F) {
+  // if a sandbox entry point, then ignore
+  if (isSandboxEntryPoint(M, F))
+    return;
+  
+  // if already visited this function, then ignore as cycle detected
+  if (privilegedMethods.count(F) > 0)
+    return;
 
-    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
-    privilegedMethods.insert(F);
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
+  privilegedMethods.insert(F);
 
-    // recurse on callees
-    for (CallGraphNode::iterator I=Node->begin(), E=Node->end(); I!=E; I++) {
-      calculatePrivilegedMethods(M, I->second);
-    }
+  // recurse on callees
+  for (Function* SuccFunc : CallGraphUtils::getCallees(F, M)) {
+    calculatePrivilegedMethods(M, SuccFunc);
   }
 }
 

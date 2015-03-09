@@ -26,7 +26,7 @@ namespace soaap {
       FunctionSet privilegedMethods;
       CallInstVector untrustedSources;
 
-      void ppPrivilegedPathToInstruction(Instruction* I, Module& M);
+      //void ppPrivilegedPathToInstruction(Instruction* I, Module& M);
   };
 }
 #endif 

@@ -14,6 +14,7 @@
 #include <vector>
 #include <set>
 #include <unordered_map>
+#include <utility>
 
 #include "Analysis/InfoFlow/Context.h"
 
@@ -36,6 +37,7 @@ namespace soaap {
   typedef list<Instruction*> InstVector;
   typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
   typedef SmallSet<Value*,16> ValueSet;
+  typedef pair<CallInst*,Function*> CallGraphEdge;
 }
 
 #endif

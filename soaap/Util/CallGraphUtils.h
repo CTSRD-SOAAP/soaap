@@ -13,14 +13,15 @@ namespace soaap {
   class FPInferredTargetsAnalysis;
   class CallGraphUtils {
     public:
-      static void loadDynamicCallGraphEdges(Module& M);
-      static void loadAnnotatedCallGraphEdges(Module& M);
+      static void loadAnnotatedInferredCallGraphEdges(Module& M);
       static void listFPCalls(Module& M, SandboxVector& sandboxes);
       static void listFPTargets(Module& M);
       static void listAllFuncs(Module& M);
       static bool isIndirectCall(CallInst* C);
       static Function* getDirectCallee(CallInst* C);
       static FunctionSet getCallees(const CallInst* C, Module& M);
+      static FunctionSet getCallees(const Function* F, Module& M);
+      static set<CallGraphEdge> getCallGraphEdges(const Function* F, Module& M);
       static CallInstSet getCallers(const Function* F, Module& M);
       static bool isExternCall(CallInst* C);
       static void addCallees(CallInst* C, FunctionSet& callees);
@@ -36,6 +37,8 @@ namespace soaap {
       static void EmitCallTrace(Function* Target, Sandbox* S, Module& M);
     private:
       static map<const CallInst*, FunctionSet> callToCallees;
+      static map<const Function*, FunctionSet> funcToCallees;
+      static map<const Function*, set<CallGraphEdge> > funcToCallEdges;
       static map<const Function*, CallInstSet> calleeToCalls;
       static map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths;
       static FPAnnotatedTargetsAnalysis fpAnnotatedTargetsAnalysis;

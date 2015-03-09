@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-// CHECK: main (<privileged>) -- MyMessage --> sandbox (handled by OnMyMessage)
-// CHECK: message_loop (<privileged>) -- PrivRequestReply --> sandbox (handled by foo)
-// CHECK: foo (sandbox) -- PrivRequest --> <privileged> (handled by message_loop)
+// CHECK: main (<privileged>) ---MyMessage--> sandbox (handled by OnMyMessage)
+// CHECK: message_loop (<privileged>) ---PrivRequestReply--> sandbox (handled by foo)
+// CHECK: foo (sandbox) ---PrivRequest--> <privileged> (handled by message_loop)
 

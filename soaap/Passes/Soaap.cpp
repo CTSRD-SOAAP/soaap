@@ -60,9 +60,8 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Finding class hierarchy (if there is one)\n";
   ClassHierarchyUtils::findClassHierarchy(M);
 
-  outs() << "* Adding dynamic/annotated/inferred call edges to callgraph (if available)\n";
-  CallGraphUtils::loadDynamicCallGraphEdges(M);
-  CallGraphUtils::loadAnnotatedCallGraphEdges(M);
+  outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
+  CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M);
 
   if (CmdLineOpts::ListAllFuncs) {
     CallGraphUtils::listAllFuncs(M);
@@ -89,9 +88,6 @@ bool Soaap::runOnModule(Module& M) {
     SandboxUtils::outputSandboxedFunctions(sandboxes);
   }
   
-  outs() << "* Building RPC graph\n";
-  buildRPCGraph(M);
-
   if (CmdLineOpts::EmPerf) {
     outs() << "* Instrumenting sandbox emulation calls\n";
     instrumentPerfEmul(M);
@@ -100,6 +96,9 @@ bool Soaap::runOnModule(Module& M) {
     // do the checks statically
     outs() << "* Calculating privileged methods\n";
     calculatePrivilegedMethods(M);
+  
+    outs() << "* Building RPC graph\n";
+    buildRPCGraph(M);
     
     if (CmdLineOpts::isSelected(SoaapAnalysis::Vuln, CmdLineOpts::SoaapAnalyses)) {
       outs() << "* Checking rights leaked by past vulnerable code\n";

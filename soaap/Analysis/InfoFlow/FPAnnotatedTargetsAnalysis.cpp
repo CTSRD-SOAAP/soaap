@@ -11,7 +11,6 @@ using namespace soaap;
 
 void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
   FPTargetsAnalysis::initialise(worklist, M, sandboxes);
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   if (Function* F = M.getFunction("llvm.var.annotation")) {
     for (User* U : F->users()) {
       if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {

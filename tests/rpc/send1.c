@@ -22,4 +22,4 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-// CHECK-DAG: main (<privileged>) -- MyMessage --> sandbox (handled by OnMyMessage)
+// CHECK-DAG: main (<privileged>) ---MyMessage--> sandbox (handled by OnMyMessage)

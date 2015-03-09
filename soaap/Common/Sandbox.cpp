@@ -180,16 +180,13 @@ void Sandbox::findSandboxedFunctions() {
   else {
     initialFuncs.push_back(entryPoint);
   }
-  CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
   for (Function* F : initialFuncs) {
-    CallGraphNode* node = CG->getOrInsertFunction(F);
-    findSandboxedFunctionsHelper(node);
+    findSandboxedFunctionsHelper(F);
   }
   SDEBUG("soaap.util.sandbox", 3, dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
 }
 
-void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
-  Function* F = node->getFunction();
+void Sandbox::findSandboxedFunctionsHelper(Function* F) {
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
    
   // check for cycle
@@ -206,12 +203,8 @@ void Sandbox::findSandboxedFunctionsHelper(CallGraphNode* node) {
   functionsSet.insert(F);
 
   //  outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
-  for (CallGraphNode::iterator I=node->begin(), E=node->end(); I != E; I++) {
-    Value* V = I->first;
-    CallGraphNode* calleeNode = I->second;
-    if (Function* calleeFunc = calleeNode->getFunction()) {
-      findSandboxedFunctionsHelper(calleeNode);
-    }
+  for (Function* SuccFunc : CallGraphUtils::getCallees(F, module)) {
+    findSandboxedFunctionsHelper(SuccFunc);
   }
 }
 

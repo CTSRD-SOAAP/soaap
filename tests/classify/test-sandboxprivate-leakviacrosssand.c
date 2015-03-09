@@ -18,7 +18,8 @@ int main() {
 
 __soaap_sandbox_persistent("get")
 void dostuff1() {
-  int key = 813;
+  int key __soaap_private("get");
+  key = 83;
   printf("leaking sandbox-private password to another sandbox\n");
 
   // CHECK: "dostuff1" executing in sandboxes: [get]

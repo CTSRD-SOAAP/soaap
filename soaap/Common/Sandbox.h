@@ -63,7 +63,7 @@ namespace soaap {
       ValueSet privateData;
       
       void findSandboxedFunctions();
-      void findSandboxedFunctionsHelper(CallGraphNode* n);
+      void findSandboxedFunctionsHelper(Function* F);
       void findSandboxedCalls();
       void findSharedGlobalVariables();
       void findCallgates();

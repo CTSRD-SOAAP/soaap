@@ -21,7 +21,6 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
   if (debug) {
     dbgs() << "Program statistics:\n";
 
-    //CallGraph* CG = LLVMAnalyses::getCallGraphAnalysis();
     // find all assignments of functions and propagate them!
     long numFuncs = 0;
     long numFPFuncs = 0;
