@@ -16,6 +16,7 @@ namespace soaap {
   class SandboxUtils {
     public:
       static SandboxVector findSandboxes(Module& M);
+      static void reInitSandboxes(SandboxVector& sandboxes);
       static FunctionVector getSandboxedMethods(SandboxVector& sandboxes);
       static int assignBitIdxToSandboxName(string sandboxName);
       static int getBitIdxFromSandboxName(string sandboxName);

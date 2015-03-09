@@ -59,9 +59,15 @@ bool Soaap::runOnModule(Module& M) {
 
   outs() << "* Finding class hierarchy (if there is one)\n";
   ClassHierarchyUtils::findClassHierarchy(M);
+  
+  outs() << "* Finding sandboxes\n";
+  findSandboxes(M);
 
   outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
   CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M);
+
+  outs() << "* Reinitialising sandboxes\n";
+  SandboxUtils::reInitSandboxes(sandboxes);
 
   if (CmdLineOpts::ListAllFuncs) {
     CallGraphUtils::listAllFuncs(M);
@@ -75,9 +81,6 @@ bool Soaap::runOnModule(Module& M) {
   if (CmdLineOpts::ListFPTargets) {
     CallGraphUtils::listFPTargets(M);
   }
-
-  outs() << "* Finding sandboxes\n";
-  findSandboxes(M);
 
   if (CmdLineOpts::ListFPCalls) {
     outs() << "* Listing function-pointer calls\n";

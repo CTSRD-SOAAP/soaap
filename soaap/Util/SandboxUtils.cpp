@@ -371,3 +371,9 @@ bool SandboxUtils::isSandboxedFunction(Function* F, SandboxVector& sandboxes) {
   }
   return false;
 }
+
+void SandboxUtils::reInitSandboxes(SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    S->reInit();
+  }
+}
