@@ -457,7 +457,6 @@ void Sandbox::findCapabilities() {
                       outs() << "sandbox name: \"" << sandboxName << "\"\n";
                       string sysCallListCsv = sandboxNameAndSysCallListCsv.substr(quote2Pos+1);
                       outs() << "sysCallList: " << sysCallListCsv << "\n";
-                      int bitIdx = SandboxUtils::getBitIdxFromSandboxName(sandboxName);
                       FunctionSet sysCalls;
                       SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
                       istringstream ss(sysCallListCsv);

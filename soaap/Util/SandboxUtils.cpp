@@ -18,11 +18,10 @@
 using namespace soaap;
 using namespace llvm;
 
-SandboxVector SandboxUtils::sandboxes;
+FunctionSet SandboxUtils::privilegedMethods;
 int SandboxUtils::nextSandboxNameBitIdx = 0;
 map<string,int> SandboxUtils::sandboxNameToBitIdx;
 map<int,string> SandboxUtils::bitIdxToSandboxName;
-FunctionSet SandboxUtils::privilegedMethods;
 SmallSet<Function*,16> SandboxUtils::sandboxEntryPoints;
 
 string SandboxUtils::stringifySandboxNames(int sandboxNames) {
@@ -83,10 +82,6 @@ int SandboxUtils::assignBitIdxToSandboxName(string sandboxName) {
   }
 }
 
-int SandboxUtils::getBitIdxFromSandboxName(string sandboxName) {
-  return sandboxNameToBitIdx[sandboxName];
-}
-
 bool SandboxUtils::isSandboxEntryPoint(Module& M, Function* F) {
   return sandboxEntryPoints.count(F);
 }
@@ -96,6 +91,8 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   FunctionIntMap funcToClearances;
   map<Function*,string> funcToSandboxName;
   FunctionVector ephemeralSandboxes;
+
+  SandboxVector sandboxes;
 
   // function-level annotations of sandboxed code
   Regex *sboxPerfRegex = new Regex("perf_overhead_\\(([0-9]{1,2})\\)", true);
@@ -353,10 +350,6 @@ void SandboxUtils::reinitSandboxes(SandboxVector& sandboxes) {
 void SandboxUtils::recalculatePrivilegedMethods(Module& M) {
   privilegedMethods.clear();
   calculatePrivilegedMethods(M);
-}
-
-SandboxVector SandboxUtils::getSandboxes() {
-  return sandboxes;
 }
 
 void SandboxUtils::validateSandboxCreations(SandboxVector& sandboxes) {

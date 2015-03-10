@@ -13,10 +13,10 @@ namespace soaap {
   class FPTargetsAnalysis;
   class CallGraphUtils {
     public:
-      static void buildBasicCallGraph(Module& M);
-      static void loadAnnotatedInferredCallGraphEdges(Module& M);
+      static void buildBasicCallGraph(Module& M, SandboxVector& sandboxes);
+      static void loadAnnotatedInferredCallGraphEdges(Module& M, SandboxVector& sandboxes);
       static void listFPCalls(Module& M, SandboxVector& sandboxes);
-      static void listFPTargets(Module& M);
+      static void listFPTargets(Module& M, SandboxVector& sandboxes);
       static void listAllFuncs(Module& M);
       static bool isIndirectCall(CallInst* C);
       static Function* getDirectCallee(CallInst* C);
@@ -35,7 +35,7 @@ namespace soaap {
        * emits a call trace to @p Target for the given sandbox @p S.
        * If @p S is null then a privileged call graph will be emitted instead.
        */
-      static void EmitCallTrace(Function* Target, Sandbox* S, Module& M);
+      static void emitCallTrace(Function* Target, Sandbox* S, Module& M);
     private:
       static map<const CallInst*, map<Context*, FunctionSet> > callToCallees;
       static map<const Function*, map<Context*, FunctionSet> > funcToCallees;

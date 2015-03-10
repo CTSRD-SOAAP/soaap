@@ -16,16 +16,10 @@ namespace soaap {
   class SandboxUtils {
     public:
       static SandboxVector findSandboxes(Module& M);
-      static SandboxVector getSandboxes();
       static void reinitSandboxes(SandboxVector& sandboxes);
-      static int assignBitIdxToSandboxName(string sandboxName);
-      static int getBitIdxFromSandboxName(string sandboxName);
       static string stringifySandboxNames(int sandboxNames);
       static string stringifySandboxVector(SandboxVector& sandboxes);
       static bool isSandboxEntryPoint(Module& M, Function* F);
-      static FunctionSet getPrivilegedMethods(Module& M);
-      static bool isPrivilegedMethod(Function* F, Module& M);
-      static bool isPrivilegedInstruction(Instruction* I, SandboxVector& sandboxes, Module& M);
       static Sandbox* getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingInstruction(Instruction* I, SandboxVector& sandboxes);
@@ -33,16 +27,20 @@ namespace soaap {
       static void outputSandboxedFunctions(SandboxVector& sandboxes);
       static bool isSandboxedFunction(Function* F, SandboxVector& sandboxes);
       static SandboxVector convertNamesToVector(int sandboxNames, SandboxVector& sandboxes);
-      static void recalculatePrivilegedMethods(Module& M);
       static void validateSandboxCreations(SandboxVector& sandboxes);
+      
+      static FunctionSet getPrivilegedMethods(Module& M);
+      static void recalculatePrivilegedMethods(Module& M);
+      static bool isPrivilegedMethod(Function* F, Module& M);
+      static bool isPrivilegedInstruction(Instruction* I, SandboxVector& sandboxes, Module& M);
     
     private:
-      static SandboxVector sandboxes;
+      static FunctionSet privilegedMethods;
       static map<string,int> sandboxNameToBitIdx;
       static map<int,string> bitIdxToSandboxName;
       static int nextSandboxNameBitIdx;
-      static FunctionSet privilegedMethods;
       static SmallSet<Function*,16> sandboxEntryPoints;
+      static int assignBitIdxToSandboxName(string sandboxName);
       static void calculateSandboxedMethods(Function* F, Sandbox* S, FunctionVector& sandboxedMethods);
       static void calculatePrivilegedMethods(Module& M);
       static void calculatePrivilegedMethodsHelper(Module& M, Function* F);

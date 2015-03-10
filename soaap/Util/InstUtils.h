@@ -9,7 +9,7 @@ namespace soaap {
 
   class InstUtils {
     public:
-      static void EmitInstLocation(Instruction* I);
+      static void emitInstLocation(Instruction* I);
   };
 }
 

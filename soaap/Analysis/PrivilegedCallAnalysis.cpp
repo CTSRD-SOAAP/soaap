@@ -50,9 +50,9 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                      "__soaap_callgates annotation.\n",
                      S->getName().c_str(),
                      privilegedFunc->getName().str().c_str());
-            InstUtils::EmitInstLocation(C);
+            InstUtils::emitInstLocation(C);
             if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
+              CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
             }
             XO::close_instance("privileged_call");
           }

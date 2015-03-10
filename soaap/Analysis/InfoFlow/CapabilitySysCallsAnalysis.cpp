@@ -202,9 +202,9 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
                        "given fd arg.\n",
               S->getName().c_str(),
               funcName.c_str());
-              InstUtils::EmitInstLocation(C);
+              InstUtils::emitInstLocation(C);
               if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
-                CallGraphUtils::EmitCallTrace(C->getCalledFunction(), S, M);
+                CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
               }
               XO::emit("\n");
               XO::close_instance("cap_rights_warning");

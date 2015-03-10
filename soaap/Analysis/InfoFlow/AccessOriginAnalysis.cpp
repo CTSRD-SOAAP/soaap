@@ -41,9 +41,9 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
             XO::emit(" *** Untrusted function pointer call in "
                      "\"{:function/%s}\"\n",
                      F->getName().str().c_str());
-            InstUtils::EmitInstLocation(C);
+            InstUtils::emitInstLocation(C);
             if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::EmitCallTrace(F, NULL, M);
+              CallGraphUtils::emitCallTrace(F, NULL, M);
             }
             XO::emit("\n");
             XO::close_instance("access_origin_warning");

@@ -14,7 +14,6 @@ namespace soaap {
     public:
       Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
       Sandbox(string n, int i, InstVector& region, bool p, Module& m);
-      void reinit();
       string getName();
       int getNameIdx();
       Function* getEntryPoint();
@@ -38,10 +37,9 @@ namespace soaap {
       bool containsFunction(Function* F);
       bool containsInstruction(Instruction* I);
       bool hasCallgate(Function* F);
-      static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
-      /** The same as getName(), but returns @c "<privileged>" if @p S is nullptr. */
-      static inline StringRef getName(Sandbox* S) { return S ? S->getName() : "<privileged>"; }
       void validateCreationPoints();
+      void reinit();
+      static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
 
     private:
       Module& module;

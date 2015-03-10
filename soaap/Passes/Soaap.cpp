@@ -64,13 +64,13 @@ bool Soaap::runOnModule(Module& M) {
   findSandboxes(M);
 
   outs() << "* Building basic callgraph\n";
-  CallGraphUtils::buildBasicCallGraph(M);
+  CallGraphUtils::buildBasicCallGraph(M, sandboxes);
   
   outs() << "* Validating sandbox creation points\n";
   SandboxUtils::validateSandboxCreations(sandboxes);
   
   outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
-  CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M);
+  CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M, sandboxes);
 
   if (CmdLineOpts::ListAllFuncs) {
     CallGraphUtils::listAllFuncs(M);
@@ -82,7 +82,7 @@ bool Soaap::runOnModule(Module& M) {
   }
 
   if (CmdLineOpts::ListFPTargets) {
-    CallGraphUtils::listFPTargets(M);
+    CallGraphUtils::listFPTargets(M, sandboxes);
   }
 
   if (CmdLineOpts::ListFPCalls) {

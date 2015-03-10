@@ -19,6 +19,7 @@ namespace soaap {
 
     private:
       map<Sandbox*,SmallVector<RPCCallRecord, 16>> rpcLinks;
+      StringRef getName(Sandbox* S);
   };
 }
 

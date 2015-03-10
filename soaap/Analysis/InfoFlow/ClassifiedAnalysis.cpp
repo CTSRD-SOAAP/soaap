@@ -110,9 +110,9 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
               XO::close_instance("clearance");
             }
             XO::close_list("clearance");
-            InstUtils::EmitInstLocation(&I);
+            InstUtils::emitInstLocation(&I);
             if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::EmitCallTrace(F, S, M);
+              CallGraphUtils::emitCallTrace(F, S, M);
             }
             XO::emit("\n");
             XO::close_instance("classified_warning");

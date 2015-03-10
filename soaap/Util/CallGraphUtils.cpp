@@ -63,9 +63,8 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
   outs() << numFPcalls << " function-pointer calls in total\n";
 }
 
-void CallGraphUtils::listFPTargets(Module& M) {
+void CallGraphUtils::listFPTargets(Module& M, SandboxVector& sandboxes) {
   unsigned long numFPcalls = 0;
-  SandboxVector sandboxes = SandboxUtils::getSandboxes();
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
@@ -113,10 +112,9 @@ void CallGraphUtils::listAllFuncs(Module& M) {
   }
 }
 
-void CallGraphUtils::loadAnnotatedInferredCallGraphEdges(Module& M) {
+void CallGraphUtils::loadAnnotatedInferredCallGraphEdges(Module& M, SandboxVector& sandboxes) {
   // Find annotated/inferred function pointers and add edges from the calls of
   // the fp to targets.  
-  SandboxVector sandboxes = SandboxUtils::getSandboxes();
   if (CmdLineOpts::InferFPTargets) {
     SDEBUG("soaap.util.callgraph", 3, dbgs() << "performing fp target inference\n")
     getFPInferredTargetsAnalysis().doAnalysis(M, sandboxes);
@@ -223,8 +221,7 @@ CallInstSet CallGraphUtils::getCallers(const Function* F, Context* Ctx, Module& 
   }
 }
 
-void CallGraphUtils::buildBasicCallGraph(Module& M) {
-  SandboxVector sandboxes = SandboxUtils::getSandboxes();
+void CallGraphUtils::buildBasicCallGraph(Module& M, SandboxVector& sandboxes) {
   ContextVector contexts = ContextUtils::getAllContexts(sandboxes);
 
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
@@ -514,7 +511,7 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
   return sboxStack;
 }
 
-void CallGraphUtils::EmitCallTrace(Function* Target, Sandbox* S, Module& M) {
+void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   XO::open_list("trace");
   XO::emit(" Possible trace:\n");
   InstTrace callStack = S

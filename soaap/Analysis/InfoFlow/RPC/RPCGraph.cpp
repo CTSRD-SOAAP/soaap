@@ -121,7 +121,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
         if (ConstantDataArray* recipientStrArray = dyn_cast<ConstantDataArray>(recipientStrGlobal->getInitializer())) {
           SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Recipient (string): " << recipientStrArray->getAsCString() << "\n");
           recipient = SandboxUtils::getSandboxWithName(recipientStrArray->getAsCString(), sandboxes);
-          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Recipient (obtained): " << Sandbox::getName(recipient) << "\n");
+          SDEBUG("soaap.analysis.infoflow.rpc", 3, dbgs() << "Recipient (obtained): " << getName(recipient) << "\n");
         }
       }
       if (GlobalVariable* msgTypeStrGlobal = dyn_cast<GlobalVariable>(C->getArgOperand(1)->stripPointerCasts())) {
@@ -152,19 +152,19 @@ void RPCGraph::dump(Module& M) {
       Function* Handler = get<3>(R);
       XO::open_instance("rpc_call");
       XO::emit("{:sender_func/%s} ({:sender_sandbox/%s}) ---{:message_type/%s}--> ",
-        Source->getName().str().c_str(), Sandbox::getName(S).str().c_str(),
+        Source->getName().str().c_str(), getName(S).str().c_str(),
         get<1>(R).c_str());
       // if there is no handler because a matching __soaap_rpc_recv is missing set receiver_sandbox
       // to be the empty string and print <handler missing>
       if (Handler) {
         XO::emit("{:receiver_sandbox/%s} (handled by {:receiver_func/%s})\n",
-          Sandbox::getName(Dest).str().c_str(), Handler->getName().str().c_str());
+          getName(Dest).str().c_str(), Handler->getName().str().c_str());
       }
       else {
         XO::emit("<handler missing>\n");
       }
       if (CmdLineOpts::SysCallTraces) {
-        CallGraphUtils::EmitCallTrace(Source, S, M);
+        CallGraphUtils::emitCallTrace(Source, S, M);
       }
       XO::close_instance("rpc_call");
     }
@@ -198,7 +198,7 @@ void RPCGraph::dump(Module& M) {
     Sandbox* S = I->first;
     myfile << "\tsubgraph cluster_" << clusterCount++ << " {\n";
     myfile << "\t\trankdir=TB\n";
-    myfile << "\t\tlabel = \"" << Sandbox::getName(S).str() << "\"\n";
+    myfile << "\t\tlabel = \"" << getName(S).str() << "\"\n";
     for (Function* F : I->second) {
       if (funcToId[S].find(F) == funcToId[S].end()) {
         funcToId[S][F] = nextFuncId++;
@@ -250,4 +250,8 @@ void RPCGraph::dump(Module& M) {
   
   myfile << "}\n";
   myfile.close();
+}
+
+StringRef RPCGraph::getName(Sandbox* S) {
+  return S ? S->getName() : "<privileged>";
 }

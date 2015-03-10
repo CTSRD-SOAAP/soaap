@@ -73,9 +73,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               XO::close_instance("sandbox_private");
             }
             XO::close_list("sandbox_private");
-            InstUtils::EmitInstLocation(&I);
+            InstUtils::emitInstLocation(&I);
             if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::EmitCallTrace(F, NULL, M);
+              CallGraphUtils::emitCallTrace(F, NULL, M);
             }
             XO::emit("\n");
             XO::close_instance("private_access");
@@ -121,9 +121,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 XO::close_instance("sandbox_access");
               }
               XO::close_list("sandbox_access");
-              InstUtils::EmitInstLocation(&I);
+              InstUtils::emitInstLocation(&I);
               if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                CallGraphUtils::EmitCallTrace(F, S, M);
+                CallGraphUtils::emitCallTrace(F, S, M);
               }
               XO::emit("\n");
               XO::close_instance("private_access");
@@ -180,9 +180,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   XO::close_instance("sandbox_access");
                 }
                 XO::close_list("sandbox_access");
-                InstUtils::EmitInstLocation(&I);
+                InstUtils::emitInstLocation(&I);
                 if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                  CallGraphUtils::EmitCallTrace(F, S, M);
+                  CallGraphUtils::emitCallTrace(F, S, M);
                 }
                 XO::emit("\n");
                 XO::close_instance("private_leak");
@@ -216,9 +216,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::close_instance("sandbox_access");
                   }
                   XO::close_list("sandbox_access");
-                  InstUtils::EmitInstLocation(&I);
+                  InstUtils::emitInstLocation(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                    CallGraphUtils::EmitCallTrace(F, S, M);
+                    CallGraphUtils::emitCallTrace(F, S, M);
                   }
                   XO::emit("\n");
                   XO::close_instance("private_leak");
@@ -245,9 +245,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::close_instance("sandbox_access");
                     }
                     XO::close_list("sandbox_access");
-                    InstUtils::EmitInstLocation(&I);
+                    InstUtils::emitInstLocation(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                      CallGraphUtils::EmitCallTrace(F, S, M);
+                      CallGraphUtils::emitCallTrace(F, S, M);
                     }
                     XO::emit("\n");
                     XO::close_instance("private_leak");
@@ -267,9 +267,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              F->getName().str().c_str(),
                              SandboxUtils::stringifySandboxNames(name).c_str(),
                              Callee->getName().str().c_str());
-                    InstUtils::EmitInstLocation(&I);
+                    InstUtils::emitInstLocation(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                      CallGraphUtils::EmitCallTrace(F, S, M);
+                      CallGraphUtils::emitCallTrace(F, S, M);
                     }
                     XO::emit("\n");
                     XO::close_instance("private_leak");
@@ -306,9 +306,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::close_instance("sandbox_access");
                     }
                     XO::close_list("sandbox_access");
-                    InstUtils::EmitInstLocation(&I);
+                    InstUtils::emitInstLocation(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                      CallGraphUtils::EmitCallTrace(F, S, M);
+                      CallGraphUtils::emitCallTrace(F, S, M);
                     }
                     XO::emit("\n");
                     XO::close_instance("private_leak");
@@ -329,9 +329,9 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                            "from entrypoint \"{:entrypoint/%s}\"\n",
                            S->getName().c_str(),
                            F->getName().str().c_str());
-                  InstUtils::EmitInstLocation(&I);
+                  InstUtils::emitInstLocation(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-                    CallGraphUtils::EmitCallTrace(F, S, M);
+                    CallGraphUtils::emitCallTrace(F, S, M);
                   }
                   XO::close_instance("private_leak");
                 }

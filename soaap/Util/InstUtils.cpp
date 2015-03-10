@@ -6,7 +6,7 @@
 
 using namespace soaap;
 
-void InstUtils::EmitInstLocation(Instruction* I) {
+void InstUtils::emitInstLocation(Instruction* I) {
   if (MDNode *N = I->getMetadata("dbg")) {
     XO::open_container("location");
     DILocation loc(N);

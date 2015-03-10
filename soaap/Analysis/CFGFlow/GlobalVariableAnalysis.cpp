@@ -88,9 +88,9 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              declareLoc.second, declareLoc.first.c_str());
                     XO::close_container("declare_loc");
                   }
-                  InstUtils::EmitInstLocation(&I);
+                  InstUtils::emitInstLocation(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
-                    CallGraphUtils::EmitCallTrace(F, S, M);
+                    CallGraphUtils::emitCallTrace(F, S, M);
                   }
                   alreadyReportedReads.push_back(gv);
                   XO::emit("\n");
@@ -135,9 +135,9 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              declareLoc.second, declareLoc.first.c_str());
                     XO::close_container("declare_loc");
                   }
-                  InstUtils::EmitInstLocation(&I);
+                  InstUtils::emitInstLocation(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
-                    CallGraphUtils::EmitCallTrace(F, S, M);
+                    CallGraphUtils::emitCallTrace(F, S, M);
                   }
                   alreadyReportedWrites.push_back(gv);
                   XO::emit("\n");
@@ -207,7 +207,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                            declareLoc.second, declareLoc.first.c_str());
                   XO::close_container("declare_loc");
                 }
-                InstUtils::EmitInstLocation(&I);
+                InstUtils::emitInstLocation(&I);
                 alreadyReported.push_back(gv);
                 XO::emit("\n");
                 XO::close_instance("global_lost_update");
