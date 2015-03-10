@@ -8,6 +8,9 @@ using namespace llvm;
 
 namespace soaap {
   class FPAnnotatedTargetsAnalysis: public FPTargetsAnalysis {
+    public:
+      FPAnnotatedTargetsAnalysis(bool c) : FPTargetsAnalysis(c) { }
+
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
   };

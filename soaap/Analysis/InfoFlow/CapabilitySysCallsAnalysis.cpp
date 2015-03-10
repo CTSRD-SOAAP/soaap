@@ -113,15 +113,18 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
           else {
             // initialise return values to the worklist and add to the worklist
             int fdKeyIdx = annotatedFunc->getArgumentList().begin()->getName().equals("this") ? 1 : 0;
-            for (CallInst* C : CallGraphUtils::getCallers(annotatedFunc, M)) {
-              // get fd key value, currently only constants are supported.
-              Value* fdKeyArg = C->getArgOperand(fdKeyIdx);
-              if (ConstantInt* CI = dyn_cast<ConstantInt>(fdKeyArg)) {
-                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd key: " << CI->getSExtValue() << "\n")
-                BitVector allowedSysCalls = fdKeyToAllowedSysCalls[CI->getSExtValue()];
-                state[ContextUtils::NO_CONTEXT][C] = allowedSysCalls;
-                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Initial state: " << stringifyFact(state[ContextUtils::NO_CONTEXT][C]) << "\n");
-                addToWorklist(C, ContextUtils::NO_CONTEXT, worklist);
+            ContextVector contexts = ContextUtils::getContextsForMethod(annotatedFunc, contextInsensitive, sandboxes, M);
+            for (Context* Ctx : contexts) {
+              for (CallInst* C : CallGraphUtils::getCallers(annotatedFunc, Ctx, M)) {
+                // get fd key value, currently only constants are supported.
+                Value* fdKeyArg = C->getArgOperand(fdKeyIdx);
+                if (ConstantInt* CI = dyn_cast<ConstantInt>(fdKeyArg)) {
+                  SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd key: " << CI->getSExtValue() << "\n")
+                  BitVector allowedSysCalls = fdKeyToAllowedSysCalls[CI->getSExtValue()];
+                  state[Ctx][C] = allowedSysCalls;
+                  SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_3 << "Initial state: " << stringifyFact(state[Ctx][C]) << "\n");
+                  addToWorklist(C, Ctx, worklist);
+                }
               }
             }
           }
@@ -156,7 +159,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
     SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
       SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "call: " << *C << "\n")
-      for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+      for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
         string funcName = Callee->getName();
         SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "callee: " << funcName << "\n")
         if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName) && sysCallsAnalysis.allowedToPerformNamedSystemCallAtSandboxedPoint(C, funcName)) {

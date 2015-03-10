@@ -1,6 +1,7 @@
 #include "Common/Debug.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassifiedUtils.h"
+#include "Util/ContextUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/SandboxUtils.h"
 #include "Util/LLVMAnalyses.h"
@@ -17,6 +18,7 @@
 using namespace soaap;
 using namespace llvm;
 
+SandboxVector SandboxUtils::sandboxes;
 int SandboxUtils::nextSandboxNameBitIdx = 0;
 map<string,int> SandboxUtils::sandboxNameToBitIdx;
 map<int,string> SandboxUtils::bitIdxToSandboxName;
@@ -90,7 +92,6 @@ bool SandboxUtils::isSandboxEntryPoint(Module& M, Function* F) {
 }
 
 SandboxVector SandboxUtils::findSandboxes(Module& M) {
-  SandboxVector sandboxes;
   FunctionIntMap funcToOverhead;
   FunctionIntMap funcToClearances;
   map<Function*,string> funcToSandboxName;
@@ -222,49 +223,20 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSand
   }
 }
 
-FunctionVector SandboxUtils::getSandboxedMethods(SandboxVector& sandboxes) {
-  FunctionVector sandboxedMethods;
-  for (Sandbox* S : sandboxes) {
-    Function* F = S->getEntryPoint();
-    int sandboxName = S->getNameIdx();
-    calculateSandboxedMethods(F, sandboxName, F, sandboxedMethods);
-  }
-  return sandboxedMethods;
-}
-
-void SandboxUtils::calculateSandboxedMethods(Function* F, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods) {
-  SDEBUG("soaap.util.sandbox", 3, dbgs() << "Visiting " << F->getName() << "\n");
-   
-  if (find(sandboxedMethods.begin(), sandboxedMethods.end(), F) != sandboxedMethods.end()) {
-    // cycle detected
-    return;
-  }
-
-  sandboxedMethods.push_back(F);
-
-//      outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
-  Module* M = F->getParent();
-  for (Function* SuccFunc : CallGraphUtils::getCallees(F, *M)) {
-    //TODO: If an entry point, update sandboxName and entryPoint
-    /*if (sandboxEntryPointToName.find(calleeFunc) != sandboxEntryPointToName.end()) {
-      SDEBUG("soaap.util.sandbox", 3, dbgs() << "   Encountered sandbox entry point, changing sandbox name to: " << SandboxUtils::stringifySandboxNames(sandboxName));
-      sandboxName = sandboxEntryPointToName[calleeFunc];
-      entryPoint = calleeFunc;
-    }*/
-    calculateSandboxedMethods(SuccFunc, sandboxName, entryPoint, sandboxedMethods);
-  }
-}
-
 FunctionSet SandboxUtils::getPrivilegedMethods(Module& M) {
   if (privilegedMethods.empty()) {
-    if (Function* MainFunc = M.getFunction("main")) {
-      calculatePrivilegedMethods(M, MainFunc);
-    }
+    calculatePrivilegedMethods(M);
   }
   return privilegedMethods;
 }
 
-void SandboxUtils::calculatePrivilegedMethods(Module& M, Function* F) {
+void SandboxUtils::calculatePrivilegedMethods(Module& M) {
+  if (Function* MainFunc = M.getFunction("main")) {
+    calculatePrivilegedMethodsHelper(M, MainFunc);
+  }
+}
+
+void SandboxUtils::calculatePrivilegedMethodsHelper(Module& M, Function* F) {
   // if a sandbox entry point, then ignore
   if (isSandboxEntryPoint(M, F))
     return;
@@ -276,9 +248,9 @@ void SandboxUtils::calculatePrivilegedMethods(Module& M, Function* F) {
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Added " << F->getName() << " as privileged method\n");
   privilegedMethods.insert(F);
 
-  // recurse on callees
-  for (Function* SuccFunc : CallGraphUtils::getCallees(F, M)) {
-    calculatePrivilegedMethods(M, SuccFunc);
+  // recurse on privileged callees
+  for (Function* SuccFunc : CallGraphUtils::getCallees(F, ContextUtils::PRIV_CONTEXT, M)) {
+    calculatePrivilegedMethodsHelper(M, SuccFunc);
   }
 }
 
@@ -372,8 +344,23 @@ bool SandboxUtils::isSandboxedFunction(Function* F, SandboxVector& sandboxes) {
   return false;
 }
 
-void SandboxUtils::reInitSandboxes(SandboxVector& sandboxes) {
+void SandboxUtils::reinitSandboxes(SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
-    S->reInit();
+    S->reinit();
+  }
+}
+
+void SandboxUtils::recalculatePrivilegedMethods(Module& M) {
+  privilegedMethods.clear();
+  calculatePrivilegedMethods(M);
+}
+
+SandboxVector SandboxUtils::getSandboxes() {
+  return sandboxes;
+}
+
+void SandboxUtils::validateSandboxCreations(SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    S->validateCreationPoints();
   }
 }

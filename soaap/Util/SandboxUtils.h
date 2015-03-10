@@ -16,8 +16,8 @@ namespace soaap {
   class SandboxUtils {
     public:
       static SandboxVector findSandboxes(Module& M);
-      static void reInitSandboxes(SandboxVector& sandboxes);
-      static FunctionVector getSandboxedMethods(SandboxVector& sandboxes);
+      static SandboxVector getSandboxes();
+      static void reinitSandboxes(SandboxVector& sandboxes);
       static int assignBitIdxToSandboxName(string sandboxName);
       static int getBitIdxFromSandboxName(string sandboxName);
       static string stringifySandboxNames(int sandboxNames);
@@ -33,15 +33,19 @@ namespace soaap {
       static void outputSandboxedFunctions(SandboxVector& sandboxes);
       static bool isSandboxedFunction(Function* F, SandboxVector& sandboxes);
       static SandboxVector convertNamesToVector(int sandboxNames, SandboxVector& sandboxes);
+      static void recalculatePrivilegedMethods(Module& M);
+      static void validateSandboxCreations(SandboxVector& sandboxes);
     
     private:
+      static SandboxVector sandboxes;
       static map<string,int> sandboxNameToBitIdx;
       static map<int,string> bitIdxToSandboxName;
       static int nextSandboxNameBitIdx;
       static FunctionSet privilegedMethods;
       static SmallSet<Function*,16> sandboxEntryPoints;
-      static void calculateSandboxedMethods(Function* F, int sandboxName, Function* entryPoint, FunctionVector& sandboxedMethods);
-      static void calculatePrivilegedMethods(Module& M, Function* F);
+      static void calculateSandboxedMethods(Function* F, Sandbox* S, FunctionVector& sandboxedMethods);
+      static void calculatePrivilegedMethods(Module& M);
+      static void calculatePrivilegedMethodsHelper(Module& M, Function* F);
       static void findAllSandboxedInstructions(Instruction* I, string sboxName, InstVector& insts);
   };
 }

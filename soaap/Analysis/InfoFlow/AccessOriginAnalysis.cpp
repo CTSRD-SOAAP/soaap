@@ -17,7 +17,7 @@ void AccessOriginAnalysis::initialise(ValueContextPairList& worklist, Module& M,
   for (Function* F : privilegedMethods) {
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-        for (Function* callee : CallGraphUtils::getCallees(C, M)) {
+        for (Function* callee : CallGraphUtils::getCallees(C, ContextUtils::PRIV_CONTEXT, M)) {
           if (SandboxUtils::isSandboxEntryPoint(M, callee)) {
             addToWorklist(C, ContextUtils::PRIV_CONTEXT, worklist);
             state[ContextUtils::PRIV_CONTEXT][C] = ORIGIN_SANDBOX;

@@ -56,18 +56,21 @@ bool Soaap::runOnModule(Module& M) {
 
   llvm::CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
-
+  
   outs() << "* Finding class hierarchy (if there is one)\n";
   ClassHierarchyUtils::findClassHierarchy(M);
-  
+
   outs() << "* Finding sandboxes\n";
   findSandboxes(M);
 
+  outs() << "* Building basic callgraph\n";
+  CallGraphUtils::buildBasicCallGraph(M);
+  
+  outs() << "* Validating sandbox creation points\n";
+  SandboxUtils::validateSandboxCreations(sandboxes);
+  
   outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
   CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M);
-
-  outs() << "* Reinitialising sandboxes\n";
-  SandboxUtils::reInitSandboxes(sandboxes);
 
   if (CmdLineOpts::ListAllFuncs) {
     CallGraphUtils::listAllFuncs(M);

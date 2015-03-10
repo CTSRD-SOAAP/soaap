@@ -14,7 +14,7 @@ namespace soaap {
     public:
       Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
       Sandbox(string n, int i, InstVector& region, bool p, Module& m);
-      void reInit();
+      void reinit();
       string getName();
       int getNameIdx();
       Function* getEntryPoint();
@@ -41,6 +41,7 @@ namespace soaap {
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
       /** The same as getName(), but returns @c "<privileged>" if @p S is nullptr. */
       static inline StringRef getName(Sandbox* S) { return S ? S->getName() : "<privileged>"; }
+      void validateCreationPoints();
 
     private:
       Module& module;
@@ -73,8 +74,7 @@ namespace soaap {
       void findAllowedSysCalls();
       void findCreationPoints();
       void findPrivateData();
-      void validateEntryPointCalls();
-      bool validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace);
+      bool validateCreationPointsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace);
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;
 }

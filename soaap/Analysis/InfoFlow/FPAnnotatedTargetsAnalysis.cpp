@@ -14,6 +14,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
   if (Function* F = M.getFunction("llvm.var.annotation")) {
     for (User* U : F->users()) {
       if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
+        ContextVector contexts = ContextUtils::getContextsForInstruction(annotateCall, contextInsensitive, sandboxes, M);
         Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
         GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
         ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
@@ -35,8 +36,10 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
               callees.insert(callee);
             }
           }
-          state[ContextUtils::SINGLE_CONTEXT][annotatedVar] = convertFunctionSetToBitVector(callees);
-          addToWorklist(annotatedVar, ContextUtils::SINGLE_CONTEXT, worklist);
+          for (Context* Ctx : contexts) {
+            state[Ctx][annotatedVar] = convertFunctionSetToBitVector(callees);
+            addToWorklist(annotatedVar, Ctx, worklist);
+          }
         }
       }
     }
@@ -46,6 +49,7 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
     for (User* U : F->users()) {
       IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
       Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+      ContextVector contexts = ContextUtils::getContextsForInstruction(annotateCall, contextInsensitive, sandboxes, M);
 
       GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
       ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
@@ -68,8 +72,10 @@ void FPAnnotatedTargetsAnalysis::initialise(ValueContextPairList& worklist, Modu
             callees.insert(callee);
           }
         }
-        state[ContextUtils::SINGLE_CONTEXT][annotateCall] = convertFunctionSetToBitVector(callees);
-        addToWorklist(annotateCall, ContextUtils::SINGLE_CONTEXT, worklist);
+        for (Context* Ctx : contexts) {
+          state[Ctx][annotateCall] = convertFunctionSetToBitVector(callees);
+          addToWorklist(annotateCall, Ctx, worklist);
+        }
       }
     }
   }

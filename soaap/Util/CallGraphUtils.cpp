@@ -21,12 +21,10 @@
 using namespace soaap;
 using namespace llvm;
 
-map<const CallInst*, FunctionSet> CallGraphUtils::callToCallees;
-map<const Function*, FunctionSet> CallGraphUtils::funcToCallees;
-map<const Function*, set<CallGraphEdge> > CallGraphUtils::funcToCallEdges;
-map<const Function*, CallInstSet> CallGraphUtils::calleeToCalls;
-FPAnnotatedTargetsAnalysis CallGraphUtils::fpAnnotatedTargetsAnalysis;
-FPInferredTargetsAnalysis CallGraphUtils::fpInferredTargetsAnalysis;
+map<const CallInst*, map<Context*, FunctionSet> > CallGraphUtils::callToCallees;
+map<const Function*, map<Context*, FunctionSet> > CallGraphUtils::funcToCallees;
+map<const Function*, map<Context*, set<CallGraphEdge> > > CallGraphUtils::funcToCallEdges;
+map<const Function*, map<Context*, CallInstSet> > CallGraphUtils::calleeToCalls;
 bool CallGraphUtils::caching = false;
 map<Function*, map<Function*,InstTrace> > CallGraphUtils::funcToShortestCallPaths;
 
@@ -67,6 +65,7 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
 
 void CallGraphUtils::listFPTargets(Module& M) {
   unsigned long numFPcalls = 0;
+  SandboxVector sandboxes = SandboxUtils::getSandboxes();
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (F->isDeclaration()) continue;
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
@@ -81,15 +80,19 @@ void CallGraphUtils::listFPTargets(Module& M) {
               outs() << INDENT_1 << "Function \"" << funcName << "\"\n";
               outs() << INDENT_2 << "Call at " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
               outs() << INDENT_3 << "Targets:\n";
-              for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(C->getCalledValue()->stripPointerCasts())) {
-                outs() << INDENT_4 << T->getName() << " (annotated)\n";
-              }
-              for (Function* T : fpInferredTargetsAnalysis.getTargets(C->getCalledValue()->stripPointerCasts())) {
-                outs() << INDENT_4 << T->getName() << " (inferred)\n";
-              }
               if (C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL) { // virtual-call
                 for (Function* T : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
                   outs() << INDENT_4 << T->getName() << " (inferred virtual)\n";
+                }
+              }
+              ContextVector contexts = ContextUtils::getContextsForInstruction(C, CmdLineOpts::ContextInsens, sandboxes, M);
+              for (Context* Ctx : contexts) {
+                outs() << INDENT_4 << ContextUtils::stringifyContext(Ctx) << ":\n";
+                for (Function* T : getFPAnnotatedTargetsAnalysis().getTargets(C->getCalledValue()->stripPointerCasts(), Ctx)) {
+                  outs() << INDENT_5 << T->getName() << " (annotated)\n";
+                }
+                for (Function* T : getFPInferredTargetsAnalysis().getTargets(C->getCalledValue()->stripPointerCasts(), Ctx)) {
+                  outs() << INDENT_5 << T->getName() << " (inferred)\n";
                 }
               }
               outs() << "\n";
@@ -113,57 +116,24 @@ void CallGraphUtils::listAllFuncs(Module& M) {
 void CallGraphUtils::loadAnnotatedInferredCallGraphEdges(Module& M) {
   // Find annotated/inferred function pointers and add edges from the calls of
   // the fp to targets.  
-  SandboxVector dummyVector;
+  SandboxVector sandboxes = SandboxUtils::getSandboxes();
   if (CmdLineOpts::InferFPTargets) {
     SDEBUG("soaap.util.callgraph", 3, dbgs() << "performing fp target inference\n")
-    fpInferredTargetsAnalysis.doAnalysis(M, dummyVector);
+    getFPInferredTargetsAnalysis().doAnalysis(M, sandboxes);
   }
   SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding annotated fp targets\n")
-  fpAnnotatedTargetsAnalysis.doAnalysis(M, dummyVector);
-
-  // for each fp-call, add annotated edges to the call graph
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Finding all fp calls\n");
-  if (fpInferredTargetsAnalysis.hasTargets() || fpAnnotatedTargetsAnalysis.hasTargets()) {
-    for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-      if (F->isDeclaration()) continue;
-      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-        if (!isa<IntrinsicInst>(&*I)) {
-          if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-            if (isIndirectCall(C)) {
-              Value* FP = C->getCalledValue();
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Caller: " << C->getParent()->getParent()->getName() << "\n");
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Found fp call: " << *C << "\n");
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "FP: " << *FP << "\n");
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Inferred Targets: ";);
-              for (Function* T : fpInferredTargetsAnalysis.getTargets(FP)) {
-                SDEBUG("soaap.util.callgraph", 3, dbgs() << " " << T->getName());
-              }
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << "\n");
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Annotated Targets: ";);
-              for (Function* T : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-                SDEBUG("soaap.util.callgraph", 3, dbgs() << " " << T->getName());
-              }
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << "\n");
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // repopulate caches, because they would've been populated already for the FPAnnotatedTargetsAnalysis
-  // and now turn on caching so future calls to getCallees and getCallers read from the caches.
-  populateCallCalleeCaches(M);
-  caching = true;
+  getFPAnnotatedTargetsAnalysis().doAnalysis(M, sandboxes);
 
   if (CmdLineOpts::PrintCallGraph) {
     XO::emit("Outputting Callgraph...\n");
     map<Function*,map<Function*,int> > funcToCalleeCallCounts;
-    for (pair<const CallInst*,FunctionSet> p : callToCallees) {
+    for (pair<const CallInst*, map<Context*, FunctionSet> > p : callToCallees) {
       const CallInst* C = p.first;
       Function* F = (Function*)C->getParent()->getParent();
-      for (Function* G : p.second) {
-        funcToCalleeCallCounts[F][G]++;
+      for (pair<Context*, FunctionSet> q : p.second) {
+        for (Function* G : q.second) {
+          funcToCalleeCallCounts[F][G]++;
+        }
       }
     }
     XO::open_list("callgraph_record");
@@ -190,159 +160,105 @@ void CallGraphUtils::loadAnnotatedInferredCallGraphEdges(Module& M) {
 
 }
 
-FunctionSet CallGraphUtils::getCallees(const CallInst* C, Module& M) {
+FunctionSet CallGraphUtils::getCallees(const CallInst* C, Context* Ctx, Module& M) {
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_5 << "Getting callees for call " << *C << "\n");
-  if (callToCallees.empty() || !caching) {
-    populateCallCalleeCaches(M);
-  }
   bool debug = false;
   SDEBUG("soaap.util.callgraph", 3, debug = true);
   if (debug) {
     dbgs() << INDENT_5 << "Callees: ";
-    for (Function* F : callToCallees[C]) {
+    for (Function* F : callToCallees[C][Ctx]) {
       dbgs() << F->getName() << " ";
     }
     dbgs() << "\n";
   }
-  return callToCallees[C];
+  if (Ctx) {
+    return callToCallees[C][Ctx];
+  }
+  else {
+    // merge contexts
+    FunctionSet result;
+    map<Context*, FunctionSet> ctxToCallees = callToCallees[C];
+    for (pair<Context*, FunctionSet> p : ctxToCallees) {
+      for (Function* F : p.second) {
+        result.insert(F);
+      }
+    }
+    return result;
+  }
 }
 
-FunctionSet CallGraphUtils::getCallees(const Function* F, Module& M) {
+FunctionSet CallGraphUtils::getCallees(const Function* F, Context* Ctx, Module& M) {
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_5 << "Getting callees for function " << F->getName() << "\n");
-  if (callToCallees.empty() || !caching) {
-    populateCallCalleeCaches(M);
-  }
   bool debug = false;
   SDEBUG("soaap.util.callgraph", 3, debug = true);
   if (debug) {
     dbgs() << INDENT_5 << "Callees: ";
-    for (Function* F2 : funcToCallees[F]) {
+    for (Function* F2 : funcToCallees[F][Ctx]) {
       dbgs() << F->getName() << " ";
     }
     dbgs() << "\n";
   }
-  return funcToCallees[F];
+  return funcToCallees[F][Ctx];
 }
 
-set<CallGraphEdge> CallGraphUtils::getCallGraphEdges(const Function* F, Module& M) {
+set<CallGraphEdge> CallGraphUtils::getCallGraphEdges(const Function* F, Context* Ctx, Module& M) {
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_5 << "Getting callees for function " << F->getName() << "\n");
-  if (callToCallees.empty() || !caching) {
-    populateCallCalleeCaches(M);
-  }
-  return funcToCallEdges[F];
+  return funcToCallEdges[F][Ctx];
 }
 
-CallInstSet CallGraphUtils::getCallers(const Function* F, Module& M) {
+CallInstSet CallGraphUtils::getCallers(const Function* F, Context* Ctx, Module& M) {
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_5 << "Getting callers for " << F->getName() << "\n");
-  if (calleeToCalls.empty() || !caching) {
-    populateCallCalleeCaches(M);
+  if (Ctx) {
+    return calleeToCalls[F][Ctx];
   }
-  return calleeToCalls[F];
+  else {
+    CallInstSet result;
+    map<Context*, CallInstSet> ctxToCallers = calleeToCalls[F];
+    for (pair<Context*, CallInstSet> p : ctxToCallers) {
+      for (CallInst* C : p.second) {
+        result.insert(C);
+      }
+    }
+    return result;
+  }
 }
 
-void CallGraphUtils::populateCallCalleeCaches(Module& M) {
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << "-----------------------------------------------------------------\n");
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Populating call -> callees and callee -> calls cache\n");
-  map<int,int> calleeCountToFrequencies;
-  long numIndCalls = 0;
-  long numIndCallees = 0;
-  long numCallees = 0;
-  long numDirectCallees = 0;
-  long numVCalls = 0;
-
-  // clear caches
-  callToCallees.clear();
-  calleeToCalls.clear();
+void CallGraphUtils::buildBasicCallGraph(Module& M) {
+  SandboxVector sandboxes = SandboxUtils::getSandboxes();
+  ContextVector contexts = ContextUtils::getAllContexts(sandboxes);
 
   for (Module::iterator F1 = M.begin(), E1 = M.end(); F1 != E1; ++F1) {
     if (F1->isDeclaration()) continue;
     SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Processing " << F1->getName() << "\n");
     for (inst_iterator I = inst_begin(F1), E = inst_end(F1); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-        FunctionSet callees;
+        map<Context*,FunctionSet> callees;
         if (Function* callee = getDirectCallee(C)) {
           if (!callee->isIntrinsic()) {
             SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding callee " << callee->getName() << "\n");
-            callees.insert(callee);
-            SDEBUG("soaap.util.callgraph", 3, numDirectCallees++);
+            for (Context* Ctx : contexts) {
+              callees[Ctx].insert(callee);
+            }
           }
         }
         else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // dynamic/annotated callees/c++ virtual funcs
           bool isVCall = C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL;
-          /*if (ProfileInfo* PI = LLVMAnalyses::getProfileInfoAnalysis()) {
-            for (const Function* callee : PI->getDynamicCallees(C)) {
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding dyn-callee " << callee->getName() << "\n");
-              callees.insert((Function*)callee);
-            }
-          }*/
           if (isVCall) {
             for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
               SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
-              callees.insert(callee);
-            }
-          }
-          if (fpInferredTargetsAnalysis.hasTargets()) {
-            for (Function* callee : fpInferredTargetsAnalysis.getTargets(FP)) {
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-inferred-callee " << callee->getName() << "\n");
-              callees.insert(callee);
-            }
-          }
-          if (fpAnnotatedTargetsAnalysis.hasTargets()) {
-            for (Function* callee : fpAnnotatedTargetsAnalysis.getTargets(FP)) {
-              SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding fp-annotated-callee " << callee->getName() << "\n");
-              callees.insert(callee);
-            }
-          }
-          SDEBUG("soaap.util.callgraph", 3, numIndCalls++);
-          SDEBUG("soaap.util.callgraph", 3, numIndCallees += callees.size());
-          if (isVCall) {
-            SDEBUG("soaap.util.callgraph", 3, calleeCountToFrequencies[callees.size()]++);
-            SDEBUG("soaap.util.callgraph", 3, numVCalls++);
-            /*if (callees.size() == 529) {
-              for (Function* callee : callees) {
-                dbgs() << " " << callee->getName() << "\n";
+              for (Context* Ctx : contexts) {
+                callees[Ctx].insert(callee);
               }
-              C->dump();
-            }*/
+            }
           }
         }
-        
-        // remove declaration-only functions
-        /*FunctionSet kill;
-        for (Function* F : callees) {
-          if (F->isDeclaration()) {
-            kill.insert(F);
-          }
-        }
-        for (Function* F : kill) {
-          callees.erase(F);
-        }*/
 
-        SDEBUG("soaap.util.callgraph", 3, numCallees += callees.size());
-        callToCallees[C] = callees;
-        Function* EnclosingFunc = C->getParent()->getParent();
-        for (Function* callee : callees) {
-          calleeToCalls[callee].insert(C); // we process each C exactly once, so no dups!
-          funcToCallees[EnclosingFunc].insert(callee);
-          funcToCallEdges[EnclosingFunc].insert(CallGraphEdge(C, callee));
+        for (Context* Ctx : contexts) {
+          addCallees(C, Ctx, callees[Ctx]);
         }
       }
     }
   }
-  bool outputStats = false;
-  SDEBUG("soaap.util.callgraph", 3, outputStats = true);
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << "Direct callees: " << numDirectCallees << ", indirect calls: " << numIndCalls << ", indirect callees: " << numIndCallees << ", numCallees: " << numCallees << "\n");
-  if (outputStats) {
-    dbgs() << "-----------------------------------------------------------------\n";
-    dbgs() << "Outputting callee-count frequencies... (" << numIndCalls << " ind calls, " << numVCalls << " v calls, " <<  numIndCallees << " callees)\n";
-    long numIndCalls2 = 0;
-    for (map<int,int>::iterator I=calleeCountToFrequencies.begin(), E=calleeCountToFrequencies.end(); I!=E; I++) {
-      dbgs() << INDENT_1 << I->first << ": " << I->second << "\n";
-      numIndCalls2 += I->second;
-    }
-    dbgs() << "(Recounted number of indirect calls: " << numIndCalls2 << ")\n";
-  }
-  caching = true;
 }
 
 bool CallGraphUtils::isIndirectCall(CallInst* C) {
@@ -372,14 +288,24 @@ bool CallGraphUtils::isExternCall(CallInst* C) {
   return false;
 }
 
-void CallGraphUtils::addCallees(CallInst* C, FunctionSet& callees) {
-  FunctionSet& currentCallees = (FunctionSet&)callToCallees[C];
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << "New callees to add: " << stringifyFunctionSet(callees) << "\n");
+void CallGraphUtils::addCallees(CallInst* C, Context* Ctx, FunctionSet& callees) {
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "New callees to add: " << stringifyFunctionSet(callees) << "\n");
+  FunctionSet& currentCallees = (FunctionSet&)callToCallees[C][Ctx];
+  Function* EnclosingFunc = C->getParent()->getParent();
   for (Function* callee : callees) {
     if (currentCallees.insert(callee).second) {
-      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Adding: " << callee->getName() << "\n");
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_4 << "Adding: " << callee->getName() << "\n");
+      calleeToCalls[callee][Ctx].insert(C);
+      funcToCallees[EnclosingFunc][Ctx].insert(callee);
+      funcToCallEdges[EnclosingFunc][Ctx].insert(CallGraphEdge(C, callee));
     }
-    calleeToCalls[callee].insert(C); //TODO: redundant?
+  }
+  if (Sandbox* S = dyn_cast<Sandbox>(Ctx)) {
+    S->reinit();
+  }
+  else if (Ctx == ContextUtils::PRIV_CONTEXT) {
+    Module* M = EnclosingFunc->getParent();
+    SandboxUtils::recalculatePrivilegedMethods(*M);
   }
 }
 
@@ -421,7 +347,7 @@ bool CallGraphUtils::isReachableFromHelper(Function* Source, Function* Curr, Fun
   }
   else {
     visited.insert(Curr);
-    for (Function* Succ : getCallees(Curr, M)) {
+    for (Function* Succ : getCallees(Curr, Ctx, M)) {
       if (isReachableFromHelper(Source, Succ, Dest, Ctx, visited, M)) {
         return true;
       }
@@ -462,7 +388,7 @@ void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privil
     // (i.e. in both case we are not entering a different protection domain)
     if (!(privileged && SandboxUtils::isSandboxEntryPoint(M, F2))
         && !(!privileged && SandboxUtils::isSandboxEntryPoint(M, F2) && F2 != S->getEntryPoint())){
-      for (CallGraphEdge E : getCallGraphEdges(F2, M)) {
+      for (CallGraphEdge E : getCallGraphEdges(F2, S ? S : ContextUtils::PRIV_CONTEXT, M)) {
         CallInst* C = E.first;
         Function* SuccFunc = E.second;
         // skip non-main root node
@@ -534,9 +460,9 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
     // such path.
     for (CallInst* C : calls) {
       SDEBUG("soaap.util.callgraph", 3, dbgs() << "Call: " << *C << "\n");
-      FunctionSet callees = getCallees(C, M);
+      FunctionSet callees = getCallees(C, S, M);
       SDEBUG("soaap.util.callgraph", 3, dbgs() << "Callees: " << stringifyFunctionSet(callees) << "\n");
-      for (Function* callee : getCallees(C, M)) {
+      for (Function* callee : callees) {
         if (funcToShortestCallPaths[callee].empty()) {
           SDEBUG("soaap.util.callgraph", 3, dbgs() << "populating short call paths (from " << callee->getName() << ") cache\n");
           calculateShortestCallPathsFromFunc(callee, false, S, M);
@@ -644,3 +570,14 @@ void CallGraphUtils::EmitCallTrace(Function* Target, Sandbox* S, Module& M) {
   XO::close_list("trace");
 }
 
+FPTargetsAnalysis& CallGraphUtils::getFPInferredTargetsAnalysis() {
+  static FPInferredTargetsAnalysis* fpInferredTargetsAnalysis
+              = new FPInferredTargetsAnalysis(CmdLineOpts::ContextInsens);
+  return *fpInferredTargetsAnalysis;
+}
+
+FPTargetsAnalysis& CallGraphUtils::getFPAnnotatedTargetsAnalysis() {
+  static FPAnnotatedTargetsAnalysis* fpAnnotatedTargetsAnalysis
+              = new FPAnnotatedTargetsAnalysis(CmdLineOpts::ContextInsens);
+  return *fpAnnotatedTargetsAnalysis;
+}

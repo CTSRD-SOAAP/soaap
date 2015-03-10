@@ -1,5 +1,9 @@
+#include "Common/Debug.h"
 #include "Util/ContextUtils.h"
 #include "Util/SandboxUtils.h"
+
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace soaap;
 
@@ -57,7 +61,9 @@ ContextVector ContextUtils::getContextsForMethod(Function* F, bool contextInsens
 }
 
 ContextVector ContextUtils::getContextsForInstruction(Instruction* I, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
+  SDEBUG("soaap.util.context", 5, dbgs() << "getContextsForInstruction\n");
   if (contextInsensitive) {
+    SDEBUG("soaap.util.context", 5, dbgs() << "context insensitive\n");
     return ContextVector(1, SINGLE_CONTEXT);
   }
   else {
@@ -65,6 +71,7 @@ ContextVector ContextUtils::getContextsForInstruction(Instruction* I, bool conte
     if (SandboxUtils::isPrivilegedInstruction(I, sandboxes, M)) {
       Cs.push_back(PRIV_CONTEXT);
     }
+    SDEBUG("soaap.util.context", 5, dbgs() << "looking for sandboxes containing instruction\n");
     SandboxVector containers = SandboxUtils::getSandboxesContainingInstruction(I, sandboxes);
     Cs.insert(Cs.begin(), containers.begin(), containers.end());
     return Cs;
@@ -73,6 +80,8 @@ ContextVector ContextUtils::getContextsForInstruction(Instruction* I, bool conte
 
 bool ContextUtils::isInContext(Instruction* I, Context* C, bool contextInsensitive, SandboxVector& sandboxes, Module& M) {
   ContextVector Cs = getContextsForInstruction(I, contextInsensitive, sandboxes, M);
+  SDEBUG("soaap.util.context", 5, dbgs() << "Looking for " << stringifyContext(C) << " amongst " << Cs.size() << " contexts\n");
+  SDEBUG("soaap.util.context", 5, dbgs() << "sandboxes.size(): " << sandboxes.size() << "\n");
   return find(Cs.begin(), Cs.end(), C) != Cs.end();
 }
 

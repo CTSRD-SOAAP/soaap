@@ -90,7 +90,7 @@ namespace soaap {
         if (CallInst* CI = dyn_cast<CallInst>(I)) {
           if (!isa<IntrinsicInst>(CI)) {
             SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Call to non-intrinsic\n");
-            FunctionSet callees = CallGraphUtils::getCallees(CI, M);
+            FunctionSet callees = CallGraphUtils::getCallees(CI, NULL, M);
             for (Function* callee : callees) {
               if (callee->isDeclaration()) continue;
               if (!SandboxUtils::isSandboxEntryPoint(M, callee) && !callee->isDeclaration()) {
@@ -108,7 +108,7 @@ namespace soaap {
           // propagate to callers
           SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Return\n");
           Function* callee = RI->getParent()->getParent();
-          CallInstSet callers = CallGraphUtils::getCallers(callee, M);
+          CallInstSet callers = CallGraphUtils::getCallers(callee, NULL, M);
           for (CallInst* CI : callers) {
             SDEBUG("soaap.analysis.cfgflow", 3, dbgs() << INDENT_6 << "Propagating to caller " << *CI << "\n");
             updateStateAndPropagate(CI, state[RI], worklist);

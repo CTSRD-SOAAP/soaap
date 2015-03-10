@@ -71,6 +71,7 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
     if (F->isDeclaration()) continue;
     SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F->getName() << "\n");
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      ContextVector contexts = ContextUtils::getContextsForInstruction(&*I, contextInsensitive, sandboxes, M);
       if (StoreInst* S = dyn_cast<StoreInst>(&*I)) { // assignments
         //SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F->getName() << ": " << *S);
         Value* Rval = S->getValueOperand()->stripInBoundsConstantOffsets();
@@ -79,13 +80,16 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
             fpTargetsUniv.insert(T);
             // we are assigning a function
             Value* Lvar = S->getPointerOperand()->stripInBoundsConstantOffsets();
-            setBitVector(state[ContextUtils::SINGLE_CONTEXT][Lvar], T);
-            addToWorklist(Lvar, ContextUtils::SINGLE_CONTEXT, worklist);
+            for (Context* C : contexts) {
+              setBitVector(state[C][Lvar], T);
+              SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Adding " << Lvar->getName() << " to worklist\n");
+              addToWorklist(Lvar, C, worklist);
 
-            if (isa<GetElementPtrInst>(Lvar)) {
-              SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Rewinding back to alloca\n");
-              ValueSet visited;
-              propagateToAggregate(Lvar, ContextUtils::SINGLE_CONTEXT, Lvar, visited, worklist, sandboxes, M);
+              if (isa<GetElementPtrInst>(Lvar)) {
+                SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Rewinding back to alloca\n");
+                ValueSet visited;
+                propagateToAggregate(Lvar, C, Lvar, visited, worklist, sandboxes, M);
+              }
             }
           }
         }
@@ -94,15 +98,19 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
         if (Function* F = dyn_cast<Function>(S->getTrueValue()->stripPointerCasts())) {
           if (!F->isDeclaration()) {
             fpTargetsUniv.insert(F);
-            setBitVector(state[ContextUtils::SINGLE_CONTEXT][S], F);
-            addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+            for (Context* C : contexts) {
+              setBitVector(state[C][S], F);
+              addToWorklist(S, C, worklist);
+            }
           }
         }
         if (Function* F = dyn_cast<Function>(S->getFalseValue()->stripPointerCasts())) {
           if (!F->isDeclaration()) {
             fpTargetsUniv.insert(F);
-            setBitVector(state[ContextUtils::SINGLE_CONTEXT][S], F);
-            addToWorklist(S, ContextUtils::SINGLE_CONTEXT, worklist);
+            for (Context* C : contexts) {
+              setBitVector(state[C][S], F);
+              addToWorklist(S, C, worklist);
+            }
           }
         }
       }
@@ -115,8 +123,11 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
             if (Function* T = dyn_cast<Function>(Arg)) {
               if (!T->isDeclaration()) {
                 fpTargetsUniv.insert(T);
-                setBitVector(state[ContextUtils::SINGLE_CONTEXT][Param], T);
-                addToWorklist(Param, ContextUtils::SINGLE_CONTEXT, worklist);
+                SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Adding param " << Param->getName() << " to worklist\n");
+                for (Context* Ctx : contexts) {
+                  setBitVector(state[Ctx][Param], T);
+                  addToWorklist(Param, Ctx, worklist);
+                }
               }
             }
           }
@@ -144,7 +155,8 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
     visited.insert(V);
     if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
       SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << INDENT_1 << "Global var: " << G->getName() << "\n");
-      if (G->hasInitializer()) {
+      // don't look in the llvm.global.annotations array
+      if (G->getName() != "llvm.global.annotations" && G->hasInitializer()) {
         findAllFunctionPointersInValue(G->getInitializer(), worklist, visited);
       }
     }
@@ -159,8 +171,8 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
       if (!F->isDeclaration()) {
         fpTargetsUniv.insert(F);
         SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << INDENT_1 << "Func: " << F->getName() << "\n");
-        setBitVector(state[ContextUtils::SINGLE_CONTEXT][V], F);
-        addToWorklist(V, ContextUtils::SINGLE_CONTEXT, worklist);
+        setBitVector(state[ContextUtils::NO_CONTEXT][V], F);
+        addToWorklist(V, ContextUtils::NO_CONTEXT, worklist);
       }
     }
     else if (ConstantStruct* S = dyn_cast<ConstantStruct>(V)) {

@@ -68,7 +68,7 @@ namespace soaap {
       virtual FactType bottomValue() = 0;
       virtual string stringifyFact(FactType f) = 0;
       virtual string stringifyValue(const Value* V);
-      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState);
+      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, Context* C, FactType& newState);
       virtual CallInstSet getCallersInContext(Function* callee, Context* C, SandboxVector& sandboxes, Module& M);
       virtual void propagateToAggregate(const Value* V, Context* C, Value* Agg, ValueSet& visited, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
   };
@@ -107,10 +107,11 @@ namespace soaap {
       Context* C = P.second;
 
       SDEBUG("soaap.analysis.infoflow", 3,
-            dbgs() << INDENT_1 << "Popped " << V->getName() << ", context: "
-              << ContextUtils::stringifyContext(C) << ", value dump: " << stringifyValue(V) << "\n"
-              << "state[C][V]: " << stringifyFact(state[C][V]) << "\n" 
-              << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n")
+            dbgs() << "\n" << INDENT_1 << "Popped (" << stringifyValue(V) << ", "
+                   << ContextUtils::stringifyContext(C) << ")\n"); 
+      SDEBUG("soaap.analysis.infoflow", 3,
+            dbgs() << INDENT_1 << "state[C][V]: " << stringifyFact(state[C][V]) << "\n" 
+                   << INDENT_2 << "Finding uses (" << V->getNumUses() << ")\n");
       for (User* U : ((Value*)V)->users()) {
         SDEBUG("soaap.analysis.infoflow" ,4, dbgs() << INDENT_3 << "Use: " << stringifyValue(U) << "\n")
         const Value* V2 = NULL;
@@ -119,31 +120,35 @@ namespace soaap {
           if (propagateToValue(V, V2, C, C, M, true)) { // propagate taint from (V,C) to (V2,C)
             SDEBUG("soaap.analysis.infoflow" , 3,
                   dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
-                    << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2) << "\n"
+                    << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V2) 
                     << ", " << ContextUtils::stringifyContext(C) << ")\n");
             addToWorklist(V2, C, worklist);
           }
         }
         else if (Instruction* I = dyn_cast<Instruction>(U)) {
+          SDEBUG("soaap.analysis.infoflow", 5, dbgs() << "Instruction\n");
           if (C == ContextUtils::NO_CONTEXT) {
             // update the taint value for the correct context and put the new pair on the worklist
             ContextVector C2s = ContextUtils::getContextsForInstruction(I, contextInsensitive, sandboxes, M);
             for (Context* C2 : C2s) {
               SDEBUG("soaap.analysis.infoflow", 3,
                   dbgs() << INDENT_4 << "Propagating (" << stringifyValue(V)
-                    << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V) << "\n"
+                    << ", " << ContextUtils::stringifyContext(C) << ") to (" << stringifyValue(V)
                     << ", " << ContextUtils::stringifyContext(C2) << ")\n");
               propagateToValue(V, V, C, C2, M, true); 
               addToWorklist(V, C2, worklist);
             }
           }
           else if (ContextUtils::isInContext(I, C, contextInsensitive, sandboxes, M)) { // check if using instruction is in context C
+            SDEBUG("soaap.analysis.infoflow", 5, dbgs() << "in context\n");
             if (StoreInst* SI = dyn_cast<StoreInst>(I)) {
+              SDEBUG("soaap.analysis.infoflow", 5, dbgs() << "store\n");
               if (V == SI->getPointerOperand()) { // to avoid infinite looping
                 // TODO: Are we clobbering V's dataflow state?
                 continue;
               }
               V2 = SI->getPointerOperand();
+              SDEBUG("soaap.analysis.infoflow", 5, dbgs() << "obtained store pointer operand\n");
             }
             else if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(I)) {
               if (II->getIntrinsicID() == Intrinsic::ptr_annotation) { // covers llvm.ptr.annotation.p0i8
@@ -163,7 +168,7 @@ namespace soaap {
                   // subclasses might want to be informed when
                   // the state of a function pointer changed
                   SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_5 << "state changed for function pointer\n");
-                  stateChangedForFunctionPointer(CI, V, state[C][V]);
+                  stateChangedForFunctionPointer(CI, V, C, state[C][V]);
                   
                   // if callee information has changed, we should propagate all
                   // args to callees in case this is the first time for some
@@ -367,7 +372,7 @@ namespace soaap {
       if (A != NULL) {
         // we found the param index, propagate back to all caller args
         int argIdx = A->getArgNo();
-        for (CallInst* caller : CallGraphUtils::getCallers(enclosingFunc, M)) {
+        for (CallInst* caller : CallGraphUtils::getCallers(enclosingFunc, C, M)) {
           ContextVector callerContexts = ContextUtils::getContextsForInstruction(caller, contextInsensitive, sandboxes, M);
           Value* arg = caller->getArgOperand(argIdx);
           Function* callerFunc = caller->getParent()->getParent();
@@ -436,7 +441,7 @@ namespace soaap {
     SDEBUG("soaap.analysis.infoflow", 4, dbgs() << "Call instruction: " << *CI << "\n"
               << "Calling-context C: " << ContextUtils::stringifyContext(C) << "\n");
 
-    FunctionSet callees = CallGraphUtils::getCallees(CI, M);
+    FunctionSet callees = CallGraphUtils::getCallees(CI, C, M);
     SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "callees: " << CallGraphUtils::stringifyFunctionSet(callees) << "\n");
     
     DataflowFacts& contextFacts = state[C];
@@ -553,11 +558,11 @@ namespace soaap {
   template <typename FactType>
   void InfoFlowAnalysis<FactType>::propagateToCallers(ReturnInst* RI, const Value* V, Context* C, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M) {
     Function* F = RI->getParent()->getParent();
-    for (CallInst* CI : CallGraphUtils::getCallers(F, M)) {
+    for (CallInst* CI : CallGraphUtils::getCallers(F, C, M)) {
       SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to caller " << stringifyValue(CI));
-      FunctionSet callees = CallGraphUtils::getCallees(CI, M);
       ContextVector C2s = ContextUtils::callerContexts(RI, CI, C, contextInsensitive, sandboxes, M);
       for (Context* C2 : C2s) {
+        FunctionSet callees = CallGraphUtils::getCallees(CI, C2, M);
         // if this is a must analysis, then take the meet of all possible return values of all callees
         if (mustAnalysis) {
           FactType meet;
@@ -652,21 +657,21 @@ namespace soaap {
       ss << V->getName();
     }
     else {
-      V->print(ss);
+      V->printAsOperand(ss);
     }
-    ss << " - " << *V->getType();
+    //ss << " - " << *V->getType();
     return result;
   }
 
   // default behaviour is to do nothing
   template<typename FactType>
-  void InfoFlowAnalysis<FactType>::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, FactType& newState) {
+  void InfoFlowAnalysis<FactType>::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, Context* C, FactType& newState) {
   }
 
   template<typename FactType>
   CallInstSet InfoFlowAnalysis<FactType>::getCallersInContext(Function* callee, Context* C, SandboxVector& sandboxes, Module& M) {
     if (inContextCallers.count(callee) == 0) {
-      CallInstSet callers = CallGraphUtils::getCallers(callee, M);
+      CallInstSet callers = CallGraphUtils::getCallers(callee, C, M);
       for (CallInst* call : callers) {
         ContextVector contexts = ContextUtils::getContextsForInstruction(call, contextInsensitive, sandboxes, M);
         for (Context* C2 : contexts) {

@@ -44,7 +44,7 @@ void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
       for (inst_iterator I=inst_begin(F), E=inst_end(F); I!=E; I++) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "call: " << *C << "\n")
-          for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+          for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
             string funcName = Callee->getName();
             SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "callee: " << funcName << "\n")
             if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName)) {

@@ -1,6 +1,7 @@
 #include "Common/Debug.h"
 #include "Common/Sandbox.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/ContextUtils.h"
 #include "Util/DebugUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
@@ -21,12 +22,10 @@ using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
-  init();
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
   : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
-  init();
 }
 
 void Sandbox::init() {
@@ -49,7 +48,7 @@ void Sandbox::init() {
   findPrivateData();
 }
 
-void Sandbox::reInit() {
+void Sandbox::reinit() {
   // clear everything
   callgates.clear();
   functionsVec.clear();
@@ -164,6 +163,7 @@ bool Sandbox::containsInstruction(Instruction* I) {
     }
   }
   Function* F = I->getParent()->getParent();
+  SDEBUG("soaap.util.sandbox", 4, dbgs() << "Looking for " << F->getName() << " in " << name << ": " << containsFunction(F) << "\n");
   return containsFunction(F);
 }
 
@@ -177,7 +177,7 @@ void Sandbox::findSandboxedFunctions() {
     // scan the code region for the set of top-level functions being called
     for (Instruction* I : region) {
       if (CallInst* C  = dyn_cast<CallInst>(I)) {
-        for (Function* F : CallGraphUtils::getCallees(C, module)) {
+        for (Function* F : CallGraphUtils::getCallees(C, this, module)) {
           if (F->isDeclaration()) continue;
           if (find(initialFuncs.begin(), initialFuncs.end(), F) == initialFuncs.end()) {
             initialFuncs.push_back(F);
@@ -211,8 +211,9 @@ void Sandbox::findSandboxedFunctionsHelper(Function* F) {
   functionsVec.push_back(F);
   functionsSet.insert(F);
 
-  //  outs() << "Adding " << node->getFunction()->getName().str() << " to visited" << endl;
-  for (Function* SuccFunc : CallGraphUtils::getCallees(F, module)) {
+  SDEBUG("soaap.util.sandbox", 4, dbgs() << "Recursing on successors\n");
+  for (Function* SuccFunc : CallGraphUtils::getCallees(F, this, module)) {
+    SDEBUG("soaap.util.sandbox", 4, dbgs() << "succ: " << SuccFunc->getName() << "\n");
     findSandboxedFunctionsHelper(SuccFunc);
   }
 }
@@ -518,8 +519,6 @@ void Sandbox::findCreationPoints() {
       }
     }
   }
-
-  validateEntryPointCalls();
 }
 
 void Sandbox::findAllowedSysCalls() {
@@ -581,13 +580,11 @@ void Sandbox::findAllowedSysCalls() {
       }
     }
   }
-
-  validateEntryPointCalls();
 }
 
 
 // check that all entrypoint calls are dominated by a creation call
-void Sandbox::validateEntryPointCalls() {
+void Sandbox::validateCreationPoints() {
   // We traverse the whole-program CFG starting from main, treating sandbox 
   // creation-point calls as leaves (i.e. we don't traverse past them). If
   // after this, an entrypoint call is still reached, then a path has been
@@ -596,11 +593,11 @@ void Sandbox::validateEntryPointCalls() {
     BasicBlock& EntryBB = MainFunc->getEntryBlock();
     BasicBlockVector visited;
     InstTrace trace;
-    validateEntryPointCallsHelper(&EntryBB, visited, trace);
+    validateCreationPointsHelper(&EntryBB, visited, trace);
   }
 }
 
-bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace) {
+bool Sandbox::validateCreationPointsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace) {
   if (find(visited.begin(), visited.end(), BB) != visited.end()) {
     return false;
   }
@@ -617,7 +614,7 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
       }
       else if (CallInst* CI = dyn_cast<CallInst>(&I)) {
         trace.push_front(CI);
-        FunctionSet callees = CallGraphUtils::getCallees(CI, module);
+        FunctionSet callees = CallGraphUtils::getCallees(CI, ContextUtils::PRIV_CONTEXT, module);
         for (Function* callee : callees) {
           if (callee->isDeclaration()) continue;
           if (callee == entryPoint) {
@@ -632,7 +629,7 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
           }
           else if (!callee->isDeclaration()) {
             // recurse on callee's entry bb
-            if (validateEntryPointCallsHelper(&callee->getEntryBlock(), visited, trace)) {
+            if (validateCreationPointsHelper(&callee->getEntryBlock(), visited, trace)) {
               trace.pop_front();
               return true; // all paths through callee have a creation-point
             }
@@ -646,7 +643,7 @@ bool Sandbox::validateEntryPointCallsHelper(BasicBlock* BB, BasicBlockVector& vi
     bool creationOnAllPaths = (succ_begin(BB) != succ_end(BB)); // true <-> at least one successor bb
     for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; ++SI) {
       BasicBlock* SuccBB = *SI;
-      creationOnAllPaths = creationOnAllPaths && validateEntryPointCallsHelper(SuccBB, visited, trace);
+      creationOnAllPaths = creationOnAllPaths && validateCreationPointsHelper(SuccBB, visited, trace);
     }
 
     return creationOnAllPaths;

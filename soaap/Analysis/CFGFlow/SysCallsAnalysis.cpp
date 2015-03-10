@@ -59,7 +59,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
     SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
       SDEBUG("soaap.analysis.cfgflow.syscalls", 4, dbgs() << "call: " << *C << "\n")
-      for (Function* Callee : CallGraphUtils::getCallees(C, M)) {
+      for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
         string funcName = Callee->getName();
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
         if (freeBSDSysCallProvider.isSysCall(funcName)) {

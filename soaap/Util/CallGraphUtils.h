@@ -3,28 +3,29 @@
 
 #include "llvm/IR/Module.h"
 #include "llvm/Support/GraphWriter.h"
+
 #include "Common/Sandbox.h"
 #include "Common/Typedefs.h"
 
 using namespace llvm;
 
 namespace soaap {
-  class FPAnnotatedTargetsAnalysis;
-  class FPInferredTargetsAnalysis;
+  class FPTargetsAnalysis;
   class CallGraphUtils {
     public:
+      static void buildBasicCallGraph(Module& M);
       static void loadAnnotatedInferredCallGraphEdges(Module& M);
       static void listFPCalls(Module& M, SandboxVector& sandboxes);
       static void listFPTargets(Module& M);
       static void listAllFuncs(Module& M);
       static bool isIndirectCall(CallInst* C);
       static Function* getDirectCallee(CallInst* C);
-      static FunctionSet getCallees(const CallInst* C, Module& M);
-      static FunctionSet getCallees(const Function* F, Module& M);
-      static set<CallGraphEdge> getCallGraphEdges(const Function* F, Module& M);
-      static CallInstSet getCallers(const Function* F, Module& M);
+      static FunctionSet getCallees(const CallInst* C, Context* Ctx, Module& M);
+      static FunctionSet getCallees(const Function* F, Context* Ctx, Module& M);
+      static set<CallGraphEdge> getCallGraphEdges(const Function* F, Context* Ctx, Module& M);
+      static CallInstSet getCallers(const Function* F, Context* Ctx, Module& M);
       static bool isExternCall(CallInst* C);
-      static void addCallees(CallInst* C, FunctionSet& callees);
+      static void addCallees(CallInst* C, Context* Ctx, FunctionSet& callees);
       static string stringifyFunctionSet(FunctionSet& funcs);
       static void dumpDOTGraph();
       static InstTrace findPrivilegedPathToFunction(Function* Target, Module& M);
@@ -36,17 +37,18 @@ namespace soaap {
        */
       static void EmitCallTrace(Function* Target, Sandbox* S, Module& M);
     private:
-      static map<const CallInst*, FunctionSet> callToCallees;
-      static map<const Function*, FunctionSet> funcToCallees;
-      static map<const Function*, set<CallGraphEdge> > funcToCallEdges;
-      static map<const Function*, CallInstSet> calleeToCalls;
-      static map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths;
-      static FPAnnotatedTargetsAnalysis fpAnnotatedTargetsAnalysis;
-      static FPInferredTargetsAnalysis fpInferredTargetsAnalysis;
+      static map<const CallInst*, map<Context*, FunctionSet> > callToCallees;
+      static map<const Function*, map<Context*, FunctionSet> > funcToCallees;
+      static map<const Function*, map<Context*, set<CallGraphEdge> > > funcToCallEdges;
+      static map<const Function*, map<Context*, CallInstSet> > calleeToCalls;
+      static map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths; //TODO: check
       static bool caching;
       static void populateCallCalleeCaches(Module& M);
       static void calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M);
       static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*>& visited, Module& M);
+      static FPTargetsAnalysis& getFPAnnotatedTargetsAnalysis();
+      static FPTargetsAnalysis& getFPInferredTargetsAnalysis();
+      
   };
 }
 namespace llvm {

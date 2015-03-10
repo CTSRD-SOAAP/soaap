@@ -11,9 +11,9 @@ using namespace llvm;
 namespace soaap {
   class FPTargetsAnalysis: public InfoFlowAnalysis<BitVector> {
     public:
-      FPTargetsAnalysis() : InfoFlowAnalysis<BitVector>(true, false) { }
-      virtual FunctionSet getTargets(Value* FP);
-      virtual bool hasTargets() { return !state[ContextUtils::SINGLE_CONTEXT].empty(); }
+      FPTargetsAnalysis(bool contextInsens) : InfoFlowAnalysis<BitVector>(contextInsens, false) { }
+      virtual FunctionSet getTargets(Value* FP, Context* C);
+      virtual bool hasTargets() { return !state.empty(); } // TODO: should we be looking inside state?
 
     protected:
       static map<Function*,int> funcToIdx;
@@ -24,10 +24,11 @@ namespace soaap {
       virtual bool performUnion(BitVector from, BitVector& to);
       virtual BitVector bottomValue() { return BitVector(); }
       virtual string stringifyFact(BitVector fact);
-      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, BitVector& newState);
+      virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, Context* C, BitVector& newState);
       virtual FunctionSet convertBitVectorToFunctionSet(BitVector vector);
       virtual BitVector convertFunctionSetToBitVector(FunctionSet funcs);
       virtual void setBitVector(BitVector& vector, Function* F);
+      virtual bool areTypeCompatible(FunctionType* FT1, FunctionType* FT2);
   };
 }
 

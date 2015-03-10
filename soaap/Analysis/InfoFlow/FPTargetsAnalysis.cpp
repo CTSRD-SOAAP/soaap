@@ -43,8 +43,8 @@ bool FPTargetsAnalysis::performUnion(BitVector from, BitVector& to) {
   return to != oldTo;
 }
 
-FunctionSet FPTargetsAnalysis::getTargets(Value* FP) {
-  BitVector& vector = state[ContextUtils::SINGLE_CONTEXT][FP];
+FunctionSet FPTargetsAnalysis::getTargets(Value* FP, Context* C) {
+  BitVector& vector = state[C][FP];
   return convertBitVectorToFunctionSet(vector);
 }
 
@@ -79,8 +79,9 @@ string FPTargetsAnalysis::stringifyFact(BitVector fact) {
   return CallGraphUtils::stringifyFunctionSet(funcs);
 }
 
-void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, BitVector& newState) {
+void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value* FP, Context* C, BitVector& newState) {
   // Filter out those callees that aren't compatible with FP's function type
+  SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "bits set (before): " << newState.count() << "\n");
   FunctionType* FT = NULL;
   if (PointerType* PT = dyn_cast<PointerType>(FP->getType())) {
     if (PointerType* PT2 = dyn_cast<PointerType>(PT->getElementType())) {
@@ -99,7 +100,7 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
       Function* F = idxToFunc[idx];
       SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "F: " << F->getName() << "\n");
       SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT: " << *FT << "\n");
-      if (F->getFunctionType() != FT || F->isDeclaration()) {
+      if (!areTypeCompatible(F->getFunctionType(), FT) || F->isDeclaration()) {
         newState.reset(idx);
         if (F->isDeclaration()) {
           SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Declaration\n");
@@ -118,6 +119,11 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
   else {
     dbgs() << "Unrecognised FP: " << *FP->getType() << "\n";
   }
+  SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "bits set (after): " << newState.count() << "\n");
   FunctionSet newFuncs = convertBitVectorToFunctionSet(newState);
-  CallGraphUtils::addCallees(CI, newFuncs);
+  CallGraphUtils::addCallees(CI, C, newFuncs);
+}
+
+bool FPTargetsAnalysis::areTypeCompatible(FunctionType* FT1, FunctionType* FT2) {
+  return FT1 == FT2 || (FT1->getReturnType() == FT2->getReturnType() && FT1->getNumParams() == 0 && FT2->getNumParams() == 0);
 }
