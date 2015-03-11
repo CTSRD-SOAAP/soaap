@@ -60,6 +60,7 @@ ExternalProject_Add(libxo
 ExternalProject_Get_Property(libxo install_dir)
 include_directories(${install_dir}/include)
 link_directories(${install_dir}/lib)
+message(STATUS "Found libxo: ${install_dir}")
 
 # Default to libc++ if installed
 find_package(LibCXX)
