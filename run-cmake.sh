@@ -17,8 +17,8 @@ if [ ! -d "${cppinc}" ]; then
 	exit 1
 fi
 
-mkdir -p ${BUILD_TYPE} || exit 1
-cd ${BUILD_TYPE} || exit 1
+mkdir -p Build/${BUILD_TYPE} || exit 1
+cd Build/${BUILD_TYPE} || exit 1
 
 PATH=${PATH}:${LLVM_PREFIX}/bin \
 	cmake \
@@ -28,4 +28,4 @@ PATH=${PATH}:${LLVM_PREFIX}/bin \
 	-D LLVM_DIR="${LLVM_PREFIX}/share/llvm/cmake" \
 	-D CMAKE_C_COMPILER="${clang}" \
 	-D CMAKE_CXX_COMPILER="${clang}++" \
-	..
+	../..
