@@ -1,6 +1,7 @@
 #!/bin/sh
 
 : ${BUILD_TYPE:="Release"}
+: ${BUILD_DIR:="Build/${BUILD_TYPE}"}
 
 if [ ! -d "${LLVM_PREFIX}" ]; then
 	echo "LLVM_PREFIX not specified"
@@ -23,8 +24,9 @@ if [ "${libcxx}" = "" ]; then
 	exit 1
 fi
 
-mkdir -p Build/${BUILD_TYPE} || exit 1
-cd Build/${BUILD_TYPE} || exit 1
+rm -rf ${BUILD_DIR}
+mkdir -p ${BUILD_DIR} || exit 1
+cd ${BUILD_DIR} || exit 1
 
 PATH=${PATH}:${LLVM_PREFIX}/bin \
 	cmake \
