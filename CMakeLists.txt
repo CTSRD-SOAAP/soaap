@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
 
+if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
+  if (POLICY CMP0022)
+    cmake_policy(SET CMP0022 NEW)
+  endif()
+endif()
+
 # Allow user to optionally override LLVM build tree locations.
 set(LLVM_TOOLS_BINARY_DIR "" CACHE PATH "Path to llvm/bin")
 set(LLVM_LIBRARY_DIR "" CACHE PATH "Path to llvm/lib")
@@ -24,9 +30,7 @@ endforeach()
 
 include(FeatureSummary)
 
-
 list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libxo/install")
 
 include(AddLLVM)
 add_definitions(${LLVM_DEFINITIONS})
@@ -39,12 +43,28 @@ message(STATUS "Setting C++ compiler to ${CMAKE_CXX_COMPILER}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 
+# libxo
+include(ExternalProject)
+ExternalProject_Add(libxo
+  URL ${CMAKE_CURRENT_SOURCE_DIR}/libxo
+  BUILD_IN_SOURCE 1
+  CONFIGURE_COMMAND sh bin/setup.sh
+                    COMMAND cd build
+                    COMMAND ../configure --prefix=<INSTALL_DIR>
+  BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND gmake 
+  INSTALL_COMMAND cd <SOURCE_DIR>/build COMMAND gmake install
+  STEP_TARGETS build install
+)
+
+ExternalProject_Get_Property(libxo install_dir)
+include_directories(${install_dir}/include/libxo)
+link_directories(${install_dir}/lib)
+
 # Default to libc++ if installed
 find_package(LibCXX)
 set_package_properties(LibCXX PROPERTIES TYPE OPTIONAL URL "http://libcxx.llvm.org/"
                               PURPOSE "Use LLVM libc++ instead of GNU libstdc++")
 if (LIBCXX_FOUND)
-#message(FATAL_ERROR "LIBCXX_FOUND")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
   include_directories(${LIBCXX_INCLUDE_DIRS})
   foreach(lib ${LIBCXX_LIBRARIES})
@@ -52,10 +72,6 @@ if (LIBCXX_FOUND)
     link_directories(${LIBCXX_LIBRARY_DIR})
   endforeach(lib)
 endif()
-
-# libxo
-find_package(LibXO REQUIRED)
-include_directories(${LIBXO_INCLUDE_DIRS})
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)

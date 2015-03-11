@@ -38,5 +38,7 @@ add_llvm_library(SOAAP
   Util/InstUtils.cpp
 )
 
+add_dependencies(SOAAP libxo)
+
 # link with libxo
-target_link_libraries(SOAAP ${LIBXO_LIBRARY})
+target_link_libraries(SOAAP xo)
