@@ -48,7 +48,8 @@ include(ExternalProject)
 ExternalProject_Add(libxo
   URL ${CMAKE_CURRENT_SOURCE_DIR}/libxo
   BUILD_IN_SOURCE 1
-  CONFIGURE_COMMAND sh bin/setup.sh
+  CONFIGURE_COMMAND rm -rf configure m4
+                    COMMAND sh bin/setup.sh
                     COMMAND cd build
                     COMMAND ../configure --prefix=<INSTALL_DIR>
   BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND gmake 
