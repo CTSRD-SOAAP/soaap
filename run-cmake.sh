@@ -9,11 +9,19 @@ if [ ! -d "${LLVM_PREFIX}" ]; then
 fi
 
 clang="${LLVM_PREFIX}/bin/clang"
-include="/usr/local/include"
-cppinc="${include}/c++/v1"
+include_dirs="/usr/include /usr/local/include"
+libcxx=""
 
-if [ ! -d "${cppinc}" ]; then
-	echo "No libc++ at ${cppinc}"
+for include in ${include_dirs}
+do
+	cppinc="${include}/c++/v1"
+	echo ${cppinc}
+
+	if [ -d "${cppinc}" ]; then libcxx=${cppinc}; fi
+done
+
+if [ "${libcxx}" = "" ]; then
+	echo "No libc++ in ${include_dirs}"
 	exit 1
 fi
 
