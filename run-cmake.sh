@@ -15,8 +15,6 @@ libcxx=""
 for include in ${include_dirs}
 do
 	cppinc="${include}/c++/v1"
-	echo ${cppinc}
-
 	if [ -d "${cppinc}" ]; then libcxx=${cppinc}; fi
 done
 
