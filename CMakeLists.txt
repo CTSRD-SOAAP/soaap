@@ -46,7 +46,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 # libxo
 include(ExternalProject)
 ExternalProject_Add(libxo
-  URL ${CMAKE_CURRENT_SOURCE_DIR}/libxo
+  GIT_REPOSITORY https://github.com/Juniper/libxo.git
+  GIT_TAG 0.1.6
   BUILD_IN_SOURCE 1
   CONFIGURE_COMMAND rm -rf configure m4
                     COMMAND sh bin/setup.sh
