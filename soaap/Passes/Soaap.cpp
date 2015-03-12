@@ -12,6 +12,7 @@
 #include "Common/XO.h"
 #include "Analysis/VulnerabilityAnalysis.h"
 #include "Analysis/PrivilegedCallAnalysis.h"
+#include "Analysis/SandboxedFuncAnalysis.h"
 #include "Analysis/CFGFlow/GlobalVariableAnalysis.h"
 #include "Analysis/CFGFlow/SysCallsAnalysis.h"
 #include "Analysis/InfoFlow/AccessOriginAnalysis.h"
@@ -129,6 +130,11 @@ bool Soaap::runOnModule(Module& M) {
       checkPrivilegedCalls(M);
     }
 
+    if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking sandbox-only functions\n";
+      checkSandboxedFuncs(M);
+    }
+
     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::SoaapAnalyses)) {
       outs() << "* Checking propagation of data from sandboxes to privileged components\n";
       checkOriginOfAccesses(M);
@@ -242,6 +248,7 @@ void Soaap::processCmdLineArgs(Module& M) {
     CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::Globals);
     CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::SysCalls);
     CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::PrivCalls);
+    CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::SandboxedFuncs);
     CmdLineOpts::OutputTraces.push_back(SoaapAnalysis::InfoFlow);
   }
 
@@ -253,6 +260,7 @@ void Soaap::processCmdLineArgs(Module& M) {
     CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Globals);
     CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SysCalls);
     CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::PrivCalls);
+    CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SandboxedFuncs);
     CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::InfoFlow);
   }
 
@@ -267,6 +275,7 @@ void Soaap::processCmdLineArgs(Module& M) {
         CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Globals);
         CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SysCalls);
         CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::PrivCalls);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SandboxedFuncs);
         break;
       }
       case SoaapMode::InfoFlow: {
@@ -280,6 +289,11 @@ void Soaap::processCmdLineArgs(Module& M) {
 
 void Soaap::checkPrivilegedCalls(Module& M) {
   PrivilegedCallAnalysis analysis;
+  analysis.doAnalysis(M, sandboxes);
+}
+
+void Soaap::checkSandboxedFuncs(Module& M) {
+  SandboxedFuncAnalysis analysis;
   analysis.doAnalysis(M, sandboxes);
 }
 

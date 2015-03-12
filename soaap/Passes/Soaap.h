@@ -56,6 +56,7 @@ namespace soaap {
       void checkSysCalls(Module& M);
       void calculatePrivilegedMethods(Module& M);
       void checkGlobalVariables(Module& M);
+      void checkSandboxedFuncs(Module& M);
       void instrumentPerfEmul(Module& M);
       void buildRPCGraph(Module& M);
   };

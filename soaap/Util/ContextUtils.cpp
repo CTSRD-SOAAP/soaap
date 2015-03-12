@@ -87,7 +87,7 @@ bool ContextUtils::isInContext(Instruction* I, Context* C, bool contextInsensiti
 
 string ContextUtils::stringifyContext(Context* C) {
   if (C == PRIV_CONTEXT) {
-    return "[<priv>]";
+    return "[<privileged>]";
   }
   else if (C == NO_CONTEXT) {
     return "[<none>]";

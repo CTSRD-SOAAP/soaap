@@ -7,6 +7,7 @@ add_llvm_library(SOAAP
   Common/XO.cpp
   Analysis/VulnerabilityAnalysis.cpp
   Analysis/PrivilegedCallAnalysis.cpp
+  Analysis/SandboxedFuncAnalysis.cpp
   Analysis/CFGFlow/GlobalVariableAnalysis.cpp
   Analysis/CFGFlow/SysCallsAnalysis.cpp
   Analysis/InfoFlow/AccessOriginAnalysis.cpp

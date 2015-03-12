@@ -107,6 +107,9 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define SOAAP_PRIVILEGED "SOAAP_PRIVILEGED"
 #define __soaap_privileged __attribute__((annotate(SOAAP_PRIVILEGED)))
 
+#define SOAAP_SANDBOXED "SOAAP_SANDBOXED"
+#define __soaap_sandboxed(sboxes...) __attribute__((annotate(SOAAP_SANDBOXED "_" #sboxes)))
+
 #define SOAAP_FP "SOAAP_FP"
 #define __soaap_fp(fns...) __attribute__((annotate(SOAAP_FP "_" #fns)))
 

@@ -513,7 +513,7 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
 
 void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   XO::open_list("trace");
-  XO::emit(" Possible trace:\n");
+  XO::emit(" Possible trace ({d:context}):\n", ContextUtils::stringifyContext(S ? S : ContextUtils::PRIV_CONTEXT).c_str());
   InstTrace callStack = S
     ? findSandboxedPathToFunction(Target, S, M)
     : findPrivilegedPathToFunction(Target, M);

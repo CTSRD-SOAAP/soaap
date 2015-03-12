@@ -19,7 +19,7 @@ namespace soaap {
     Null, Vuln, Correct, InfoFlow, Custom, All
   };
   enum class SoaapAnalysis {
-    None, Vuln, Globals, SysCalls, PrivCalls, InfoFlow, All
+    None, Vuln, Globals, SysCalls, PrivCalls, SandboxedFuncs, InfoFlow, All
   };
   class CmdLineOpts {
     public:
