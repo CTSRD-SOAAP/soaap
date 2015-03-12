@@ -1,6 +1,7 @@
 #!/bin/sh
 
 : ${BUILD_TYPE:="Release"}
+: ${BUILD_DIR:="Build/${BUILD_TYPE}"}
 
 if [ ! -d "${LLVM_PREFIX}" ]; then
 	echo "LLVM_PREFIX not specified"
@@ -9,16 +10,23 @@ if [ ! -d "${LLVM_PREFIX}" ]; then
 fi
 
 clang="${LLVM_PREFIX}/bin/clang"
-include="/usr/local/include"
-cppinc="${include}/c++/v1"
+include_dirs="/usr/include /usr/local/include"
+libcxx=""
 
-if [ ! -d "${cppinc}" ]; then
-	echo "No libc++ at ${cppinc}"
+for include in ${include_dirs}
+do
+	cppinc="${include}/c++/v1"
+	if [ -d "${cppinc}" ]; then libcxx=${cppinc}; fi
+done
+
+if [ "${libcxx}" = "" ]; then
+	echo "No libc++ in ${include_dirs}"
 	exit 1
 fi
 
-mkdir -p Build/${BUILD_TYPE} || exit 1
-cd Build/${BUILD_TYPE} || exit 1
+rm -rf ${BUILD_DIR}
+mkdir -p ${BUILD_DIR} || exit 1
+cd ${BUILD_DIR} || exit 1
 
 PATH=${PATH}:${LLVM_PREFIX}/bin \
 	cmake \
