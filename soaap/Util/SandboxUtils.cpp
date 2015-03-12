@@ -270,6 +270,7 @@ bool SandboxUtils::isPrivilegedInstruction(Instruction* I, SandboxVector& sandbo
         return false;
       }
     }
+    return true;
   }
   return false;
 }
