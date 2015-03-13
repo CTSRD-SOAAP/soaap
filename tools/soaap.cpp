@@ -137,9 +137,9 @@ int main(int argc, char **argv) {
 
     // Pass to create output
     if (OutputAssembly)
-      Passes.add(createPrintModulePass(Out->os()));                                                      
-    else                                                                                                  
-      Passes.add(createBitcodeWriterPass(Out->os()));                                                     
+      Passes.add(createPrintModulePass(Out->os()));
+    else
+      Passes.add(createBitcodeWriterPass(Out->os()));
   }
 
   // Now that we have all of the passes ready, run them.
