@@ -53,7 +53,7 @@ endif()
 include(ExternalProject)
 ExternalProject_Add(libxo
   GIT_REPOSITORY https://github.com/Juniper/libxo.git
-  GIT_TAG 0.1.6
+  GIT_TAG 0.2.0
   BUILD_IN_SOURCE 1
   CONFIGURE_COMMAND rm -rf configure m4
                     COMMAND sh bin/setup.sh
