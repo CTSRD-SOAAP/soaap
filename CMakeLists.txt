@@ -44,6 +44,12 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 
 # libxo
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+  set(GMAKE "make")
+else()
+  set(GMAKE "gmake")
+endif()
+
 include(ExternalProject)
 ExternalProject_Add(libxo
   GIT_REPOSITORY https://github.com/Juniper/libxo.git
@@ -53,8 +59,8 @@ ExternalProject_Add(libxo
                     COMMAND sh bin/setup.sh
                     COMMAND cd build
                     COMMAND ../configure --prefix=<INSTALL_DIR>
-  BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND gmake 
-  INSTALL_COMMAND cd <SOURCE_DIR>/build COMMAND gmake install
+  BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE}
+  INSTALL_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE} install
   STEP_TARGETS build install
 )
 
