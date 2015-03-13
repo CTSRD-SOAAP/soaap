@@ -6,20 +6,7 @@
 #     LIBCXX_INCLUDE_DIRS  - include dirs for libc++ and (no) dependencies
 #
 
-find_path(LIBCXX_PREFIX c++/v1/string REQUIRED
-  DOC "container for versioned libc++ include directories"
-  PATHS ${CMAKE_SYSTEM_PREFIX_PATH}
-)
-
-if (LIBCXX_PREFIX)
-  set(LIBCXX_INCLUDE_DIR "${LIBCXX_PREFIX}/c++/v1"
-    CACHE STRING "Include directory for libc++ headers")
-
-  set(LIBCXX_INCLUDE_DIRS "${LIBCXX_INCLUDE_DIR}" "${LIBCXX_PREFIX}")
-
-  find_library(LIBCXX_LIBRARY c++)
-
-elseif (LIBCXX_BUILD_DIR)
+if (LIBCXX_BUILD_DIR)
   set(LIBCXX_INCLUDE_DIRS
     "${LIBCXX_BUILD_DIR}/include"
     "${LIBCXX_SOURCE_DIR}/include")
@@ -27,6 +14,23 @@ elseif (LIBCXX_BUILD_DIR)
   find_library(LIBCXX_LIBRARY c++
 	PATHS "${LIBCXX_BUILD_DIR}/lib"
 	NO_DEFAULT_PATH)
+
+else()
+
+  find_path(LIBCXX_PREFIX c++/v1/string REQUIRED
+    DOC "container for versioned libc++ include directories"
+    PATHS ${CMAKE_SYSTEM_PREFIX_PATH}
+  )
+
+  if (LIBCXX_PREFIX)
+    set(LIBCXX_INCLUDE_DIR "${LIBCXX_PREFIX}/c++/v1"
+      CACHE STRING "Include directory for libc++ headers")
+
+    set(LIBCXX_INCLUDE_DIRS "${LIBCXX_INCLUDE_DIR}" "${LIBCXX_PREFIX}")
+
+    find_library(LIBCXX_LIBRARY c++)
+
+  endif()
 
 endif ()
 
