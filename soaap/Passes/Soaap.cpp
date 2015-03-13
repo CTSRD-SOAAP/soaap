@@ -95,6 +95,11 @@ bool Soaap::runOnModule(Module& M) {
     SandboxUtils::outputSandboxedFunctions(sandboxes);
   }
   
+  if (CmdLineOpts::ListPrivilegedFuncs) {
+    outs() << "\n* Listing privileged functions\n";
+    SandboxUtils::outputPrivilegedFunctions();
+  }
+
   if (CmdLineOpts::EmPerf) {
     outs() << "* Instrumenting sandbox emulation calls\n";
     instrumentPerfEmul(M);

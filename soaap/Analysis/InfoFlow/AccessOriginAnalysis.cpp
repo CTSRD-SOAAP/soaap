@@ -9,13 +9,14 @@
 #include "Util/InstUtils.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
+#include "Util/PrivInstIterator.h"
 #include "Util/SandboxUtils.h"
 
 using namespace soaap;
 
 void AccessOriginAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
   for (Function* F : privilegedMethods) {
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
+    for (PrivInstIterator I = priv_inst_begin(F, sandboxes), E = priv_inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         for (Function* callee : CallGraphUtils::getCallees(C, ContextUtils::PRIV_CONTEXT, M)) {
           if (SandboxUtils::isSandboxEntryPoint(M, callee)) {
@@ -33,7 +34,7 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
   // check that no untrusted function pointers are called in privileged methods
   XO::open_list("access_origin_warning");
   for (Function* F : privilegedMethods) {
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I!=E; ++I) {
+    for (PrivInstIterator I = priv_inst_begin(F, sandboxes), E = priv_inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (C->getCalledFunction() == NULL) {
           if (state[ContextUtils::PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {

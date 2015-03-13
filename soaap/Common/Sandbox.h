@@ -22,6 +22,7 @@ namespace soaap {
       FunctionVector getFunctions();
       CallInstVector getCalls();
       CallInstVector getTopLevelCalls();
+      InstVector getRegion();
       GlobalVariableIntMap getGlobalVarPerms();
       ValueFunctionSetMap getCapabilities();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);

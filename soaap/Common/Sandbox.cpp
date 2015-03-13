@@ -727,3 +727,7 @@ void Sandbox::findPrivateData() {
 ValueSet Sandbox::getPrivateData() {
   return privateData;
 }
+
+InstVector Sandbox::getRegion() {
+  return region;
+}

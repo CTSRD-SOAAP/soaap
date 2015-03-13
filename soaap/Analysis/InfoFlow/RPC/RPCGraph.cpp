@@ -1,6 +1,7 @@
 #include "Analysis/InfoFlow/RPC/RPCGraph.h"
 #include "Common/Debug.h"
 #include "Util/CallGraphUtils.h"
+#include "Util/PrivInstIterator.h"
 #include "Util/SandboxUtils.h"
 #include "Common/XO.h"
 
@@ -21,7 +22,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
 
   // privileged methods
   for (Function* F : privilegedMethods) {
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    for (PrivInstIterator I = priv_inst_begin(F, sandboxes), E = priv_inst_end(F); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (Function* callee = C->getCalledFunction()) {
           if (callee->getName().startswith("__soaap_rpc_send_helper")) {
@@ -50,7 +51,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
   // privileged methods
   map<Sandbox*,map<string,Function*>> receiverToMsgTypeHandler;
   for (Function* F : privilegedMethods) {
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    for (PrivInstIterator I = priv_inst_begin(F, sandboxes), E = priv_inst_end(F); I != E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (Function* callee = C->getCalledFunction()) {
           if (callee->getName().startswith("__soaap_rpc_recv_helper") 

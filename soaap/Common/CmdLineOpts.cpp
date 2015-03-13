@@ -31,6 +31,12 @@ static cl::opt<bool, true> ClListSandboxedFuncs("soaap-list-sandboxed-funcs",
        cl::desc("List sandboxed functions"),
        cl::location(CmdLineOpts::ListSandboxedFuncs));
 
+bool CmdLineOpts::ListPrivilegedFuncs;
+static cl::opt<bool, true> ClListPrivilegedFuncs("soaap-list-priv-funcs",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("List privileged functions"),
+       cl::location(CmdLineOpts::ListPrivilegedFuncs));
+
 bool CmdLineOpts::ListFPCalls;
 static cl::opt<bool, true> ClListFPCalls("soaap-list-fp-calls",
        cl::cat(CmdLineOpts::SoaapCategory),

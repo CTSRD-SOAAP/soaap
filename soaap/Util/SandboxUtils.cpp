@@ -333,6 +333,22 @@ void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
   }
 }
 
+void SandboxUtils::outputPrivilegedFunctions() {
+  outs() << INDENT_1 << "Privileged methods:\n";
+  for (Function* F : privilegedMethods) {
+    if (F->isDeclaration()) { continue; }
+    outs() << INDENT_2 << F->getName();
+    // output location
+    Instruction* I = F->getEntryBlock().getTerminator();
+    if (MDNode *N = I->getMetadata("dbg")) {
+      DILocation loc(N);
+      outs() << " (" << loc.getFilename().str() << ")";
+    }
+    outs() << "\n";
+  }
+  outs() << "\n";
+}
+
 bool SandboxUtils::isSandboxedFunction(Function* F, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     if (S->containsFunction(F)) {
@@ -357,4 +373,16 @@ void SandboxUtils::validateSandboxCreations(SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
     S->validateCreationPoints();
   }
+}
+
+bool SandboxUtils::isWithinSandboxedRegion(Instruction* I, SandboxVector& sandboxes) {
+  for (Sandbox* S : sandboxes) {
+    if (S->getEntryPoint() == NULL) {
+      InstVector region = S->getRegion();
+      if (find(region.begin(), region.end(), I) != region.end()) {
+        return true;
+      }
+    }
+  }
+  return false;
 }

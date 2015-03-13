@@ -20,11 +20,13 @@ namespace soaap {
       static string stringifySandboxNames(int sandboxNames);
       static string stringifySandboxVector(SandboxVector& sandboxes);
       static bool isSandboxEntryPoint(Module& M, Function* F);
+      static bool isWithinSandboxedRegion(Instruction* I, SandboxVector& sandboxes);
       static Sandbox* getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingMethod(Function* F, SandboxVector& sandboxes);
       static SandboxVector getSandboxesContainingInstruction(Instruction* I, SandboxVector& sandboxes);
       static Sandbox* getSandboxWithName(string name, SandboxVector& sandboxes);
       static void outputSandboxedFunctions(SandboxVector& sandboxes);
+      static void outputPrivilegedFunctions();
       static bool isSandboxedFunction(Function* F, SandboxVector& sandboxes);
       static SandboxVector convertNamesToVector(int sandboxNames, SandboxVector& sandboxes);
       static void validateSandboxCreations(SandboxVector& sandboxes);
