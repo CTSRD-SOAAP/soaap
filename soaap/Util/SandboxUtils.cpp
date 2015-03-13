@@ -161,7 +161,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
 		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Created new Sandbox instance\n");
   }
 
-  // Handle sandboxe code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
+  // Handle sandboxed code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
   if (Function* SboxStart = M.getFunction("llvm.annotation.i32")) {
     for (User* U : SboxStart->users()) {
       if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
