@@ -226,16 +226,18 @@ void CallGraphUtils::buildBasicCallGraph(Module& M, SandboxVector& sandboxes) {
   ContextVector contexts = ContextUtils::getAllContexts(sandboxes);
 
   if (Function* MainFn = M.getFunction("main")) {
-    buildBasicCallGraphHelper(M, sandboxes, MainFn, ContextUtils::PRIV_CONTEXT, set<Function*>());
+    set<Function*> visited;
+    buildBasicCallGraphHelper(M, sandboxes, MainFn, ContextUtils::PRIV_CONTEXT, visited);
   }
 
   for (Sandbox* S : sandboxes) {
-    buildBasicCallGraphHelper(M, sandboxes, S->getEntryPoint(), S, set<Function*>());
+    set<Function*> visited;
+    buildBasicCallGraphHelper(M, sandboxes, S->getEntryPoint(), S, visited);
   }
 
 }
 
-void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*> visited) {
+void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*>& visited) {
   
   if (F && F->isDeclaration()) {
     return;
