@@ -79,9 +79,11 @@ Function* Sandbox::getEnclosingFunc() {
 
 bool Sandbox::isRegionWithin(Function* F) {
   if (entryPoint == NULL) {
-    Instruction* firstI = region.front();
-    Function* enclosingFunc = firstI->getParent()->getParent();
-    return enclosingFunc == F;
+    if (!region.empty()) {
+      Instruction* firstI = region.front();
+      Function* enclosingFunc = firstI->getParent()->getParent();
+      return enclosingFunc == F;
+    }
   }
   return false;
 }
@@ -286,14 +288,14 @@ void Sandbox::findSharedGlobalVariables() {
           if (sandboxName == name) {
             sharedVarToPerms[annotatedVar] |= VAR_READ_MASK;
           }
-          dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n";
+          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n");
         }
         else if (annotationStrArrayCString.startswith(VAR_WRITE)) {
           StringRef sandboxName = annotationStrArrayCString.substr(strlen(VAR_WRITE)+1);
           if (sandboxName == name) {
             sharedVarToPerms[annotatedVar] |= VAR_WRITE_MASK;
           }
-          dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n";
+          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n");
         }
       }
     }
@@ -324,7 +326,7 @@ void Sandbox::findCallgates() {
     if (F.getName().startswith("__soaap_declare_callgates_helper_")) {
       SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found __soaap_declare_callgates_helper_\n");
       StringRef sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
-      dbgs() << INDENT_3 << "Sandbox name: " << sandboxName << "\n";
+      SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Sandbox name: " << sandboxName << "\n");
       if (sandboxName == name) {
         for (User* U : F.users()) {
           if (CallInst* annotateCallgatesCall = dyn_cast<CallInst>(U)) {
@@ -335,7 +337,7 @@ void Sandbox::findCallgates() {
              */
             for (unsigned int i=1; i<annotateCallgatesCall->getNumArgOperands(); i++) {
               Function* callgate = dyn_cast<Function>(annotateCallgatesCall->getArgOperand(i)->stripPointerCasts());
-              outs() << INDENT_3 << "Callgate " << i << " is " << callgate->getName() << "\n";
+              SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Callgate " << i << " is " << callgate->getName() << "\n");
               callgates.push_back(callgate);
             }
           }

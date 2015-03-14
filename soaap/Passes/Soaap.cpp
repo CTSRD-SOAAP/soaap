@@ -66,7 +66,10 @@ bool Soaap::runOnModule(Module& M) {
 
   outs() << "* Building basic callgraph\n";
   CallGraphUtils::buildBasicCallGraph(M, sandboxes);
-  
+
+  // init sandboxes
+  SandboxUtils::reinitSandboxes(sandboxes);
+
   outs() << "* Validating sandbox creation points\n";
   SandboxUtils::validateSandboxCreations(sandboxes);
   

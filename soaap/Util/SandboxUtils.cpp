@@ -15,8 +15,11 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicInst.h"
 
+#include <sstream>
+
 using namespace soaap;
 using namespace llvm;
+using namespace std;
 
 FunctionSet SandboxUtils::privilegedMethods;
 int SandboxUtils::nextSandboxNameBitIdx = 0;
@@ -164,16 +167,16 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   // Handle sandboxed code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
   if (Function* SboxStart = M.getFunction("llvm.annotation.i32")) {
     for (User* U : SboxStart->users()) {
-      if (IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U)) {
-        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotateCall->getOperand(1)->stripPointerCasts());
+      if (IntrinsicInst* annotCall = dyn_cast<IntrinsicInst>(U)) {
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotCall->getOperand(1)->stripPointerCasts());
         ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
         StringRef annotationStrValCString = annotationStrValArray->getAsCString();
         
         if (annotationStrValCString.startswith(SOAAP_SANDBOX_REGION_START)) {
           StringRef sandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_REGION_START)+1); //+1 because of _
-          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotateCall->dump(););
+          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found start of sandboxed code region: "; annotCall->dump(););
           InstVector sandboxedInsts;
-          findAllSandboxedInstructions(annotateCall, sandboxName, sandboxedInsts);
+          findAllSandboxedInstructions(annotCall, sandboxName, sandboxedInsts);
           int idx = assignBitIdxToSandboxName(sandboxName);
           sandboxes.push_back(new Sandbox(sandboxName, idx, sandboxedInsts, false, M)); //TODO: obtain persistent/ephemeral information in a better way (currently we obtain it from the creation point)
         }
@@ -181,8 +184,93 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     }
   }
 
+  // Find other sandboxes that have been referenced in annotations but not
+  // explicitly created.  This allows the developer to use annotations, such as
+  // __soaap_private(N), to understand what should be sandboxed.
+  if (Function* F = M.getFunction("llvm.ptr.annotation.p0i8")) {
+    for (User* U : F->users()) {
+      if (IntrinsicInst* annotCall = dyn_cast<IntrinsicInst>(U)) {
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+          string sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+          createEmptySandboxIfNew(sandboxName, sandboxes, M);
+        }
+      }
+    }
+  }
+
+  if (Function* F = M.getFunction("llvm.var.annotation")) {
+    for (User* U : F->users()) {
+      if (IntrinsicInst* annotCall = dyn_cast<IntrinsicInst>(U)) {
+        GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(annotCall->getOperand(1)->stripPointerCasts());
+        ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+        StringRef annotationStrValCString = annotationStrValArray->getAsCString();
+        if (annotationStrValCString.startswith(SANDBOX_PRIVATE)) {
+          string sandboxName = annotationStrValCString.substr(strlen(SANDBOX_PRIVATE)+1); //+1 because of _
+          createEmptySandboxIfNew(sandboxName, sandboxes, M);
+        }
+      }
+    }
+  }
+
+  // annotations on variables are stored in the llvm.global.annotations global
+  // array
+  if (GlobalVariable* lga = M.getNamedGlobal("llvm.global.annotations")) {
+    ConstantArray* lgaArray = dyn_cast<ConstantArray>(lga->getInitializer()->stripPointerCasts());
+    for (User::op_iterator i=lgaArray->op_begin(), e = lgaArray->op_end(); e!=i; i++) {
+      ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
+
+      // get the annotation value first
+      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
+      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+      StringRef annotationStrArrayCStr = annotationStrArray->getAsCString();
+      if (annotationStrArrayCStr.startswith(SANDBOX_PRIVATE)) {
+        string sandboxName = annotationStrArrayCStr.substr(strlen(SANDBOX_PRIVATE)+1);
+        createEmptySandboxIfNew(sandboxName, sandboxes, M);
+      }
+      else if (annotationStrArrayCStr.startswith(VAR_READ)) {
+        string sandboxName = annotationStrArrayCStr.substr(strlen(VAR_READ)+1);
+        createEmptySandboxIfNew(sandboxName, sandboxes, M);
+      }
+      else if (annotationStrArrayCStr.startswith(VAR_WRITE)) {
+        string sandboxName = annotationStrArrayCStr.substr(strlen(VAR_WRITE)+1);
+        createEmptySandboxIfNew(sandboxName, sandboxes, M);
+      }
+      else if (annotationStrArrayCStr.startswith(SOAAP_SANDBOXED)) {
+        string sandboxListCsv = annotationStrArrayCStr.substr(strlen(SOAAP_SANDBOXED)+1); //+1 because of _
+        istringstream ss(sandboxListCsv);
+        string sandbox;
+        while(getline(ss, sandbox, ',')) {
+          // trim leading and trailing spaces and quotes ("")
+          size_t start = sandbox.find_first_not_of(" \"");
+          size_t end = sandbox.find_last_not_of(" \"");
+          sandbox = sandbox.substr(start, end-start+1);
+          createEmptySandboxIfNew(sandbox, sandboxes, M);
+        }
+      }
+    }
+  }
+
+  for (Function& F : M.getFunctionList()) {
+    if (F.getName().startswith("__soaap_declare_callgates_helper_")) {
+      string sandboxName = F.getName().substr(strlen("__soaap_declare_callgates_helper")+1);
+      createEmptySandboxIfNew(sandboxName, sandboxes, M);
+    }
+  }
+
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << "Returning sandboxes vector\n");
   return sandboxes;
+}
+          
+void SandboxUtils::createEmptySandboxIfNew(string name, SandboxVector& sandboxes, Module& M) {
+  if (!getSandboxWithName(name, sandboxes)) {
+    outs() << INDENT_1 << "No scope exists for referenced sandbox \"" << name << "\", creating empty sandbox\n";
+    int idx = assignBitIdxToSandboxName(name);
+    InstVector region;
+    sandboxes.push_back(new Sandbox(name, idx, region, true, M));
+  }
 }
 
 void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSandboxName, InstVector& insts) {

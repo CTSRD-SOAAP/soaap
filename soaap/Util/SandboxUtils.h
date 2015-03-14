@@ -42,6 +42,7 @@ namespace soaap {
       static map<int,string> bitIdxToSandboxName;
       static int nextSandboxNameBitIdx;
       static SmallSet<Function*,16> sandboxEntryPoints;
+      static void createEmptySandboxIfNew(string name, SandboxVector& sandboxes, Module& M);
       static int assignBitIdxToSandboxName(string sandboxName);
       static void calculateSandboxedMethods(Function* F, Sandbox* S, FunctionVector& sandboxedMethods);
       static void calculatePrivilegedMethods(Module& M);
