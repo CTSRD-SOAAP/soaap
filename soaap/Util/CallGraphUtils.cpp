@@ -296,7 +296,7 @@ void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandbox
       }
     }
 
-    addCallees(C, Ctx, callees);
+    addCallees(C, Ctx, callees, false);
     for (Function* callee : callees) {
       buildBasicCallGraphHelper(M, sandboxes, callee, Ctx, visited);
     }
@@ -330,7 +330,7 @@ bool CallGraphUtils::isExternCall(CallInst* C) {
   return false;
 }
 
-void CallGraphUtils::addCallees(CallInst* C, Context* Ctx, FunctionSet& callees) {
+void CallGraphUtils::addCallees(CallInst* C, Context* Ctx, FunctionSet& callees, bool reinit) {
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "New callees to add: " << stringifyFunctionSet(callees) << "\n");
   FunctionSet& currentCallees = (FunctionSet&)callToCallees[C][Ctx];
   Function* EnclosingFunc = C->getParent()->getParent();
@@ -342,12 +342,14 @@ void CallGraphUtils::addCallees(CallInst* C, Context* Ctx, FunctionSet& callees)
       funcToCallEdges[EnclosingFunc][Ctx].insert(CallGraphEdge(C, callee));
     }
   }
-  if (Sandbox* S = dyn_cast<Sandbox>(Ctx)) {
-    S->reinit();
-  }
-  else if (Ctx == ContextUtils::PRIV_CONTEXT) {
-    Module* M = EnclosingFunc->getParent();
-    SandboxUtils::recalculatePrivilegedMethods(*M);
+  if (reinit) {
+    if (Sandbox* S = dyn_cast<Sandbox>(Ctx)) {
+      S->reinit();
+    }
+    else if (Ctx == ContextUtils::PRIV_CONTEXT) {
+      Module* M = EnclosingFunc->getParent();
+      SandboxUtils::recalculatePrivilegedMethods(*M);
+    }
   }
 }
 

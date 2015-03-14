@@ -25,7 +25,7 @@ namespace soaap {
       static set<CallGraphEdge> getCallGraphEdges(const Function* F, Context* Ctx, Module& M);
       static CallInstSet getCallers(const Function* F, Context* Ctx, Module& M);
       static bool isExternCall(CallInst* C);
-      static void addCallees(CallInst* C, Context* Ctx, FunctionSet& callees);
+      static void addCallees(CallInst* C, Context* Ctx, FunctionSet& callees, bool reinit);
       static string stringifyFunctionSet(FunctionSet& funcs);
       static void dumpDOTGraph();
       static InstTrace findPrivilegedPathToFunction(Function* Target, Module& M);

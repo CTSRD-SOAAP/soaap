@@ -121,7 +121,7 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
   }
   SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "bits set (after): " << newState.count() << "\n");
   FunctionSet newFuncs = convertBitVectorToFunctionSet(newState);
-  CallGraphUtils::addCallees(CI, C, newFuncs);
+  CallGraphUtils::addCallees(CI, C, newFuncs, true);
 }
 
 bool FPTargetsAnalysis::areTypeCompatible(FunctionType* FT1, FunctionType* FT2) {
