@@ -10,3 +10,5 @@
 *.svg
 *.dyncg
 *.soaap*
+/build
+/Build
