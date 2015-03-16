@@ -26,13 +26,13 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/LinkAllIR.h"
 #include "llvm/LinkAllPasses.h"
 #include "llvm/MC/SubtargetFeature.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
   // Create a PassManager to hold and optimize the collection of passes we are
   // about to build.
   //
-  PassManager Passes;
+  legacy::PassManager Passes;
   Passes.add(new soaap::Soaap);
 
   // Check that the module is well formed on completion of optimization

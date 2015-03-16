@@ -1,5 +1,5 @@
 /*
- * RUN: clang %cflags -gsoaap -emit-llvm -S %s -o %t.ll
+ * RUN: clang++ %cflags -gsoaap -emit-llvm -c %s -o %t.ll
  * RUN: soaap --soaap-list-fp-targets %t.ll | c++filt > %t.out
  * RUN: FileCheck %s -input-file %t.out
  */

@@ -2,9 +2,9 @@
 #define SOAAP_PASSES_SOAAP_H
 
 #include "llvm/Pass.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #include "soaap.h"
 
