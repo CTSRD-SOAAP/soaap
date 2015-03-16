@@ -28,6 +28,7 @@ foreach(v
   endif()
 endforeach()
 
+include(GNUInstallDirs)
 include(FeatureSummary)
 
 list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
@@ -66,8 +67,13 @@ ExternalProject_Add(libxo
 
 ExternalProject_Get_Property(libxo install_dir)
 include_directories(${install_dir}/include)
-link_directories(${install_dir}/lib)
-message(STATUS "Found libxo: ${install_dir}")
+# handle lib/ vs lib64/ vs lib/<arch>/ from the libxo build
+if(IS_ABSOLUTE ${CMAKE_INSTALL_LIBDIR})
+  message(FATAL_ERROR "CMAKE_INSTALL_LIBDIR (${CMAKE_INSTALL_LIBDIR}) is absolute.")
+endif()
+set(LIBXO_LIBDIR ${install_dir}/${CMAKE_INSTALL_LIBDIR})
+link_directories(${LIBXO_LIBDIR})
+message(STATUS "Found libxo: ${LIBXO_LIBDIR}")
 
 # Default to libc++ if installed
 find_package(LibCXX)
