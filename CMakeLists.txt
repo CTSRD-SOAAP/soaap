@@ -59,7 +59,7 @@ ExternalProject_Add(libxo
   CONFIGURE_COMMAND rm -rf configure m4
                     COMMAND sh bin/setup.sh
                     COMMAND cd build
-                    COMMAND ../configure --prefix=<INSTALL_DIR>
+                    COMMAND ../configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
   BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE}
   INSTALL_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE} install
   STEP_TARGETS build install
@@ -67,11 +67,7 @@ ExternalProject_Add(libxo
 
 ExternalProject_Get_Property(libxo install_dir)
 include_directories(${install_dir}/include)
-# handle lib/ vs lib64/ vs lib/<arch>/ from the libxo build
-if(IS_ABSOLUTE ${CMAKE_INSTALL_LIBDIR})
-  message(FATAL_ERROR "CMAKE_INSTALL_LIBDIR (${CMAKE_INSTALL_LIBDIR}) is absolute.")
-endif()
-set(LIBXO_LIBDIR ${install_dir}/${CMAKE_INSTALL_LIBDIR})
+set(LIBXO_LIBDIR ${install_dir}/lib)
 link_directories(${LIBXO_LIBDIR})
 message(STATUS "Found libxo: ${LIBXO_LIBDIR}")
 
