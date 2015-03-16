@@ -66,16 +66,22 @@ bool Soaap::runOnModule(Module& M) {
 
   outs() << "* Building basic callgraph\n";
   CallGraphUtils::buildBasicCallGraph(M, sandboxes);
+  
+  outs() << "* Calculating privileged methods\n";
+  calculatePrivilegedMethods(M);
 
-  // init sandboxes
+  outs() << "* Reinitialising sandboxes\n";
   SandboxUtils::reinitSandboxes(sandboxes);
+
+  outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
+  CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M, sandboxes);
+  
+  // reobtain privileged methods
+  privilegedMethods = SandboxUtils::getPrivilegedMethods(M);
 
   outs() << "* Validating sandbox creation points\n";
   SandboxUtils::validateSandboxCreations(sandboxes);
   
-  outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
-  CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M, sandboxes);
-
   if (CmdLineOpts::ListAllFuncs) {
     CallGraphUtils::listAllFuncs(M);
     return true;
@@ -108,10 +114,6 @@ bool Soaap::runOnModule(Module& M) {
     instrumentPerfEmul(M);
   }
   else {
-    // do the checks statically
-    outs() << "* Calculating privileged methods\n";
-    calculatePrivilegedMethods(M);
-  
     outs() << "* Building RPC graph\n";
     buildRPCGraph(M);
     

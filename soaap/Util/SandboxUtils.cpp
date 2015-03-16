@@ -73,7 +73,7 @@ string SandboxUtils::stringifySandboxVector(SandboxVector& sandboxes) {
 
 int SandboxUtils::assignBitIdxToSandboxName(string sandboxName) {
   if (sandboxNameToBitIdx.find(sandboxName) == sandboxNameToBitIdx.end()) {
-    dbgs() << "    Assigning index " << nextSandboxNameBitIdx << " to sandbox name \"" << sandboxName << "\"\n";
+    outs() << "    Assigning index " << nextSandboxNameBitIdx << " to sandbox name \"" << sandboxName << "\"\n";
     sandboxNameToBitIdx[sandboxName] = nextSandboxNameBitIdx;
     bitIdxToSandboxName[nextSandboxNameBitIdx] = sandboxName;
     nextSandboxNameBitIdx++;

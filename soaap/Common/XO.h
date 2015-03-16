@@ -16,7 +16,6 @@ namespace soaap {
     public:
       static void create(int style, int flags);
       static void create_to_file(FILE* fp, int style, int flags);
-      static void flush();
       static void finish();
 
       static void open_container(const char* name);

@@ -21,7 +21,7 @@ void XO::create(int style, int flags) {
   xo_handle_t* handle = xo_create(style, flags);
   handles.push_back(handle);
   // use llvm's output stream for stdout
-  xo_set_writer(handle, NULL, llvm_write, NULL);
+  xo_set_writer(handle, NULL, llvm_write, NULL, NULL);
 }
 
 void XO::create_to_file(FILE* fp, int style, int flags) {
