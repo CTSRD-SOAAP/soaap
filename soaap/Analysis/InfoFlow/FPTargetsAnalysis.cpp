@@ -17,11 +17,14 @@ void FPTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, Sa
   if (funcToIdx.empty()) {
     int nextIdx = 0;
     for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-      if (F->isDeclaration()) continue;
       if (F->hasAddressTaken()) { // limit to only those funcs that could be fp targets
+        dbgs() << "Adding " << F->getName() << " as address taken\n";
         funcToIdx[F] = nextIdx;
         idxToFunc[nextIdx] = F;
         nextIdx++;
+      }
+      else {
+        dbgs() << "Skipping " << F->getName() << " as address not taken\n";
       }
     }
   }
@@ -100,19 +103,14 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
       Function* F = idxToFunc[idx];
       SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "F: " << F->getName() << "\n");
       SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT: " << *FT << "\n");
-      if (!areTypeCompatible(F->getFunctionType(), FT) || F->isDeclaration()) {
+      if (!areTypeCompatible(F->getFunctionType(), FT)) {
         newState.reset(idx);
-        if (F->isDeclaration()) {
-          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Declaration\n");
-        }
-        else {
-          FunctionType* FT2 = F->getFunctionType();
-          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Function types don't match: " << *FT2 << "\n");
-          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.return: " << *(FT2->getReturnType()) << "\n");
-          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.params: " << FT2->getNumParams() << "\n");
-          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.varargs: " << FT2->isVarArg() << "\n");
-          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT.vararg: " << FT->isVarArg() << "\n");
-        }
+        FunctionType* FT2 = F->getFunctionType();
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Function types don't match: " << *FT2 << "\n");
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.return: " << *(FT2->getReturnType()) << "\n");
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.params: " << FT2->getNumParams() << "\n");
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT2.varargs: " << FT2->isVarArg() << "\n");
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "FT.vararg: " << FT->isVarArg() << "\n");
       }
     }
   }
@@ -125,5 +123,27 @@ void FPTargetsAnalysis::stateChangedForFunctionPointer(CallInst* CI, const Value
 }
 
 bool FPTargetsAnalysis::areTypeCompatible(FunctionType* FT1, FunctionType* FT2) {
-  return FT1 == FT2 || (FT1->getReturnType() == FT2->getReturnType() && FT1->getNumParams() == 0 && FT2->getNumParams() == 0);
+  SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "checking " << *FT1 << " with " << *FT2 << "\n");
+  if (FT1 == FT2) {
+    SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "same\n");
+    return true;
+  }
+  else if (FT1->isVarArg() || FT2->isVarArg()) {
+    // check return and parameter types
+    SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "at least one has varargs, checking return type and param types\n");
+    if (FT1->getReturnType() == FT2->getReturnType()
+           && FT1->getNumParams() == FT2->getNumParams()) {
+      int i=0;
+      for (Type* T : FT1->params()) {
+        if (T != FT1->getParamType(i)) {
+          SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "mismatch at index " << i << "\n");
+          return false;
+        }
+        i++;
+      }
+      return true;
+    }
+  }
+  SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "not type compatible\n");
+  return false;
 }
