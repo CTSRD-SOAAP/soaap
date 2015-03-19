@@ -8,6 +8,7 @@
 #define INDENT_5 "          "
 #define INDENT_6 "            "
 
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 
@@ -20,12 +21,14 @@ using namespace std;
 namespace soaap {
   class DebugUtils {
     public:
-      static pair<string,int> getFunctionLocation(Function* F);
+      static string getEnclosingModule(Instruction* I);
 
     protected:
       static bool cachingDone;
-      static map<Function*, pair<string,int> > funcToDebugMetadata;
-      static void cacheFuncToDebugMetadata(Module* M);
+      static map<DICompileUnit, DILLVMModule> cuToMod;
+      static map<Function*, DICompileUnit> funcToCU;
+      static void cacheDebugMetadata(Module* M);
+      static void cacheCompileUnitToModule(DILLVMModule Mod);
   };
 }
 
