@@ -72,50 +72,52 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
     FunctionVector sandboxedFuncs = S->getFunctions();
     int clearances = S->getClearances();
     for (Function* F : sandboxedFuncs) {
-      SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_1 << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
-      for (BasicBlock& BB : F->getBasicBlockList()) {
-        for (Instruction& I : BB.getInstList()) {
-          SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_2 << "Instruction: "; I.dump(););
-          Value* V = NULL;
-          if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
-            V = load->getPointerOperand();
-          }
-          else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
-            V = store->getValueOperand();
-          }
+      if (shouldOutputWarningFor(F)) {
+        SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_1 << "Function: " << F->getName() << ", clearances: " << ClassifiedUtils::stringifyClassNames(clearances) << "\n");
+        for (BasicBlock& BB : F->getBasicBlockList()) {
+          for (Instruction& I : BB.getInstList()) {
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_2 << "Instruction: "; I.dump(););
+            Value* V = NULL;
+            if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+              V = load->getPointerOperand();
+            }
+            else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+              V = store->getValueOperand();
+            }
 
-          SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value dump: "; V->dump(););
-          SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value classes: " << state[S][V] << ", " << ClassifiedUtils::stringifyClassNames(state[S][V]) << "\n");
-          if (!(state[S][V] == 0 || (state[S][V] & clearances) == state[S][V])) {
-            XO::open_instance("classified_warning");
-            XO::emit(" *** Sandboxed method \"{:function/%s}\" "
-                     "read data value of class: {d:data_classes/%s} but only "
-                     "has clearances for: {d:clearances/%s}\n",
-            F->getName().str().c_str(),
-            ClassifiedUtils::stringifyClassNames(state[S][V]).c_str(),
-            ClassifiedUtils::stringifyClassNames(clearances).c_str());
-            StringVector dataClassesVec = ClassifiedUtils::convertNamesToVector(state[S][V]);
-            XO::open_list("data_class");
-            for (string class_name : dataClassesVec) {
-              XO::open_instance("data_class");
-              XO::emit("{e:name/%s}", class_name.c_str());
-              XO::close_instance("data_class");
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value dump: "; V->dump(););
+            SDEBUG("soaap.analysis.infoflow.classified", 3, dbgs() << INDENT_3 << "Value classes: " << state[S][V] << ", " << ClassifiedUtils::stringifyClassNames(state[S][V]) << "\n");
+            if (!(state[S][V] == 0 || (state[S][V] & clearances) == state[S][V])) {
+              XO::open_instance("classified_warning");
+              XO::emit(" *** Sandboxed method \"{:function/%s}\" "
+                       "read data value of class: {d:data_classes/%s} but only "
+                       "has clearances for: {d:clearances/%s}\n",
+              F->getName().str().c_str(),
+              ClassifiedUtils::stringifyClassNames(state[S][V]).c_str(),
+              ClassifiedUtils::stringifyClassNames(clearances).c_str());
+              StringVector dataClassesVec = ClassifiedUtils::convertNamesToVector(state[S][V]);
+              XO::open_list("data_class");
+              for (string class_name : dataClassesVec) {
+                XO::open_instance("data_class");
+                XO::emit("{e:name/%s}", class_name.c_str());
+                XO::close_instance("data_class");
+              }
+              XO::close_list("data_class");
+              StringVector clearancesVec = ClassifiedUtils::convertNamesToVector(clearances);
+              XO::open_list("clearance");
+              for (string clearance : clearancesVec) {
+                XO::open_instance("clearance");
+                XO::emit("{e:name/%s}", clearance.c_str());
+                XO::close_instance("clearance");
+              }
+              XO::close_list("clearance");
+              InstUtils::emitInstLocation(&I);
+              if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
+                CallGraphUtils::emitCallTrace(F, S, M);
+              }
+              XO::emit("\n");
+              XO::close_instance("classified_warning");
             }
-            XO::close_list("data_class");
-            StringVector clearancesVec = ClassifiedUtils::convertNamesToVector(clearances);
-            XO::open_list("clearance");
-            for (string clearance : clearancesVec) {
-              XO::open_instance("clearance");
-              XO::emit("{e:name/%s}", clearance.c_str());
-              XO::close_instance("clearance");
-            }
-            XO::close_list("clearance");
-            InstUtils::emitInstLocation(&I);
-            if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::emitCallTrace(F, S, M);
-            }
-            XO::emit("\n");
-            XO::close_instance("classified_warning");
           }
         }
       }

@@ -158,56 +158,58 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
-      SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "call: " << *C << "\n")
-      for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
-        string funcName = Callee->getName();
-        SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "callee: " << funcName << "\n")
-        if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName) && sysCallsAnalysis.allowedToPerformNamedSystemCallAtSandboxedPoint(C, funcName)) {
-          // This is an allowed system call. If the sandbox platform does not
-          // permit it then SysCallsAnalysis will output an error, so we can
-          // ignore that case here.
-          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall " << funcName << " found and takes fd arg\n")
-          int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
-          int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
-          Value* fdArg = C->getArgOperand(fdArgIdx);
-          
-          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
-          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
-          if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
-            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
-          }
-
-          bool sysCallRequiresFDRights = true;
-          if (sandboxPlatform) {
-            sysCallRequiresFDRights = sandboxPlatform->doesSysCallRequireFDRights(funcName);
-            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox platform present, sysCallRequiresFDRights: " << sysCallRequiresFDRights << "\n");
-          }
-
-          if (sysCallRequiresFDRights) {
-            bool noRights = true; // we assume no rights by default (capability model)
-            if ((isa<ConstantInt>(fdArg)
-                 && intFdToAllowedSysCalls.find(cast<ConstantInt>(fdArg)->getSExtValue()) != intFdToAllowedSysCalls.end())
-                || state[S].find(fdArg) != state[S].end()) {
-              // annotations exist 
-              BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
-              noRights = vector.size() <= sysCallIdx || !vector.test(sysCallIdx);
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "annotation exists, noRights: " << noRights << "\n");
-              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
+      if (shouldOutputWarningFor(C)) {
+        SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "call: " << *C << "\n")
+        for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
+          string funcName = Callee->getName();
+          SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "callee: " << funcName << "\n")
+          if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName) && sysCallsAnalysis.allowedToPerformNamedSystemCallAtSandboxedPoint(C, funcName)) {
+            // This is an allowed system call. If the sandbox platform does not
+            // permit it then SysCallsAnalysis will output an error, so we can
+            // ignore that case here.
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall " << funcName << " found and takes fd arg\n")
+            int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
+            int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
+            Value* fdArg = C->getArgOperand(fdArgIdx);
+            
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
+            SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg idx: " << fdArgIdx << "\n")
+            if (ConstantInt* CI = dyn_cast<ConstantInt>(fdArg)) {
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "fd arg is a constant, value: " << CI->getSExtValue() << "\n")
             }
 
-            if (noRights) {
-              XO::open_instance("cap_rights_warning");
-              XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
-                       "\"{:syscall/%s}\" but is not allowed to for the "
-                       "given fd arg.\n",
-              S->getName().c_str(),
-              funcName.c_str());
-              InstUtils::emitInstLocation(C);
-              if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
-                CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+            bool sysCallRequiresFDRights = true;
+            if (sandboxPlatform) {
+              sysCallRequiresFDRights = sandboxPlatform->doesSysCallRequireFDRights(funcName);
+              SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox platform present, sysCallRequiresFDRights: " << sysCallRequiresFDRights << "\n");
+            }
+
+            if (sysCallRequiresFDRights) {
+              bool noRights = true; // we assume no rights by default (capability model)
+              if ((isa<ConstantInt>(fdArg)
+                   && intFdToAllowedSysCalls.find(cast<ConstantInt>(fdArg)->getSExtValue()) != intFdToAllowedSysCalls.end())
+                  || state[S].find(fdArg) != state[S].end()) {
+                // annotations exist 
+                BitVector& vector = isa<ConstantInt>(fdArg) ? intFdToAllowedSysCalls[cast<ConstantInt>(fdArg)->getSExtValue()] : state[S][fdArg];
+                noRights = vector.size() <= sysCallIdx || !vector.test(sysCallIdx);
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "annotation exists, noRights: " << noRights << "\n");
+                SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "allowed sys calls vector size and count for fd arg: " << vector.size() << "," << vector.count() << "\n")
               }
-              XO::emit("\n");
-              XO::close_instance("cap_rights_warning");
+
+              if (noRights) {
+                XO::open_instance("cap_rights_warning");
+                XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
+                         "\"{:syscall/%s}\" but is not allowed to for the "
+                         "given fd arg.\n",
+                S->getName().c_str(),
+                funcName.c_str());
+                InstUtils::emitInstLocation(C);
+                if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
+                  CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+                }
+                XO::emit("\n");
+                XO::close_instance("cap_rights_warning");
+              }
             }
           }
         }

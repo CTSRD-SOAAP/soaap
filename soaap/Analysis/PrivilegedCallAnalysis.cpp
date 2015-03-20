@@ -40,21 +40,23 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   for (Function* privilegedFunc : privAnnotFuncs) {
     for (User* U : privilegedFunc->users()) {
       if (CallInst* C = dyn_cast<CallInst>(U)) {
-        Function* enclosingFunc = C->getParent()->getParent();
-        for (Sandbox* S : sandboxes) {
-          if (!S->hasCallgate(privilegedFunc) && S->containsFunction(enclosingFunc)) {
-            XO::open_instance("privileged_call");
-            XO::emit(" *** Sandbox \"{:sandbox}\" calls privileged function "
-                     "\"{:privileged_func/%s}\" that they are not allowed to. "
-                     "If intended, annotate this permission using the "
-                     "__soaap_callgates annotation.\n",
-                     S->getName().c_str(),
-                     privilegedFunc->getName().str().c_str());
-            InstUtils::emitInstLocation(C);
-            if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+        if (shouldOutputWarningFor(C)) {
+          Function* enclosingFunc = C->getParent()->getParent();
+          for (Sandbox* S : sandboxes) {
+            if (!S->hasCallgate(privilegedFunc) && S->containsFunction(enclosingFunc)) {
+              XO::open_instance("privileged_call");
+              XO::emit(" *** Sandbox \"{:sandbox}\" calls privileged function "
+                       "\"{:privileged_func/%s}\" that they are not allowed to. "
+                       "If intended, annotate this permission using the "
+                       "__soaap_callgates annotation.\n",
+                       S->getName().c_str(),
+                       privilegedFunc->getName().str().c_str());
+              InstUtils::emitInstLocation(C);
+              if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::OutputTraces)) {
+                CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+              }
+              XO::close_instance("privileged_call");
             }
-            XO::close_instance("privileged_call");
           }
         }
       }

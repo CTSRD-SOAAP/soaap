@@ -206,3 +206,19 @@ static cl::list<SoaapAnalysis, list<SoaapAnalysis> > ClSoaapAnalyses("soaap-anal
        clEnumValEnd),
        cl::CommaSeparated,
        cl::location(CmdLineOpts::SoaapAnalyses));
+
+list<string> CmdLineOpts::WarnModules;
+static cl::list<string, list<string> > ClWarnModules("soaap-warn-modules",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Comma-separated list of modules SOAAP should only output warnings for"),
+       cl::value_desc("list of modules"),
+       cl::CommaSeparated,
+       cl::location(CmdLineOpts::WarnModules));
+
+list<string> CmdLineOpts::NoWarnModules;
+static cl::list<string, list<string> > ClNoWarnModules("soaap-nowarn-modules",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Comma-separated list of modules SOAAP should not output warnings for"),
+       cl::value_desc("list of modules"),
+       cl::CommaSeparated,
+       cl::location(CmdLineOpts::NoWarnModules));

@@ -22,6 +22,7 @@ namespace soaap {
   class DebugUtils {
     public:
       static string getEnclosingModule(Instruction* I);
+      static string getEnclosingModule(Function* F);
 
     protected:
       static bool cachingDone;

@@ -295,6 +295,10 @@ void Soaap::processCmdLineArgs(Module& M) {
       default: { }
     }
   }
+
+  if (!CmdLineOpts::WarnModules.empty() && !CmdLineOpts::NoWarnModules.empty()) {
+    errs() << "ERROR: can only specify one of --soaap-warn-modules and --soaap-nowarn-modules\n";
+  }
 }
 
 void Soaap::checkPrivilegedCalls(Module& M) {

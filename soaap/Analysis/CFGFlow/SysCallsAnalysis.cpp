@@ -58,45 +58,47 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
-      SDEBUG("soaap.analysis.cfgflow.syscalls", 4, dbgs() << "call: " << *C << "\n")
-      for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
-        string funcName = Callee->getName();
-        SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
-        if (freeBSDSysCallProvider.isSysCall(funcName)) {
-          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
-          bool sysCallAllowed = false;
-          if (sandboxPlatform) {
-            // sandbox platform dictates if the system call is allowed
-            sysCallAllowed = sandboxPlatform->isSysCallPermitted(funcName);
-          }
-          else if (state.find(C) == state.end()) { // no annotations, so disallow by default
-            sysCallAllowed = false;
-          }
-          else { // there are annotations
-            // We distinguish an empty vector from C not appearing in state
-            // to avoid blowing up the state map
-            BitVector& vector = state[C];
-            int idx = freeBSDSysCallProvider.getIdx(funcName);
-            SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
-            SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
-            sysCallAllowed = vector.size() > idx && vector.test(idx);
-          }
-
-          // Show warning if system call is not allowed
-          if (!sysCallAllowed) {
-            XO::open_instance("syscall_warning");
-            XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
-                     "\"{:syscall/%s}\" but it is not allowed to,\n"
-                     " *** based on the current sandboxing restrictions.\n",
-                     S->getName().c_str(),
-                     funcName.c_str());
-            InstUtils::emitInstLocation(C);
-            // output trace
-            if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+      if (shouldOutputWarningFor(C)) {
+        SDEBUG("soaap.analysis.cfgflow.syscalls", 4, dbgs() << "call: " << *C << "\n")
+        for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
+          string funcName = Callee->getName();
+          SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
+          if (freeBSDSysCallProvider.isSysCall(funcName)) {
+            SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
+            bool sysCallAllowed = false;
+            if (sandboxPlatform) {
+              // sandbox platform dictates if the system call is allowed
+              sysCallAllowed = sandboxPlatform->isSysCallPermitted(funcName);
             }
-            XO::emit("\n");
-            XO::close_instance("syscall_warning");
+            else if (state.find(C) == state.end()) { // no annotations, so disallow by default
+              sysCallAllowed = false;
+            }
+            else { // there are annotations
+              // We distinguish an empty vector from C not appearing in state
+              // to avoid blowing up the state map
+              BitVector& vector = state[C];
+              int idx = freeBSDSysCallProvider.getIdx(funcName);
+              SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
+              SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
+              sysCallAllowed = vector.size() > idx && vector.test(idx);
+            }
+
+            // Show warning if system call is not allowed
+            if (!sysCallAllowed) {
+              XO::open_instance("syscall_warning");
+              XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
+                       "\"{:syscall/%s}\" but it is not allowed to,\n"
+                       " *** based on the current sandboxing restrictions.\n",
+                       S->getName().c_str(),
+                       funcName.c_str());
+              InstUtils::emitInstLocation(C);
+              // output trace
+              if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
+                CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
+              }
+              XO::emit("\n");
+              XO::close_instance("syscall_warning");
+            }
           }
         }
       }

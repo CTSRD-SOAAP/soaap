@@ -37,17 +37,19 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
     for (PrivInstIterator I = priv_inst_begin(F, sandboxes), E = priv_inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (C->getCalledFunction() == NULL) {
-          if (state[ContextUtils::PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
-            XO::open_instance("access_origin_warning");
-            XO::emit(" *** Untrusted function pointer call in "
-                     "\"{:function/%s}\"\n",
-                     F->getName().str().c_str());
-            InstUtils::emitInstLocation(C);
-            if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
-              CallGraphUtils::emitCallTrace(F, NULL, M);
+          if (shouldOutputWarningFor(C)) {
+            if (state[ContextUtils::PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
+              XO::open_instance("access_origin_warning");
+              XO::emit(" *** Untrusted function pointer call in "
+                       "\"{:function/%s}\"\n",
+                       F->getName().str().c_str());
+              InstUtils::emitInstLocation(C);
+              if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
+                CallGraphUtils::emitCallTrace(F, NULL, M);
+              }
+              XO::emit("\n");
+              XO::close_instance("access_origin_warning");
             }
-            XO::emit("\n");
-            XO::close_instance("access_origin_warning");
           }
         }
       }

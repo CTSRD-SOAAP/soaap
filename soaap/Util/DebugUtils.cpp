@@ -53,7 +53,10 @@ void DebugUtils::cacheCompileUnitToModule(DILLVMModule Mod) {
 }
 
 string DebugUtils::getEnclosingModule(Instruction* I) {
-  Function* F = I->getParent()->getParent();
+  return getEnclosingModule(I->getParent()->getParent());
+}
+
+string DebugUtils::getEnclosingModule(Function* F) {
   SDEBUG("soaap.util.debug", 3, dbgs() << "Finding enclosing module for inst in func " << F->getName() << "\n");
   if (!cachingDone) {
     cacheDebugMetadata(F->getParent());

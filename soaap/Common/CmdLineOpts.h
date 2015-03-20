@@ -49,6 +49,8 @@ namespace soaap {
       static SoaapMode Mode;
       static list<SoaapAnalysis> OutputTraces;
       static list<SoaapAnalysis> SoaapAnalyses;
+      static list<string> NoWarnModules;
+      static list<string> WarnModules;
   
       template<typename T>
       static bool isSelected(T opt, list<T> optsList) {

@@ -59,80 +59,82 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   XO::open_list("sandboxed_func");
   for (pair<Function*,SandboxVector> p : funcToSandboxes) {
     Function* F = p.first;
-    SandboxVector& sandboxingRestriction = p.second;
-    SDEBUG("soaap.analysis.sandboxed", 3, dbgs() << "Processing " << F->getName() << " with sandboxing restrictions: " << SandboxUtils::stringifySandboxVector(sandboxingRestriction) << "\n");
-    
-    // first determine if we will be outputting a warning
-    SandboxVector containingSandboxes = SandboxUtils::getSandboxesContainingMethod(F, sandboxes);
-    SandboxVector disallowedSandboxes;
-    if (!sandboxingRestriction.empty() && !containingSandboxes.empty()) {
-      for (Sandbox* S : containingSandboxes) {
-        if (find(sandboxingRestriction.begin(), sandboxingRestriction.end(), S) == sandboxingRestriction.end()) {
-          disallowedSandboxes.push_back(S);
-        }
-      }
-    }
-    bool privileged = SandboxUtils::isPrivilegedMethod(F, M);
-    bool outputWarning = privileged || !disallowedSandboxes.empty();
-
-    // now output the warning
-    if (outputWarning) {
-      XO::emit("\n");
-      XO::open_instance("sandboxed_func");
-      XO::emit("{e:function}", F->getName().str().c_str());
+    if (shouldOutputWarningFor(F)) {
+      SandboxVector& sandboxingRestriction = p.second;
+      SDEBUG("soaap.analysis.sandboxed", 3, dbgs() << "Processing " << F->getName() << " with sandboxing restrictions: " << SandboxUtils::stringifySandboxVector(sandboxingRestriction) << "\n");
       
-      // output first bit of warning, as it is common
-      if (sandboxingRestriction.empty()) {
-        XO::emit("{e:sandbox_restriction/some_sandbox}");
-        XO::emit(" *** Function \"{d:function}\" has been annotated as only being allowed to execute in a sandbox but ",
-                 F->getName().str().c_str());
-      }
-      else {
-        XO::open_list("sandbox_restriction");
-        for (Sandbox* S : sandboxingRestriction) {
-          XO::open_instance("sandbox_restriction");
-          XO::emit("{e:name/%s}", S->getName().c_str());
-          XO::close_instance("sandbox_restriction");
+      // first determine if we will be outputting a warning
+      SandboxVector containingSandboxes = SandboxUtils::getSandboxesContainingMethod(F, sandboxes);
+      SandboxVector disallowedSandboxes;
+      if (!sandboxingRestriction.empty() && !containingSandboxes.empty()) {
+        for (Sandbox* S : containingSandboxes) {
+          if (find(sandboxingRestriction.begin(), sandboxingRestriction.end(), S) == sandboxingRestriction.end()) {
+            disallowedSandboxes.push_back(S);
+          }
         }
-        XO::close_list("sandbox_restriction");
-        XO::emit(" *** Function \"{d:function}\" has been annotated as only being allowed to execute in the sandboxes: {d:restricted_sandboxes} but ",
-                 F->getName().str().c_str(),
-                 SandboxUtils::stringifySandboxVector(sandboxingRestriction).c_str());
       }
+      bool privileged = SandboxUtils::isPrivilegedMethod(F, M);
+      bool outputWarning = privileged || !disallowedSandboxes.empty();
 
-      XO::open_list("sandbox_violation");
-      if (privileged) {
-        XO::open_instance("sandbox_violation");
-        XO::emit("{e:type/privileged}");
-        XO::emit("it may execute in a privileged context\n");
-        if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
-          CallGraphUtils::emitCallTrace(F, NULL, M);
+      // now output the warning
+      if (outputWarning) {
+        XO::emit("\n");
+        XO::open_instance("sandboxed_func");
+        XO::emit("{e:function}", F->getName().str().c_str());
+        
+        // output first bit of warning, as it is common
+        if (sandboxingRestriction.empty()) {
+          XO::emit("{e:sandbox_restriction/some_sandbox}");
+          XO::emit(" *** Function \"{d:function}\" has been annotated as only being allowed to execute in a sandbox but ",
+                   F->getName().str().c_str());
         }
-        XO::close_instance("sandbox_violation");
-      }
+        else {
+          XO::open_list("sandbox_restriction");
+          for (Sandbox* S : sandboxingRestriction) {
+            XO::open_instance("sandbox_restriction");
+            XO::emit("{e:name/%s}", S->getName().c_str());
+            XO::close_instance("sandbox_restriction");
+          }
+          XO::close_list("sandbox_restriction");
+          XO::emit(" *** Function \"{d:function}\" has been annotated as only being allowed to execute in the sandboxes: {d:restricted_sandboxes} but ",
+                   F->getName().str().c_str(),
+                   SandboxUtils::stringifySandboxVector(sandboxingRestriction).c_str());
+        }
 
-      if (!disallowedSandboxes.empty()) {
-        XO::emit("{d:additonal_text}it executes in the sandboxes: {d:containing_sandboxes} of which {d:disallowed_sandboxes} are disallowed\n",
-                 privileged ? "\n Additionally, " : "",
-                 SandboxUtils::stringifySandboxVector(containingSandboxes).c_str(),
-                 SandboxUtils::stringifySandboxVector(disallowedSandboxes).c_str());
-        bool first = true;
-        for (Sandbox* S : disallowedSandboxes) {
+        XO::open_list("sandbox_violation");
+        if (privileged) {
           XO::open_instance("sandbox_violation");
-          XO::emit("{e:type/sandbox}{e:name/%s}", S->getName().c_str());
+          XO::emit("{e:type/privileged}");
+          XO::emit("it may execute in a privileged context\n");
           if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
-            if (!first) {
-              XO::emit("\n");
-            }
-            //XO::emit(" Sandbox: {d:sandbox}\n", S->getName().c_str());
-            CallGraphUtils::emitCallTrace(F, S, M);
+            CallGraphUtils::emitCallTrace(F, NULL, M);
           }
           XO::close_instance("sandbox_violation");
-          first = false;
         }
+
+        if (!disallowedSandboxes.empty()) {
+          XO::emit("{d:additonal_text}it executes in the sandboxes: {d:containing_sandboxes} of which {d:disallowed_sandboxes} are disallowed\n",
+                   privileged ? "\n Additionally, " : "",
+                   SandboxUtils::stringifySandboxVector(containingSandboxes).c_str(),
+                   SandboxUtils::stringifySandboxVector(disallowedSandboxes).c_str());
+          bool first = true;
+          for (Sandbox* S : disallowedSandboxes) {
+            XO::open_instance("sandbox_violation");
+            XO::emit("{e:type/sandbox}{e:name/%s}", S->getName().c_str());
+            if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
+              if (!first) {
+                XO::emit("\n");
+              }
+              //XO::emit(" Sandbox: {d:sandbox}\n", S->getName().c_str());
+              CallGraphUtils::emitCallTrace(F, S, M);
+            }
+            XO::close_instance("sandbox_violation");
+            first = false;
+          }
+        }
+        XO::close_instance("sandboxed_func");
+        XO::emit("\n");
       }
-      XO::close_instance("sandboxed_func");
-      XO::emit("\n");
     }
   }
   XO::close_list("sandboxed_func");
