@@ -165,12 +165,6 @@ bool Soaap::runOnModule(Module& M) {
 }
 
 void Soaap::processCmdLineArgs(Module& M) {
-  // process ClVulnerableVendors
-  for (StringRef vendor : CmdLineOpts::VulnerableVendors) {
-    SDEBUG("soaap", 3, dbgs() << "Vulnerable vendor: " << vendor << "\n");
-    vulnerableVendors.push_back(vendor);
-  }
-
   // process ClSandboxPlatform
   switch (CmdLineOpts::SandboxPlatform) {
     case SandboxPlatformName::None: {
@@ -312,7 +306,7 @@ void Soaap::checkSandboxedFuncs(Module& M) {
 }
 
 void Soaap::checkLeakedRights(Module& M) {
-  VulnerabilityAnalysis analysis(privilegedMethods, vulnerableVendors, sandboxPlatform);
+  VulnerabilityAnalysis analysis(privilegedMethods, sandboxPlatform);
   analysis.doAnalysis(M, sandboxes);
 }
 
