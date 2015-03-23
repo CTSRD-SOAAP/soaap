@@ -25,6 +25,7 @@ namespace soaap {
     public:
       static bool EmPerf;
       static list<string> VulnerableVendors;
+      static list<string> VulnerableModules;
       static bool ContextInsens;
       static bool ListSandboxedFuncs;
       static bool ListPrivilegedFuncs;

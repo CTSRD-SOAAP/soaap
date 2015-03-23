@@ -13,6 +13,15 @@ static cl::list<string, list<string> > ClVulnerableVendors("soaap-vulnerable-ven
        cl::CommaSeparated,
        cl::location(CmdLineOpts::VulnerableVendors));
 
+list<string> CmdLineOpts::VulnerableModules;
+static cl::list<string, list<string> > ClVulnerableModules("soaap-vulnerable-modules",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Comma-separated list of modules that should "
+                "be treated as vulnerable"),
+       cl::value_desc("list of modules"),
+       cl::CommaSeparated,
+       cl::location(CmdLineOpts::VulnerableModules));
+
 bool CmdLineOpts::EmPerf;
 static cl::opt<bool, true> ClEmPerf("soaap-emulate-performance",
        cl::cat(CmdLineOpts::SoaapCategory),
