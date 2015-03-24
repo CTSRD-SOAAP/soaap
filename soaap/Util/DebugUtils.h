@@ -21,15 +21,14 @@ using namespace std;
 namespace soaap {
   class DebugUtils {
     public:
-      static string getEnclosingModule(Instruction* I);
-      static string getEnclosingModule(Function* F);
+      static string getEnclosingLibrary(Instruction* I);
+      static string getEnclosingLibrary(Function* F);
 
     protected:
       static bool cachingDone;
-      static map<DICompileUnit, DILLVMModule> cuToMod;
-      static map<Function*, DICompileUnit> funcToCU;
-      static void cacheDebugMetadata(Module* M);
-      static void cacheCompileUnitToModule(DILLVMModule Mod);
+      static map<Function*, string> funcToLib;
+      static void cacheLibraryMetadata(Module* M);
+
   };
 }
 

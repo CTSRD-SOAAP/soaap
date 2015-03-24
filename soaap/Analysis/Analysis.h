@@ -18,16 +18,16 @@ namespace soaap {
       }
 
       virtual bool shouldOutputWarningFor(Function* F) {
-        if (!CmdLineOpts::WarnModules.empty() || !CmdLineOpts::NoWarnModules.empty()) {
-          string module = DebugUtils::getEnclosingModule(F);
-          if (module.empty()) {
+        if (!CmdLineOpts::WarnLibs.empty() || !CmdLineOpts::NoWarnLibs.empty()) {
+          string library = DebugUtils::getEnclosingLibrary(F);
+          if (library.empty()) {
             return true;
           }
-          if (!CmdLineOpts::WarnModules.empty()) {
-            return find(CmdLineOpts::WarnModules.begin(), CmdLineOpts::WarnModules.end(), module) != CmdLineOpts::WarnModules.end();
+          if (!CmdLineOpts::WarnLibs.empty()) {
+            return find(CmdLineOpts::WarnLibs.begin(), CmdLineOpts::WarnLibs.end(), library) != CmdLineOpts::WarnLibs.end();
           }
-          else if (!CmdLineOpts::NoWarnModules.empty()) {
-            return find(CmdLineOpts::NoWarnModules.begin(), CmdLineOpts::NoWarnModules.end(), module) == CmdLineOpts::NoWarnModules.end();
+          else if (!CmdLineOpts::NoWarnLibs.empty()) {
+            return find(CmdLineOpts::NoWarnLibs.begin(), CmdLineOpts::NoWarnLibs.end(), library) == CmdLineOpts::NoWarnLibs.end();
           }
         }
         return true;

@@ -574,7 +574,7 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
       StringRef File = Loc.getFilename();
       unsigned FileOnlyIdx = File.find_last_of("/");
       StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-      string module = DebugUtils::getEnclosingModule(I);
+      string library = DebugUtils::getEnclosingLibrary(I);
 
       XO::open_instance("trace");
       bool printCall = CmdLineOpts::SummariseTraces <= 0
@@ -588,8 +588,8 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
         XO::emit("({:file/%s}:{:line/%d})",
                   FileOnly.str().c_str(),
                   Line);
-        if (!module.empty()) {
-          XO::emit(" [{:module/%s} module]", module.c_str());
+        if (!library.empty()) {
+          XO::emit(" [{:library/%s} library]", library.c_str());
         }
         XO::emit("\n");
         XO::close_container("location");
@@ -609,8 +609,8 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
         XO::emit("{e:file/%s}{e:line/%d}",
                   FileOnly.str().c_str(),
                   Line);
-        if (!module.empty()) {
-          XO::emit("{e:module/%s}", module.c_str());
+        if (!library.empty()) {
+          XO::emit("{e:library/%s}", library.c_str());
         }
         XO::close_container("location");
       }

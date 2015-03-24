@@ -25,7 +25,7 @@ namespace soaap {
     public:
       static bool EmPerf;
       static list<string> VulnerableVendors;
-      static list<string> VulnerableModules;
+      static list<string> VulnerableLibs;
       static bool ContextInsens;
       static bool ListSandboxedFuncs;
       static bool ListPrivilegedFuncs;
@@ -50,8 +50,8 @@ namespace soaap {
       static SoaapMode Mode;
       static list<SoaapAnalysis> OutputTraces;
       static list<SoaapAnalysis> SoaapAnalyses;
-      static list<string> NoWarnModules;
-      static list<string> WarnModules;
+      static list<string> NoWarnLibs;
+      static list<string> WarnLibs;
   
       template<typename T>
       static bool isSelected(T opt, list<T> optsList) {

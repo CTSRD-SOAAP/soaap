@@ -13,14 +13,14 @@ static cl::list<string, list<string> > ClVulnerableVendors("soaap-vulnerable-ven
        cl::CommaSeparated,
        cl::location(CmdLineOpts::VulnerableVendors));
 
-list<string> CmdLineOpts::VulnerableModules;
-static cl::list<string, list<string> > ClVulnerableModules("soaap-vulnerable-modules",
+list<string> CmdLineOpts::VulnerableLibs;
+static cl::list<string, list<string> > ClVulnerableLibs("soaap-vulnerable-libs",
        cl::cat(CmdLineOpts::SoaapCategory),
-       cl::desc("Comma-separated list of modules that should "
+       cl::desc("Comma-separated list of libraries that should "
                 "be treated as vulnerable"),
-       cl::value_desc("list of modules"),
+       cl::value_desc("list of libraries"),
        cl::CommaSeparated,
-       cl::location(CmdLineOpts::VulnerableModules));
+       cl::location(CmdLineOpts::VulnerableLibs));
 
 bool CmdLineOpts::EmPerf;
 static cl::opt<bool, true> ClEmPerf("soaap-emulate-performance",
@@ -216,18 +216,18 @@ static cl::list<SoaapAnalysis, list<SoaapAnalysis> > ClSoaapAnalyses("soaap-anal
        cl::CommaSeparated,
        cl::location(CmdLineOpts::SoaapAnalyses));
 
-list<string> CmdLineOpts::WarnModules;
-static cl::list<string, list<string> > ClWarnModules("soaap-warn-modules",
+list<string> CmdLineOpts::WarnLibs;
+static cl::list<string, list<string> > ClWarnLibs("soaap-warn-libs",
        cl::cat(CmdLineOpts::SoaapCategory),
-       cl::desc("Comma-separated list of modules SOAAP should only output warnings for"),
-       cl::value_desc("list of modules"),
+       cl::desc("Comma-separated list of libraries SOAAP should only output warnings for"),
+       cl::value_desc("list of libraries"),
        cl::CommaSeparated,
-       cl::location(CmdLineOpts::WarnModules));
+       cl::location(CmdLineOpts::WarnLibs));
 
-list<string> CmdLineOpts::NoWarnModules;
-static cl::list<string, list<string> > ClNoWarnModules("soaap-nowarn-modules",
+list<string> CmdLineOpts::NoWarnLibs;
+static cl::list<string, list<string> > ClNoWarnLibs("soaap-nowarn-libs",
        cl::cat(CmdLineOpts::SoaapCategory),
-       cl::desc("Comma-separated list of modules SOAAP should not output warnings for"),
-       cl::value_desc("list of modules"),
+       cl::desc("Comma-separated list of libraries SOAAP should not output warnings for"),
+       cl::value_desc("list of libraries"),
        cl::CommaSeparated,
-       cl::location(CmdLineOpts::NoWarnModules));
+       cl::location(CmdLineOpts::NoWarnLibs));

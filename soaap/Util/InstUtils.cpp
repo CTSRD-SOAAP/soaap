@@ -15,9 +15,9 @@ void InstUtils::emitInstLocation(Instruction* I) {
       " +++ Line {:line/%d} of file {:file/%s}",
       loc.getLineNumber(),
       loc.getFilename().str().c_str());
-    string module = DebugUtils::getEnclosingModule(I);
-    if (!module.empty()) {
-      XO::emit(" ({:module/%s} module)", module.c_str());
+    string library = DebugUtils::getEnclosingLibrary(I);
+    if (!library.empty()) {
+      XO::emit(" ({:library/%s} library)", library.c_str());
     }
     XO::emit("\n");
     XO::close_container("location");

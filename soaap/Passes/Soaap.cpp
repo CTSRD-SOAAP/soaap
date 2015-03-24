@@ -290,7 +290,7 @@ void Soaap::processCmdLineArgs(Module& M) {
     }
   }
 
-  if (!CmdLineOpts::WarnModules.empty() && !CmdLineOpts::NoWarnModules.empty()) {
+  if (!CmdLineOpts::WarnLibs.empty() && !CmdLineOpts::NoWarnLibs.empty()) {
     errs() << "ERROR: can only specify one of --soaap-warn-modules and --soaap-nowarn-modules\n";
   }
 }
