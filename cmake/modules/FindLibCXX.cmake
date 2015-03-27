@@ -41,5 +41,10 @@ find_package_handle_standard_args(LIBCXX DEFAULT_MSG
   LIBCXX_LIBRARY
   LIBCXX_INCLUDE_DIRS
 )
+if(NOT EXISTS "${LIBCXX_INCLUDE_DIR}/cxxabi.h")
+  # work around systems that have libc++ but only the libcstdc++ <cxxabi.h> header
+  message(WARNING "libc++ found but required header cxxabi.h doesn't exist! libc++ does not seem to be installed correctly!")
+  set(LIBCXX_FOUND FALSE)
+endif()
 
 mark_as_advanced (LIBCXX_INCLUDE_DIRS)
