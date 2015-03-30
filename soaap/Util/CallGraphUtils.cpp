@@ -237,8 +237,89 @@ void CallGraphUtils::buildBasicCallGraph(Module& M, SandboxVector& sandboxes) {
 
 }
 
-void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*>& visited) {
+void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, Function* entryPoint, Context* Ctx, set<Function*>& visited) {
   
+  vector<Function*> worklist;
+  set<Function*> processed;
+  
+  worklist.push_back(entryPoint);
+
+  while (!worklist.empty()) {
+    Function* F = worklist.back();
+    worklist.pop_back();
+
+    if (F && F->isDeclaration()) {
+      continue;
+    }
+
+    if (processed.count(F) > 0) {
+      // cycle
+      continue;
+    }
+
+    // check for change of context. TODO: check callgates
+    if (SandboxUtils::isSandboxEntryPoint(M, F) && SandboxUtils::getSandboxForEntryPoint(F, sandboxes) != Ctx) {
+      continue;
+    }
+    
+    SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Processing " << (F ? F->getName() : "sandboxed region") << "\n");
+    
+    CallInstVector calls;
+
+    if (!F) {
+      // we are at the outermost level of a sandboxed region
+      Sandbox* S = dyn_cast<Sandbox>(Ctx);
+      for (Instruction* I : S->getRegion()) {
+        if (CallInst* C = dyn_cast<CallInst>(I)) {
+          calls.push_back(C);
+        }
+      }
+    }
+    else {
+      processed.insert(F);
+      for (inst_iterator I=inst_begin(F), E=inst_end(F); I != E; I++) {
+        if (Ctx == ContextUtils::PRIV_CONTEXT && SandboxUtils::isWithinSandboxedRegion(&*I, sandboxes)) {
+          continue; // skip
+        }
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          calls.push_back(C);
+        }
+      }
+    }
+
+    for (CallInst* C : calls) {
+      FunctionSet callees;
+      if (Function* callee = getDirectCallee(C)) {
+        if (!callee->isIntrinsic()) {
+          SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding direct callee " << callee->getName() << "\n");
+          callees.insert(callee);
+        }
+      }
+      else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // c++ virtual funcs
+        bool isVCall = C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL;
+        if (isVCall) {
+          for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
+            SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
+            callees.insert(callee);
+          }
+        }
+      }
+
+      addCallees(C, Ctx, callees, false);
+      for (Function* callee : callees) {
+        worklist.push_back(callee);
+      }
+    }
+  }
+
+}
+
+void CallGraphUtils::buildBasicCallGraphHelperRecursive(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*>& visited) {
+  
+  static int nestingDepth = 0;
+
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << "Nesting depth: " << nestingDepth << "\n");
+
   if (F && F->isDeclaration()) {
     return;
   }
@@ -248,9 +329,9 @@ void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandbox
     return;
   }
 
-  // update current context if necessary, TODO: also check for callgates?
-  if (SandboxUtils::isSandboxEntryPoint(M, F)) {
-    Ctx = SandboxUtils::getSandboxForEntryPoint(F, sandboxes);
+  // check for change of context. TODO: check callgates
+  if (SandboxUtils::isSandboxEntryPoint(M, F) && SandboxUtils::getSandboxForEntryPoint(F, sandboxes) != Ctx) {
+    return;
   }
   
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Processing " << (F ? F->getName() : "sandboxed region") << "\n");
@@ -283,7 +364,7 @@ void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandbox
     if (Function* callee = getDirectCallee(C)) {
       if (!callee->isIntrinsic()) {
         SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding direct callee " << callee->getName() << "\n");
-          callees.insert(callee);
+        callees.insert(callee);
       }
     }
     else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // c++ virtual funcs
@@ -298,7 +379,9 @@ void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandbox
 
     addCallees(C, Ctx, callees, false);
     for (Function* callee : callees) {
-      buildBasicCallGraphHelper(M, sandboxes, callee, Ctx, visited);
+      nestingDepth++;
+      buildBasicCallGraphHelperRecursive(M, sandboxes, callee, Ctx, visited);
+      nestingDepth--;
     }
   }
 }

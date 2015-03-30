@@ -44,6 +44,7 @@ namespace soaap {
       static map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths; //TODO: check
       static bool caching;
       static void buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*>& visited);
+      static void buildBasicCallGraphHelperRecursive(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*>& visited);
       static void calculateShortestCallPathsFromFunc(Function* F, bool privileged, Sandbox* S, Module& M);
       static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*>& visited, Module& M);
       static FPTargetsAnalysis& getFPAnnotatedTargetsAnalysis();
