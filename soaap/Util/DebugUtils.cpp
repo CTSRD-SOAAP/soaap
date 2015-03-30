@@ -13,7 +13,7 @@ bool DebugUtils::cachingDone = false;
 
 void DebugUtils::cacheLibraryMetadata(Module* M) {
   if (NamedMDNode* N = M->getNamedMetadata("llvm.libs")) {
-    SDEBUG("soaap.util.debug", 3, dbgs() << "Found llvm.libs metadata, " << N->getNumOperands() << " operands\n");
+    SDEBUG("soaap.util.debug", 3, dbgs() << "Found llvm.libs metadata, " << N->getNumOperands() << " operands:\n");
     for (int i=0; i<N->getNumOperands(); i++) {
       MDNode* lib = N->getOperand(i);
       MDString* name = cast<MDString>(lib->getOperand(0).get());
@@ -26,7 +26,7 @@ void DebugUtils::cacheLibraryMetadata(Module* M) {
         for (int k=0; k<funcs.getNumElements(); k++) {
           DISubprogram func = static_cast<DISubprogram>(funcs.getElement(k));
           Function* F = func.getFunction();
-          SDEBUG("soaap.util.debug", 3, dbgs() << "Found func: " << F->getName() << "\n");
+          SDEBUG("soaap.util.debug", 4, dbgs() << INDENT_1 << "Found func: " << F->getName() << "\n");
           if (funcToLib.find(F) != funcToLib.end()) {
             dbgs() << "WARNING: Function " << F->getName()
                    << " already exists in library "
