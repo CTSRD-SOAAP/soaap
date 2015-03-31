@@ -9,7 +9,7 @@
 #define SOAAP_H
 
 //#include "valgrind/taintgrind.h"
-#include <stdio.h>
+#pragma GCC system_header
 
 #define __weak_reference2(sym,alias) \
   extern __typeof (sym) alias __attribute__ ((weak, __alias__ (#sym)))
