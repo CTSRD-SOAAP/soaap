@@ -130,6 +130,7 @@ include_directories(${LLVM_MAIN_SRC_DIR}/lib)
 include_directories(${LLVM_MAIN_SRC_DIR}/runtime/libprofile)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/soaap)
+link_directories(${LLVM_LIBRARY_DIR}) # required so that RPATH is correct
 
 add_subdirectory(include)
 add_subdirectory(soaap)
