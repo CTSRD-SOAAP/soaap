@@ -8,6 +8,7 @@ endif()
 
 # Allow user to optionally override LLVM build tree locations.
 set(LLVM_BUILD_DIR "" CACHE PATH "Path to LLVM build directory")
+set(LLVM_DIR "" CACHE PATH "Path to LLVM cmake config files")
 set(LLVM_TOOLS_BINARY_DIR "" CACHE PATH "Path to llvm/bin")
 set(LLVM_LIBRARY_DIR "" CACHE PATH "Path to llvm/lib")
 set(LLVM_MAIN_INCLUDE_DIR "" CACHE PATH "Path to llvm/include")
@@ -17,11 +18,25 @@ set(LLVM_MAIN_SRC_DIR "" CACHE PATH "Path to LLVM source tree")
 if(NOT LLVM_BUILD_DIR)
   # compatibility with the previous build instructions
   if(LLVM_DIR)
-    set(LLVM_BUILD_DIR "${LLVM_DIR}/../../..")
+    set(LLVM_BUILD_DIR "${LLVM_DIR}/../../.." CACHE PATH "Path to LLVM build directory" FORCE)
+    message(STATUS "Inferring LLVM_BUILD_DIR from LLVM_DIR")
   else()
-    message(FATAL_ERROR "LLVM_BUILD_DIR not defined! It must point to the directory where LLVM was built.")
+    # If ${CMAKE_C_COMPILER} points to <llvm build dir>/bin/clang we can just infer LLVM_BUILD_DIR from that
+    # This handles the case where CMake reruns (with empty cache!) because the CMAKE_C_COMPILER was changed
+    get_filename_component(COMPILER_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
+    if(EXISTS "${COMPILER_DIR}/../LLVMBuild.cmake")
+      message(STATUS "Inferring LLVM_BUILD_DIR from CMAKE_C_COMPILER")
+      set(LLVM_BUILD_DIR "${COMPILER_DIR}/..")
+    else()
+      message(STATUS "${COMPILER_DIR}/../LLVMBuild.cmake does not exist")
+      message(FATAL_ERROR "LLVM_BUILD_DIR not defined! It must point to the directory where LLVM was built. Run CMake -DLLVM_BUILD_DIR=<dir> to fix this.")
+    endif()
   endif()
 endif()
+
+get_filename_component(LLVM_BUILD_DIR "${LLVM_BUILD_DIR}" REALPATH)
+message(STATUS "LLVM_BUILD_DIR: ${LLVM_BUILD_DIR}, LLVM_DIR: ${LLVM_DIR}")
+
 # only search in ${LLVM_BUILD_DIR} and not in any of the default search locations:
 # this is done by passing PATHS ${LLVM_DIR} and NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH
 # message("Looking for LLVM in ${LLVM_BUILD_DIR}")
@@ -35,10 +50,11 @@ foreach(v
     BINARY_DIR
     MAIN_SRC_DIR
     )
-  if (LLVM_${v})
-    set(LLVM_BUILD_${v} "${LLVM_${v}}")
+  if (NOT LLVM_${v})
+    set(LLVM_${v} ${LLVM_BUILD_${v}} CACHE PATH "Path to LLVM ${v}" FORCE)
   endif()
-  if(NOT LLVM_BUILD_${v})
+  if(NOT LLVM_${v})
+    # these variables must be set in LLVMConfig.cmake
     message(FATAL_ERROR "Required variable LLVM_BUILD_${v} is not set!")
   endif()
 endforeach()
@@ -53,8 +69,9 @@ add_definitions(${LLVM_DEFINITIONS})
 
 # LLVM_BINARY_DIR must be set otherwise there would have been an error earlier
 if(NOT ${CMAKE_C_COMPILER} STREQUAL "${LLVM_TOOLS_BINARY_DIR}/clang")
-  set(CMAKE_C_COMPILER ${LLVM_TOOLS_BINARY_DIR}/clang CACHE FILE "C compiler" FORCE)
-  set(CMAKE_CXX_COMPILER ${LLVM_TOOLS_BINARY_DIR}/clang++ CACHE FILE "C++ compiler" FORCE)
+  message(STATUS "${CMAKE_C_COMPILER} no longer matches ${LLVM_TOOLS_BINARY_DIR}/clang")
+  set(CMAKE_C_COMPILER ${LLVM_TOOLS_BINARY_DIR}/clang CACHE STRING "C compiler" FORCE)
+  set(CMAKE_CXX_COMPILER ${LLVM_TOOLS_BINARY_DIR}/clang++ CACHE STRING "C++ compiler" FORCE)
   message(STATUS "Setting C compiler to ${CMAKE_C_COMPILER}")
   message(STATUS "Setting C++ compiler to ${CMAKE_CXX_COMPILER}")
 endif()
