@@ -39,7 +39,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   
   // find all uses of global variables and check that they are allowed
   // as per the annotations
-  XO::open_list("global_access_warning");
+  XO::List globalAccessWarningList("global_access_warning");
   for (Sandbox* S : sandboxes) {
     GlobalVariableIntMap varToPerms = S->getGlobalVarPerms();
     // update reverse map of global vars -> sandbox names for later
@@ -71,7 +71,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       ss << "(" << declareLoc.first << ":" << declareLoc.second << ")";
                       declareLocStr = ss.str();
                     }
-                    XO::open_instance("global_access_warning");
+                    XO::Instance globalAccessWarningInstance(globalAccessWarningList);
                     XO::emit(
                       " *** Sandboxed method \"{:function/%s}\" [{:sandbox/%s}] "
                       "{:access_type/%s} global variable \"{:var_name/%s}\" "
@@ -84,10 +84,9 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       gv->getName().str().c_str(),
                       declareLocStr.c_str());
                     if (declareLoc.second != -1) {
-                      XO::open_container("declare_loc");
+                      XO::Container declareLocContainer("declare_loc");
                       XO::emit("{e:line/%d}{e:file/%s}",
                                declareLoc.second, declareLoc.first.c_str());
-                      XO::close_container("declare_loc");
                     }
                     InstUtils::emitInstLocation(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
@@ -95,7 +94,6 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     }
                     alreadyReportedReads.push_back(gv);
                     XO::emit("\n");
-                    XO::close_instance("global_access_warning");
                   }
                 }
               }
@@ -118,7 +116,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       ss << "(" << declareLoc.first << ":" << declareLoc.second << ")";
                       declareLocStr = ss.str();
                     }
-                    XO::open_instance("global_access_warning");
+                    XO::Instance globalAccessWarningInstance(globalAccessWarningList);
                     XO::emit(
                       " *** Sandboxed method \"{:function/%s}\" [{:sandbox/%s}] "
                       "{e:access_type/%s}wrote to global variable \"{:var_name/%s}\" "
@@ -131,10 +129,9 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       gv->getName().str().c_str(),
                       declareLocStr.c_str());
                     if (declareLoc.second != -1) {
-                      XO::open_container("declare_loc");
+                      XO::Container declareLocContainer("declare_loc");
                       XO::emit("{e:line/%d}{e:file%s}",
                                declareLoc.second, declareLoc.first.c_str());
-                      XO::close_container("declare_loc");
                     }
                     InstUtils::emitInstLocation(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
@@ -142,7 +139,6 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     }
                     alreadyReportedWrites.push_back(gv);
                     XO::emit("\n");
-                    XO::close_instance("global_access_warning");
                   }
                 }
               }
@@ -152,11 +148,11 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
       }
     }
   }
-  XO::close_list("global_access_warning");
+  globalAccessWarningList.close();
 
   // Now check for each privileged write, whether it may be preceded by a sandbox-creation
   // annotation.
-  XO::open_list("global_lost_update");
+  XO::List globalLostUpdateList("global_lost_update");
   for (Function* F : privilegedMethods) {
     if (shouldOutputWarningFor(F)) {
       SDEBUG("soaap.analysis.globals", 3, dbgs() << INDENT_1 << "Privileged function: " << F->getName().str() << "\n");
@@ -187,7 +183,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     ss << "(" << declareLoc.first << ":" << declareLoc.second << ")";
                     declareLocStr = ss.str();
                   }
-                  XO::open_instance("global_lost_update");
+                  XO::Instance globalLostUpdateInstance(globalLostUpdateList);
                   XO::emit(" *** Write to shared variable \"{:var_name/%s}\" "
                            "{d:declare_loc/%s} outside sandbox in method "
                            "\"{:function/%s}\" will not be seen by the sandboxes: "
@@ -197,23 +193,20 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                            declareLocStr.c_str(),
                            F->getName().str().c_str(),
                            SandboxUtils::stringifySandboxNames(possInconsSandboxes).c_str());
-                  XO::open_list("sandbox");
+                  XO::List sandboxList("sandbox");
                   for (Sandbox* S : SandboxUtils::convertNamesToVector(possInconsSandboxes, sandboxes)) {
-                    XO::open_instance("sandbox");
+                    XO::Instance sandboxInstance(sandboxList);
                     XO::emit("{e:name/%s}", S->getName().c_str());
-                    XO::close_instance("sandbox");
                   }
-                  XO::close_list("sandbox");
+                  sandboxList.close();
                   if (declareLoc.second != -1) {
-                    XO::open_container("declare_loc");
+                    XO::Container declareLocContainer("declare_loc");
                     XO::emit("{e:line/%d}{e:file/%s}",
                              declareLoc.second, declareLoc.first.c_str());
-                    XO::close_container("declare_loc");
                   }
                   InstUtils::emitInstLocation(&I);
                   alreadyReported.push_back(gv);
                   XO::emit("\n");
-                  XO::close_instance("global_lost_update");
                 }
               }
             }
@@ -222,7 +215,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
       }
     }
   }
-  XO::close_list("global_lost_update");
+  globalLostUpdateList.close();
 }
 
 pair<string,int> GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
