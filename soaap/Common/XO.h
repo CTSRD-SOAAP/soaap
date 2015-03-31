@@ -20,7 +20,7 @@ namespace soaap {
 
       static void emit(const char* fmt, ...);
 
-    public: // TODO private
+    private:
       static void open_container(const char* name);
       static void close_container(const char* name);
       static void open_list(const char* name);
