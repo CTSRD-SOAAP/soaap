@@ -32,14 +32,14 @@ void AccessOriginAnalysis::initialise(ValueContextPairList& worklist, Module& M,
 
 void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
   // check that no untrusted function pointers are called in privileged methods
-  XO::open_list("access_origin_warning");
+  XO::List accessOriginList("access_origin_warning");
   for (Function* F : privilegedMethods) {
     for (PrivInstIterator I = priv_inst_begin(F, sandboxes), E = priv_inst_end(F); I!=E; ++I) {
       if (CallInst* C = dyn_cast<CallInst>(&*I)) {
         if (C->getCalledFunction() == NULL) {
           if (shouldOutputWarningFor(C)) {
             if (state[ContextUtils::PRIV_CONTEXT][C->getCalledValue()] == ORIGIN_SANDBOX) {
-              XO::open_instance("access_origin_warning");
+              XO::Instance accessOriginInstance(accessOriginList);
               XO::emit(" *** Untrusted function pointer call in "
                        "\"{:function/%s}\"\n",
                        F->getName().str().c_str());
@@ -48,14 +48,12 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
                 CallGraphUtils::emitCallTrace(F, NULL, M);
               }
               XO::emit("\n");
-              XO::close_instance("access_origin_warning");
             }
           }
         }
       }
     }
   }
-  XO::close_list("access_origin_warning");
 }
 
 
