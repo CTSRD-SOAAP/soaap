@@ -26,7 +26,7 @@ def setIrWrapperEnvVar(var, command):
     changeEnvVar(var, wrapper)
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
+#parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
 parser.add_argument('-f', required=False, default='./configure', help='configure script override')
 parser.add_argument('--ld', required=False, default='clang', type=str,
                     help='LD wrapper script name (and parameters)')
