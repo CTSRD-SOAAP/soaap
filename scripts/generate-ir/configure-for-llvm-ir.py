@@ -24,15 +24,15 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
 parser.add_argument('-f', required=False, default='./configure', help='configure script override')
 parser.add_argument('--ld', required=False, default='clang', type=str,
-                    help='LD variable override (wrapper script name)')
+                    help='LD wrapper script name')
 parser.add_argument('--link', required=False, default='clang', type=str,
-                    help='LINK variable override (wrapper script name)')
+                    help='LINK wrapper script name')
 parser.add_argument('--ar', required=False, default='ar', type=str,
-                    help='AR variable override (wrapper script name)')
+                    help='AR wrapper script name')
 parser.add_argument('--ranlib', required=False, default='ar', type=str,
-                    help='RANLIB variable override (wrapper script name)')
-parser.add_argument('--var-override', nargs=2, required=False, action='append', metavar=('VAR', 'VALUE'),
-                    help='override env var [var] with [value]. Can be repeated multiple times')
+                    help='RANLIB wrapper script name')
+parser.add_argument('--env', required=False, action='append', metavar=('VAR=VALUE'),
+                    help='override env var [VAR] with [VALUE]. Can be repeated multiple times')
 parser.add_argument('--confirm', action='store_true', help='Confirm before running configure')
 parsedArgs, unknownArgs = parser.parse_known_args()
 configureScript = parsedArgs.f
@@ -50,8 +50,9 @@ setIrWrapperEnvVar('LD', parsedArgs.ld)
 setIrWrapperEnvVar('LINK', parsedArgs.link)
 
 # now replace the manual overrides:
-for i in (parsedArgs.var_override or []):
-    changeEnvVar(i[0], i[1])
+for s in (parsedArgs.env or []):
+    (var, value) = s.split('=')
+    changeEnvVar(var.strip(), value.strip())
 
 print('About to run', commandline, 'with the following env vars:\n', pprint.pformat(changedEnvVars))
 
