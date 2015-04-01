@@ -38,6 +38,7 @@ parser.add_argument('--ranlib', required=False, default='ranlib', type=str,
                     help='RANLIB wrapper script name (and parameters)')
 parser.add_argument('--env', required=False, action='append', metavar=('VAR=VALUE'),
                     help='override env var [VAR] with [VALUE]. Can be repeated multiple times')
+parser.add_argument('--cpp-linker', action='store_true', help='Use C++ compiler for linking')
 parser.add_argument('--confirm', action='store_true', help='Confirm before running configure')
 parsedArgs, unknownArgs = parser.parse_known_args()
 configureScript = parsedArgs.f
@@ -46,11 +47,18 @@ print(parsedArgs)
 commandline = [configureScript]
 commandline.extend(unknownArgs)  # append all the user passed flags
 
+# no need to add an override option for CC and CXX, this can be done via --env
 setIrWrapperEnvVar('CC', 'clang')
 setIrWrapperEnvVar('CXX', 'clang++')
 setIrWrapperEnvVar('AR', parsedArgs.ar)
 setIrWrapperEnvVar('RANLIB', parsedArgs.ranlib)
 # TODO: this one might cause problems...
+if parsedArgs.cpp_linker:
+    if parsedArgs.ld == 'clang':
+        parsedArgs.ld = 'clang++'
+    if parsedArgs.link == 'clang':
+        parsedArgs.link = 'clang++'
+
 setIrWrapperEnvVar('LD', parsedArgs.ld)
 setIrWrapperEnvVar('LINK', parsedArgs.link)
 
