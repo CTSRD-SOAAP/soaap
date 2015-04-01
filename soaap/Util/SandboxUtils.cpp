@@ -273,38 +273,106 @@ void SandboxUtils::createEmptySandboxIfNew(string name, SandboxVector& sandboxes
   }
 }
 
-void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string startSandboxName, InstVector& insts) {
+/** @return the end instruction */
+static Instruction* findAllSandboxedInstructionsHelper(Instruction* I, string startSandboxName, InstVector& insts,
+                                               std::vector<BasicBlock*>& visitedBlocks) {
   BasicBlock* BB = I->getParent();
-  
+  // make sure we don't end up in an endless recursion if there is a loop in the IR
+  visitedBlocks.push_back(BB);
+//   errs() << "Adding new basic block '" << BB->getName() << "' (" << (void*)BB << ") in '"
+//     << BB->getParent()->getName() << "' to sandbox " << startSandboxName;
+//   if (MDNode *N = I->getMetadata("dbg")) {
+//     DILocation loc(N);
+//     errs() << " (at " << loc.getFilename().str() << ':' << loc.getLineNumber() << ")";
+//   }
+//   errs() << "\n";
+
   // If I is not the start of BB, then fast-forward iterator to it
   BasicBlock::iterator BI = BB->begin();
   while (&*BI != I) { BI++; }
+
+  assert(BI != BB->end());
 
   for (BasicBlock::iterator BE = BB->end(); BI != BE; BI++) {
     // If I is the end_sandboxed_code() annotation then we stop
     I = &*BI;
     SDEBUG("soaap.util.sandbox", 3, I->dump());
     insts.push_back(I);
-    if (isa<IntrinsicInst>(I)) {
+
+    if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(I)) {
+      if (II->getIntrinsicID() != Intrinsic::annotation) {
+        // we only care about llvm.annotation calls
+        continue;
+      }
+
       GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(I->getOperand(1)->stripPointerCasts());
       ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
       StringRef annotationStrValCString = annotationStrValArray->getAsCString();
-      
+
       if (annotationStrValCString.startswith(SOAAP_SANDBOX_REGION_END)) {
         StringRef endSandboxName = annotationStrValCString.substr(strlen(SOAAP_SANDBOX_REGION_END)+1); //+1 because of _
         SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump());
         if (endSandboxName == startSandboxName) {
           // we have found the end of the region
-          return;
+          errs() << "End for " << startSandboxName << " found in " << BB->getName() << " (" << (void*)BB << ")\n";
+          return II;
         }
       }
     }
   }
 
   // recurse on successor BBs
-  for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; SI++) {
-    BasicBlock* SBB = *SI;
-    findAllSandboxedInstructions(SBB->begin(), startSandboxName, insts);
+  for (BasicBlock* SBB : successors(BB)) {
+//     errs() << "\n" << SBB->getName() << " (" << (void*)SBB << ") is a successor of "
+//       << BB->getName() << " (" << (void*)BB << ")\n";
+    if (std::find(visitedBlocks.cbegin(), visitedBlocks.cend(), SBB) != visitedBlocks.cend()) {
+//       errs() << "Skipping already visited basic block '" << SBB->getName()
+//         << "' (" << (void*)SBB << ") in " << SBB->getParent()->getName();
+//       if (MDNode *N = SBB->begin()->getMetadata("dbg")) {
+//         DILocation loc(N);
+//         errs() << " (" << loc.getFilename().str() << ':' << loc.getLineNumber() << ")";
+//       }
+//       errs() << '\n';
+      continue;
+    }
+    if (Instruction* endInstr = findAllSandboxedInstructionsHelper(SBB->begin(), startSandboxName, insts, visitedBlocks)) {
+      return endInstr;
+    }
+  }
+  return nullptr;
+}
+
+void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string sboxName, InstVector& insts)
+{
+  // TODO: why std::list<Instruction*> here, it only uses push_back -> vector is more efficient
+  // I->getParent()->getParent()->dump();
+
+  // this is needed to ensure we don't end up in an infinite recursion
+  std::vector<BasicBlock*> visitedBlocks;
+  Instruction* endInstr = findAllSandboxedInstructionsHelper(I, sboxName, insts, visitedBlocks);
+  if (!endInstr) {
+    errs() << "WARNING: Could not find matching __soaap_sandboxed_region_end(\"" << sboxName
+      << "\") for __soaap_sandboxed_region_start(\"" << sboxName << "\")\n";
+    errs() << "WARNING: assuming sandbox '" << sboxName << "' ends at the end of the function "
+      << I->getParent()->getParent()->getName() << "\n";
+    endInstr = insts.back();
+    // TODO: should we abort instead?
+    // abort();
+  }
+  // TODO: XO::emit?
+  errs() << "Sandbox '" << sboxName << "' starts at ";
+  if (MDNode *N = I->getMetadata("dbg")) {
+    DILocation loc(N);
+    errs() << loc.getFilename().str() << ':' << loc.getLineNumber();
+  } else {
+    errs() << "<unknown location>";
+  }
+  errs() << " and ends at ";
+  if (MDNode *N = endInstr->getMetadata("dbg")) {
+    DILocation loc(N);
+    errs() << loc.getFilename().str() << ':' << loc.getLineNumber() << '\n';
+  } else {
+    errs() << "<unknown location>\n";
   }
 }
 
