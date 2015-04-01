@@ -38,13 +38,31 @@ Currently the following build systems have been tested:
 **Important**: Currently you must set`SOAAP_LLVM_BINDIR` to point to the
 LLVM build directory (`$SOAAP_LLVM_BINDIR/clang` must exist)
 
+### CMake
+
+CMake is the build system that is most likely to work without any problems.
+A script that wraps around the CMake command and sets the necessary variables
+can be found in this directory (`cmake-for-llvm-ir.py`). It will ensure that
+the right (evironment and CMake) variables are set during the configure step
+so that a plain `ninja` or `make` invocation will be enough.
+If no `-G` argument is passed to the script it will automatically instruct
+CMake to use the `ninja` generator.
+
+To build a CMake project execute the following:
+```
+    # <script-dir>/cmake-for-llvm-ir.py <cmake args> <source dir>
+    # ninja # or make if you passed -G'Unix Makefiles' above
+```
+
+### Other build systems with a configure step
+
 For most build systems it is enough to do the following:
 
 ```
     # export CC=<script-dir>/clang-and-emit-llvm-ir.py
     # export CXX==<script-dir>/clang-and-emit-llvm-ir.py
     # export NO_EMIT_LLVM_IR=1
-    # ./configure or cmake or qmake
+    # ./configure or qmake
     # unset NO_EMIT_LLVM_IR
     # make -j8
 ```
@@ -54,12 +72,14 @@ during the configure step the compiler output is often parsed. Since the
 additional IR generation step (and debug output) will interfere with this many
 compiler features will not be detected correctly.
 
+### Plain Makefile build system
+
 If the build system uses hand written Makefiles or the configure step does not
 set the compiler wrappers for some reason there is also a script that wraps `make`.
 In that case you can run and hopefully everything will work
 
 ```
-    # make-for-llvm-ir.py <make-options>.
+    # <script-dir>/make-for-llvm-ir.py <make-options>.
 ```
 
 This method has been tested with the qtbase build system and the openSSH build system.
