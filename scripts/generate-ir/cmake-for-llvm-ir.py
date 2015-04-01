@@ -8,10 +8,10 @@ scriptDir = os.path.dirname(os.path.realpath(__file__))
 
 
 def irWrapper(var, command):
-    wrapper = os.path.join(scriptDir, command + '-and-emit-llvm-ir.py');
+    wrapper = os.path.join(scriptDir, command + '-and-emit-llvm-ir.py')
     if not os.path.exists(wrapper):
         sys.exit('could not find ' + wrapper)
-    return '"-DCMAKE_' + var + '=' + wrapper + '"'
+    return '-DCMAKE_' + var + '=' + wrapper
 
 
 commandline = [
@@ -33,4 +33,7 @@ if not hasGenerator:
 commandline.extend(sys.argv[1:])  # append all the user passed flags
 
 print(commandline)
-subprocess.call(commandline)
+os.environ['NO_EMIT_LLVM_IR'] = '1'
+# no need for subprocess.call, just use execve
+os.execve(commandline[0], commandline, os.environ)
+sys.exit('Could not execute ' + str(commandline))
