@@ -14,7 +14,7 @@ def overrideCmd(name):
     return '"' + os.path.join(scriptDir, name + '-and-emit-llvm-ir.py') + '"'
 
 fullArgs = list(sys.argv)  # copy of original args
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('options', nargs='*', help='Arguments to pass to make')
 parser.add_argument('-f', required=False, default='./Makefile', help='Makefile override')
 parser.add_argument('--confirm', action='store_true', help='Confirm before running make')

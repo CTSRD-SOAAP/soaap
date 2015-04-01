@@ -87,8 +87,10 @@ def highlightForMode(mode, msg):
         return colored(msg, 'red', attrs=['bold'])
     elif mode == Mode.executable:
         return colored(msg, 'green', attrs=['bold'])
+    elif mode == Mode.ranlib:
+        return colored(msg, 'yellow', attrs=['bold'])
     else:
-        print(warningMsg('WARNING: invalid mode: ' + mode))
+        print(warningMsg('WARNING: invalid mode: ' + mode.name))
         return infoMsg(msg)
 
 
