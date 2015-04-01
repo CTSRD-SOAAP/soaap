@@ -16,9 +16,9 @@ def overrideCmd(name):
 fullArgs = list(sys.argv)  # copy of original args
 parser = argparse.ArgumentParser()
 parser.add_argument('options', nargs='*', help='Arguments to pass to make')
-parser.add_argument('-f', nargs=1, required=False, default='./Makefile', help='Makefile override')
+parser.add_argument('-f', required=False, default='./Makefile', help='Makefile override')
 parser.add_argument('--confirm', action='store_true', help='Confirm before running make')
-parser.add_argument('-C', nargs=1, required=False, help='CWD override')
+parser.add_argument('-C', required=False, help='CWD override')
 # TODO: handle dir
 # parser.print_help()
 parsedArgs, unknownArgs = parser.parse_known_args()
