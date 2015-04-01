@@ -30,6 +30,8 @@ class Mode(Enum):
 
 #  TODO: let cmake set this at configure time
 SOAAP_LLVM_BINDIR = os.getenv('SOAAP_LLVM_BINDIR', '/home/alex/devel/soaap/llvm/release-build/bin/')
+if not os.path.isdir(SOAAP_LLVM_BINDIR):
+    sys.exit('could not find SOAAP_LLVM_BINDIR, please make sure the env var is set correctly')
 
 
 def soaapLlvmBinary(name):

@@ -35,6 +35,8 @@ Currently the following build systems have been tested:
 
 
 ## Instructions:
+**Important**: Currently you must set`SOAAP_LLVM_BINDIR` to point to the
+LLVM build directory (`$SOAAP_LLVM_BINDIR/clang` must exist)
 
 For most build systems it is enough to do the following:
 
@@ -74,3 +76,6 @@ the linking step do not work yet
 They need to be added manually if whole-program-analysis is desired.
 In the future some LLVM metadata might be added to solve this issue
 
+## Urgent TODO:
+- if `SOAAP_LLVM_BINDIR` is not set it will assume that the LLVM binaries are located at
+ /home/alex/devel/soaap/llvm/release-build/bin/
