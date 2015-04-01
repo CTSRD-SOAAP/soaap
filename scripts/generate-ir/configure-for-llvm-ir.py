@@ -34,7 +34,7 @@ parser.add_argument('--link', required=False, default='clang', type=str,
                     help='LINK wrapper script name (and parameters)')
 parser.add_argument('--ar', required=False, default='ar', type=str,
                     help='AR wrapper script name (and parameters)')
-parser.add_argument('--ranlib', required=False, default='ar', type=str,
+parser.add_argument('--ranlib', required=False, default='ranlib', type=str,
                     help='RANLIB wrapper script name (and parameters)')
 parser.add_argument('--env', required=False, action='append', metavar=('VAR=VALUE'),
                     help='override env var [VAR] with [VALUE]. Can be repeated multiple times')
