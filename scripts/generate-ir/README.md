@@ -29,8 +29,8 @@ symbols.
 Currently the following build systems have been tested:
 
 - CMake
-- QMake (excluding qtbase)
 - Autotools (openSSH)
+- QMake
 - Custom Makefiles (as long as they use common variable names)
 
 
@@ -71,6 +71,36 @@ automatically
 of the script
 - `--confirm`: Display command line and changed environment vars and request
 confirmation before running it.
+
+#### qtbase `./configure` script
+
+The qtbase.git project can be build using the `configure-for-llvm-ir.py` script
+if you apply the following patch: https://codereview.qt-project.org/#/c/109807/
+For some strange reason it requires AR to be set to `/path/to/ar cqs` which can
+be achieved by passing `"--ar=ar cqs"` to the script. Additionally, the binaries
+need to be linked using clang++ (`--cpp-linker`) since otherwise the C++ standard
+library is not added automatically.
+
+To build all the qtbase libraries as LLVM IR run the following:
+
+    # configure-for-llvm-ir.py "--ar=ar cqs" --cpp-linker <configure arguments>
+    # make -j8
+
+This has been tested with the 5.5 branch of qtbase.git, but should also work
+with any other branch where the patch applies cleanly.
+
+# QMake
+
+In order to build a QMake project you must have built qtbase using the configure
+wrapper script. If that is the case you can run the qmake binary from that
+directory and the make.
+
+    # <path-to-qtbase>/bin/qmake
+    # make -j8
+
+If you don't have the qmake binary from qtbase configured for LLVM IR you can
+also try following the instructions from *Plain Makefile build system*.
+It should also work, but is not recommended.
 
 ### Other build systems with a configure step
 
