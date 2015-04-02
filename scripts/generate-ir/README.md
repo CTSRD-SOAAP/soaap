@@ -67,10 +67,24 @@ to `./configure`
 - `--cpp-linker`: Ensures that clang++ is used instead of clang for linking.
 This is required in C++ projects to ensure the standard library is added
 automatically
-- `--env VAR=VALUE`: set environment variable `VAR` to `VALUE` for the duration
-of the script
 - `--confirm`: Display command line and changed environment vars and request
 confirmation before running it.
+- `"--ld=[LD_CMD]"`: set the LD environment variable to
+`"<scripts-dir>/<LD_CMD>-and-emit-llvm-ir.py"`. By default `LD_CMD` will be
+clang, but some build systems link using ld directly. In that case you should
+run `configure-for-llvm-ir.py --ld=ld`. If `LD_COMMAND` contains spaces the
+first word will be treated as the command and everything after the first space
+will be treated as parameters. E.g. `configure-for-llvm-ir.py "--ld=ld -m elf_x86_64"`
+will set `LD=<script-dir/ld-and-emit-llvm-ir.py -m elf_x86_64`.
+- `--ar=`[AR]`, `--link=[LINK]`, `--ranlib=[RANLIB]`: these work the same way as `--ld`
+- `--env VAR=VALUE`: set environment variable `VAR` to `VALUE` for the duration
+of the script
+
+In most cases it will be sufficient to run the following commands:
+
+    # ./autogen.sh # required for some projects to generate ./configure
+    # configure-for-llvm-ir.py <configure args>
+    # make -j8
 
 #### qtbase `./configure` script
 
