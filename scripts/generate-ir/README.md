@@ -86,6 +86,27 @@ This method has been tested with the qtbase build system and the openSSH build s
 
 **Note**: this has only been tested with **GNU make**.
 
+## Important environment variables
+
+### SOAAP_LLVM_BINDIR
+
+This variable must point to the directory where the SOAAP fork of LLVM was built.
+
+### LLVM_IR_WRAPPER_DELEGATE_TO_SYSTEM_COMPILER
+If this variable is set the native compile step will use the clang/clang++ binary from
+`$PATH` instead of from the SOAAP LLVM build directory.
+
+This is useful if you only have
+a Debug build of SOAAP available and want to speed up the build or if there are any issues
+with the SOAAP clang binary.
+
+### NO_EMIT_LLVM_IR
+If this variable is set the wrappers will delegate directly to the native compiler and
+skip the LLVM IR build step.
+
+This is useful when running the configure step for a build system since these scripts
+often parse the raw compiler output and having additional output would confuse them.
+
 ## Current limitations
 
 - Any build system that uses `libtool` does not work since libtool is a weird shell
