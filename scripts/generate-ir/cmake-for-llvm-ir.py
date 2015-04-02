@@ -2,7 +2,6 @@
 
 import sys
 import os
-import subprocess
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 

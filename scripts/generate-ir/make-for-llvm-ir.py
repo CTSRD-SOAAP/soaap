@@ -6,6 +6,8 @@ import re
 import subprocess
 import sys
 
+#TODO: simplify by understanding the same arguments as configure-for-llvm-ir
+
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 
 
