@@ -54,15 +54,34 @@ To build a CMake project execute the following:
     # ninja # or make if you passed -G'Unix Makefiles' above
 ```
 
+### Autotools or anything with a `./configure` script
+
+The script `configure-for-llvm-ir.py` will set the neccessary environment
+variables so that `./configure` will use the wrapper compiler instead.
+There are many arguments that can be passed to it to override the defaults
+in case that doesn't work for the given build system (see `--help` option
+for details). The most important ones are:
+
+- `-f <file>`: The executable to run with the modified environment. Defaults
+to `./configure`
+- `--cpp-linker`: Ensures that clang++ is used instead of clang for linking.
+This is required in C++ projects to ensure the standard library is added
+automatically
+- `--env VAR=VALUE`: set environment variable `VAR` to `VALUE` for the duration
+of the script
+- `--confirm`: Display command line and changed environment vars and request
+confirmation before running it.
+
 ### Other build systems with a configure step
 
-For most build systems it is enough to do the following:
+If for some reason the `configure-for-llvm-ir.py` script doesn't work
+you can perform the steps manually.
 
 ```
     # export CC=<script-dir>/clang-and-emit-llvm-ir.py
     # export CXX==<script-dir>/clang-and-emit-llvm-ir.py
     # export NO_EMIT_LLVM_IR=1
-    # ./configure or qmake
+    # ./my-configure-command
     # unset NO_EMIT_LLVM_IR
     # make -j8
 ```
@@ -72,11 +91,17 @@ during the configure step the compiler output is often parsed. Since the
 additional IR generation step (and debug output) will interfere with this many
 compiler features will not be detected correctly.
 
+**Note:**  The python script can be configured to set all these variables (see
+`--help option`) and also use a different script from `./configure` by using the
+`-f` option. Consider opening an issue instead of running these steps manually.
+
 ### Plain Makefile build system
 
-If the build system uses hand written Makefiles or the configure step does not
-set the compiler wrappers for some reason there is also a script that wraps `make`.
-In that case you can run and hopefully everything will work
+**WARNING:** Experimental
+
+If the build system uses hand written Makefiles or for some reason the configure
+step does not instruct make to use set the compiler wrappers there is also a
+script that wraps `make`:
 
 ```
     # <script-dir>/make-for-llvm-ir.py <make-options>.
