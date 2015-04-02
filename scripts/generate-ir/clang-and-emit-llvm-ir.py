@@ -35,7 +35,10 @@ if not os.path.isdir(SOAAP_LLVM_BINDIR):
 
 
 def soaapLlvmBinary(name):
-    return os.path.join(SOAAP_LLVM_BINDIR, name)
+    wrapper = os.path.join(SOAAP_LLVM_BINDIR, name)
+    if os.path.isfile(wrapper):
+        return wrapper
+    return None
 
 
 # Work around clang++ possibly being aliased to this script -> find the real one
