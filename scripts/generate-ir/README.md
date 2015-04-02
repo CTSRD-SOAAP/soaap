@@ -90,14 +90,12 @@ In most cases it will be sufficient to run the following commands:
 
 The qtbase.git project can be build using the `configure-for-llvm-ir.py` script
 if you apply the following patch: https://codereview.qt-project.org/#/c/109807/
-For some strange reason it requires AR to be set to `/path/to/ar cqs` which can
-be achieved by passing `"--ar=ar cqs"` to the script. Additionally, the binaries
-need to be linked using clang++ (`--cpp-linker`) since otherwise the C++ standard
-library is not added automatically.
+The binaries need to be linked using clang++ (`--cpp-linker`) since otherwise
+the C++ standard library is not added automatically.
 
 To build all the qtbase libraries as LLVM IR run the following:
 
-    # configure-for-llvm-ir.py "--ar=ar cqs" --cpp-linker <configure arguments>
+    # configure-for-llvm-ir.py --cpp-linker <configure arguments>
     # make -j8
 
 This has been tested with the 5.5 branch of qtbase.git, but should also work
