@@ -210,7 +210,12 @@ sys.stdout = sys.stderr
 # just use the normal clang++ executable
 compile_cmdline = list(sys.argv)  # copy
 map(str.strip, compile_cmdline)  # remove spaces
-compile_cmdline[0] = findExe(soaapLlvmBinary(executable)) or findExe(executable)  # find exe in path to skip aliases
+if os.getenv('LLVM_IR_WRAPPER_DELEGATE_TO_SYSTEM_COMPILER'):
+    # system clang or clang++
+    compile_cmdline[0] = findExe(executable)
+else:
+    # SOAAP clang or clang++ or fallback to system binary
+    compile_cmdline[0] = soaapLlvmBinary(executable) or findExe(executable)
 compile_mode = Mode.unknown
 output = ''
 generateIrCmdline = []
