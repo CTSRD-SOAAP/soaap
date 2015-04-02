@@ -7,6 +7,8 @@ import argparse
 from termcolor import colored, cprint
 from enum import Enum
 
+# TODO: always build with optimizations off (does that include DCE?) or maybe -fno-inline is better?
+
 # TODO: do we need to wrap objcopy?
 
 # TODO: there is also an llvm-ar command, will those archives also work with llvm-link?
@@ -275,8 +277,11 @@ elif executable in ('clang', 'clang++'):
         compile_mode = Mode.object_file
         generateIrCmdline = list(compile_cmdline)
         generateIrCmdline[0] = soaapLlvmBinary(executable)  # clang or clang++
+        generateIrCmdline[0] = soaapLlvmBinary(executable)  # clang or clang++
         generateIrCmdline.append('-g')  # soaap needs debug info
         generateIrCmdline.append('-emit-llvm')
+        generateIrCmdline.append('-fno-inline')  # make sure functions are not inlined
+        # TODO: generateIrCmdline.append('-O0')  # should this be added?
         if outputIdx < 0:
             # passing -c and no -o flag will produce an output with the extension renamed to .o
             # in this case we can't replace but need to add to the command line
