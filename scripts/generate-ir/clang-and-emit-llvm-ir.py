@@ -99,14 +99,29 @@ def highlightForMode(mode, msg):
         return infoMsg(msg)
 
 
+def correspondingBitcodeName(fname):
+    # if the output file is something like libfoo.so.1.2.3 we want libfoo.so.bc.1.2.3 to be emitted
+    if '.so.' in fname:
+        return fname.replace('.so.', '.so.bc.')
+    return fname + '.bc'
+
+
 def findLinkInputCandidates(cmdline):
     skipNextParam = True   # skip the executable
     linkCandidates = []
+    sharedLibs = []
     for param in cmdline:
         if skipNextParam:
             skipNextParam = False
             continue
         if param.startswith('-'):
+            # Tell llvm-link to add llvm.sharedlibs metadata
+            # TODO: is this the best solution?
+            if param.startswith('-l'):
+                sharedLibs.append(param)
+            if param == '-pthread':
+                # the modified llvm-link only understands -l flags
+                sharedLibs.append('-lpthread')
             #
             # A lot more options from clang: clang --help-hidden | grep -E -e '\-\w+ <'
             # And gcc: gcc -v --help | grep -E -e '\-\w+ <'
@@ -126,18 +141,15 @@ def findLinkInputCandidates(cmdline):
                          '-imultilib', '-isysroot', '-iprefix', '-iwithprefix', 'iwithprefixbefore',
                          '-idirafter', '-imacros', '-imultilib', '-Xassembler', '-ccc-gcc-name'):
                 skipNextParam = True
+            # ignore all other -XXX flags
             continue
-            if param.startswith('-l') or param == '-pthread':
-                # TODO: how to handle this? lookup global list of .bc libs? add it to metadata?
-                print(warningMsg('ATTEMPTING TO LINK AGAINST: ' + param))
-        if '.so' in param:
-            print(warningMsg('Not adding ' + param + ' to the resulting binary to prevent duplicate symbols'))
-            # TODO: how to properly handle shared libs, what about llvm-ar?
-            # Add something to metadata?
+        if param.endswith('.so') or '.so.' in param:
+            # print(warningMsg('Not adding ' + param + ' to the resulting binary to prevent duplicate symbols'))
+            sharedLibs.append(param)
         else:
             linkCandidates.append(param)
 
-    return linkCandidates
+    return (linkCandidates, sharedLibs)
 
 
 #  check if a file with the name and .bc appended exists, if that fails
@@ -146,7 +158,7 @@ def findBitcodeFiles(files):
     found = []
     toTest = []
     for f in files:
-        bitcodeName = f + '.bc'
+        bitcodeName = correspondingBitcodeName(f)
         if os.path.exists(bitcodeName):
             print('found bitcode file', bitcodeName)
             found.append(bitcodeName)
@@ -194,7 +206,7 @@ def getOutputParam(cmdline):
         if outputIdx >= len(cmdline):
             sys.stderr.write('WARNING: -o flag given but no parameter to it!')
         else:
-            output = cmdline[outputIdx]
+            output = correspondingBitcodeName(cmdline[outputIdx])
     return (output, outputIdx)
 
 
@@ -254,15 +266,14 @@ if executable == 'ar':
     elif not ('q' in operation and 'c' in operation):
         sys.exit(errorMsg('ERROR: only ar with \'cq\' mode is currently supported: ' + str(compile_cmdline)))
 
-    output = compile_cmdline[2]
-    generateIrCmdline = [soaapLlvmBinary('llvm-link'), '-o', output + '.bc']
+    output = correspondingBitcodeName(compile_cmdline[2])
+    generateIrCmdline = [soaapLlvmBinary('llvm-link'), '-o', output]
     generateIrCmdline.extend(findBitcodeFiles(compile_cmdline[3:]))
 
 # ranlib creates an index in the .a file -> we can skip this since we have created a llvm bitcode file
 elif executable == 'ranlib':
     compile_mode = Mode.ranlib
-    output = compile_cmdline[-1]
-    outputIdx = len(compile_cmdline) - 1
+    output = correspondingBitcodeName(compile_cmdline[1])
     nothingToDo = True
 
 # direct invocation of the linker: can be ld, gold or lld
@@ -293,14 +304,14 @@ elif executable in ('clang', 'clang++'):
             generateIrCmdline.append('-o')
             generateIrCmdline.append(output)
         else:
-            generateIrCmdline[outputIdx] = output + '.bc'
+            generateIrCmdline[outputIdx] = output  # replace with the bitcode name
     else:
         # now we really need the output file name
         if outputIdx < 0:
             print(warningMsg('WARNING: could not determine output file: ' + str(compile_cmdline)))
-            output = 'a.out'
+            output = 'a.out.bc'
         # must be linking if we aren't using -c
-        if '-shared' in compile_cmdline or '.so' in output:
+        if '-shared' in compile_cmdline or '.so.bc' in output:
             # using clang and passing '-shared' passed to the compiler will create a shared lib
             compile_mode = Mode.shared_lib
         else:
@@ -309,19 +320,18 @@ elif executable in ('clang', 'clang++'):
             # or are there any flags that we could detect? Or run file magic again
             compile_mode = Mode.executable
 
-        generateIrCmdline = [soaapLlvmBinary('llvm-link'), '-o', output + '.bc']
+        generateIrCmdline = [soaapLlvmBinary('llvm-link'), '-o', output]
         # we have already verified that the -o flag exists so there is no need to replace it
         # -> findLinkInputCandidates can skip it
-        linkCandidates = findLinkInputCandidates(compile_cmdline)
+        (linkCandidates, sharedLibs) = findLinkInputCandidates(compile_cmdline)
         if len(linkCandidates) == 0:
             sys.exit(errorMsg('NO LINK CANDIDATES FOUND IN CMDLINE: ' + str(compile_cmdline)))
-            nothingToDo = True
         inputFiles = findBitcodeFiles(linkCandidates)
         if len(inputFiles) == 0:
-            print(warningMsg("NO FILES FOUND FOR LINKING!"))
-            nothingToDo = True
+            sys.exit(errorMsg("NO FILES FOUND FOR LINKING!"))
         # print(infoMsg("InputFiles:" + str(inputFiles)))
         generateIrCmdline.extend(inputFiles)
+        generateIrCmdline.extend(sharedLibs)
         # print(len(generateIrCmdline), generateIrCmdline)
 else:
     compile_mode = Mode.unknown
