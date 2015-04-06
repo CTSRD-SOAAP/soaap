@@ -137,19 +137,18 @@ class CommandWrapper:
         # parse the original command line and compute the IR generation one
         self.computeWrapperCommand()
 
-        if len(self.generateIrCommand) == 0:
+        if len(self.generateIrCommand) == 0 and not self.nothingToDo:
             raise RuntimeError('Could not determine IR command line from', self.realCommand)
 
         print(highlightForMode(self.mode, self.mode.name + ' OUTPUT=' + self.output + '\nCMDLINE=' +
                                str(self.generateIrCommand) + '\nORIG_CMDLINE=' + str(self.realCommand)))
 
         if self.nothingToDo:
-            # no need to run the llvm generation command, only do the original instead
+            # no need to run the llvm generation command, only run the original instead
             print(infoMsg(self.executable + ' replacement: nothing to do:' + str(self.realCommand)))
-            return
-
-        #  Do the IR generation first so that if it fails we don't have the Makefile dependencies existing!
-        subprocess.check_call(self.generateIrCommand)
+        else:
+            #  Do the IR generation first so that if it fails we don't have the Makefile dependencies existing!
+            subprocess.check_call(self.generateIrCommand)
         # do the actual compilation step:
         subprocess.check_call(self.realCommand)
 
