@@ -45,8 +45,10 @@ elif executable == 'ranlib':
 elif executable in ('ld', 'lld', 'gold'):
     wrapper = LinkerWrapper(sys.argv)
 elif executable in ('clang', 'clang++'):
-    if "-c" in sys.argv:
+    if '-c' in sys.argv:
         wrapper = CompilerWrapper(sys.argv)
+    elif '-S' in sys.argv:
+        raise RuntimeError('assembly generation not supported!', sys.argv)
     else:
         wrapper = LinkerWrapper(sys.argv)
 else:
