@@ -93,6 +93,13 @@ class TestLinkerWrapper(unittest.TestCase):
         command = getIrCommand(['clang++', '-shared', 'foo.o', '-o', 'libfoo.so'])
         self.assertIn('-lc', command)
         self.assertIn('-lc++', command)
+        # should not be added with -ffreestanding
+        command = getIrCommand(['clang', '-shared', '-ffreestanding', 'foo.o', '-o', 'libfoo.so'])
+        self.assertNotIn('-lc', command)
+        self.assertNotIn('-lc++', command)
+        command = getIrCommand(['clang++', '-shared', '-ffreestanding', 'foo.o', '-o', 'libfoo.so'])
+        self.assertNotIn('-lc', command)
+        self.assertNotIn('-lc++', command)
 
 
 if __name__ == '__main__':

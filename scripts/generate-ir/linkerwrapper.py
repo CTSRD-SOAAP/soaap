@@ -43,19 +43,21 @@ class LinkerWrapper(CommandWrapper):
         # print(infoMsg("InputFiles:" + str(inputFiles)))
         self.generateIrCommand.extend(inputFiles)
         self.generateIrCommand.extend(self.sharedLibs)
-        if self.executable == 'clang':
-            self.generateIrCommand.append('-lc')
-        elif self.executable == 'clang++':
-            self.generateIrCommand.append('-lc')
-            self.generateIrCommand.append('-lc++')
-        else:
-            raise RuntimeError('Unsupported linker command: ' + self.executable)
+        if not self.noDefaultLibs:
+            if self.executable == 'clang':
+                self.generateIrCommand.append('-lc')
+            elif self.executable == 'clang++':
+                self.generateIrCommand.append('-lc')
+                self.generateIrCommand.append('-lc++')
+            else:
+                raise RuntimeError('Unsupported linker command: ' + self.executable)
 
     def parseCommandLine(self):
         # iterate over command line and convert all known options and input files
         skipNextParam = True   # skip the executable
         self.linkCandidates = []
         self.sharedLibs = []
+        self.noDefaultLibs = False
         for index, param in enumerate(self.realCommand):
             if skipNextParam:
                 skipNextParam = False
@@ -70,6 +72,8 @@ class LinkerWrapper(CommandWrapper):
                         self.mode = Mode.shared_lib
                 elif param == '-shared':
                     self.mode = Mode.shared_lib
+                elif param == '-ffreestanding':
+                    self.noDefaultLibs = True
                 # The only other flag we support is the -l flag, all others are ignored
                 # Tell llvm-link to add llvm.sharedlibs metadata
                 # TODO: is this the best solution?
