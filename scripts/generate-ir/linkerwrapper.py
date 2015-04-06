@@ -43,6 +43,13 @@ class LinkerWrapper(CommandWrapper):
         # print(infoMsg("InputFiles:" + str(inputFiles)))
         self.generateIrCommand.extend(inputFiles)
         self.generateIrCommand.extend(self.sharedLibs)
+        if self.executable == 'clang':
+            self.generateIrCommand.append('-lc')
+        elif self.executable == 'clang++':
+            self.generateIrCommand.append('-lc')
+            self.generateIrCommand.append('-lc++')
+        else:
+            raise RuntimeError('Unsupported linker command: ' + self.executable)
 
     def parseCommandLine(self):
         # iterate over command line and convert all known options and input files
@@ -128,13 +135,13 @@ def findBitcodeFiles(files):
     for f in files:
         bitcodeName = correspondingBitcodeName(f)
         if os.path.exists(bitcodeName):
-            print('found bitcode file', bitcodeName)
+            # print('found bitcode file', bitcodeName)
             found.append(bitcodeName)
         # work around libtool moving stuff around ....
         elif bitcodeName.startswith('.libs/'):
             bitcodeName = bitcodeName[len('.libs/'):]
             if os.path.exists(bitcodeName):
-                print('found libtool bitcode file', f, '->', bitcodeName)
+                # print('found libtool bitcode file', f, '->', bitcodeName)
                 found.append(bitcodeName)
             else:
                 toTest.append(str(f))
