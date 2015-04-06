@@ -9,34 +9,85 @@ import sys
 #TODO: simplify by understanding the same arguments as configure-for-llvm-ir
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
+overrides = {}
 
 
-# make sure it is quoted in case the dir contains spaces
-def overrideCmd(name):
-    return '"' + os.path.join(scriptDir, name + '-and-emit-llvm-ir.py') + '"'
+def setIrWrapperVar(var, command):
+    splitted = command.split()
+    command = splitted[0]
+    wrapper = os.path.join(scriptDir, command + '-and-emit-llvm-ir.py')
+    if not os.path.exists(wrapper):
+        sys.exit('could not find ' + wrapper)
+    # allow parameters to be passed
+    if len(splitted) > 1:
+        wrapper = wrapper + ' ' + ' '.join(splitted[1:])
+    setOverride(var, wrapper)
 
-fullArgs = list(sys.argv)  # copy of original args
+
+# also change the ENV vars
+def setOverride(var, value):
+    overrides[var] = value
+    os.environ[var] = value
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('options', nargs='*', help='Arguments to pass to make')
+# parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
 parser.add_argument('-f', required=False, default='./Makefile', help='Makefile override')
-parser.add_argument('--confirm', action='store_true', help='Confirm before running make')
-parser.add_argument('-C', required=False, help='CWD override')
-# TODO: handle dir
-# parser.print_help()
+parser.add_argument('--ld', required=False, default='clang', type=str,
+                    help='LD wrapper script name (and parameters)')
+parser.add_argument('--link', required=False, default='clang', type=str,
+                    help='LINK wrapper script name (and parameters)')
+parser.add_argument('--ar', required=False, default='ar', type=str,
+                    help='AR wrapper script name (and parameters)')
+parser.add_argument('--ranlib', required=False, default='ranlib', type=str,
+                    help='RANLIB wrapper script name (and parameters)')
+parser.add_argument('--var', required=False, action='append', metavar=('VAR=VALUE'),
+                    help='override env var [VAR] with [VALUE]. Can be repeated multiple times')
+parser.add_argument('--cpp-linker', action='store_true', help='Use C++ compiler for linking')
+parser.add_argument('--confirm', action='store_true', help='Confirm before running configure')
 parsedArgs, unknownArgs = parser.parse_known_args()
-print(parsedArgs)
 makefile = parsedArgs.f
 print('Makefile is:', makefile)
-# try and override all relevant make variables with the wrapper script
-# CC and CXX are always valid, all others depend on the build system
-varOverrides = {
-    'CC': overrideCmd('clang'),
-    'CXX': overrideCmd('clang++'),
-    'AR': overrideCmd('ar'),
-    # most build systems seem to link with the compiler instead of calling ld directly
-    'LD': overrideCmd('clang++'),
-}
+print(parsedArgs)
+commandline = ['make', '-f', makefile]
 
+# no need to add an override option for CC and CXX, this can be done via --env
+setIrWrapperVar('CC', 'clang')
+setIrWrapperVar('CXX', 'clang++')
+setIrWrapperVar('AR', parsedArgs.ar)
+setIrWrapperVar('RANLIB', parsedArgs.ranlib)
+# TODO: this one might cause problems...
+if parsedArgs.cpp_linker:
+    if parsedArgs.ld == 'clang':
+        parsedArgs.ld = 'clang++'
+    if parsedArgs.link == 'clang':
+        parsedArgs.link = 'clang++'
+
+setIrWrapperVar('LD', parsedArgs.ld)
+setIrWrapperVar('LINK', parsedArgs.link)
+
+# now replace the manual overrides:
+for s in (parsedArgs.var or []):
+    (var, value) = s.split('=')
+    setOverride(var.strip(), value.strip())
+
+for k, v in overrides.items():
+    commandline.append(k + '=' + v)
+
+commandline.extend(unknownArgs)  # append all the user passed flags
+print('About to run', commandline)
+
+if parsedArgs.confirm:
+    result = input('Continue? [y/n] (y)').lower()
+    if len(result) > 0 and result[0] != 'y':
+        sys.exit()
+
+# no need for subprocess.call, just use execvpe
+os.execvpe(commandline[0], commandline, os.environ)
+sys.exit('Could not execute ' + str(commandline))
+
+
+# keep the old makefile parsing code here for now in case it makes sense to reactivate it
+'''
 buildSystem = 'generic'
 
 # we (currently?) only care about upper case variables
@@ -131,24 +182,4 @@ for index, line in enumerate(open(makefile)):
             sys.exit('COULD NOT HANDLE LD assignment: ' + value)
 
 print('Detected build system is', buildSystem)
-
-# TODO: Make vs. gmake?
-makeCommandLine = ['gmake']
-if makefile != './Makefile':
-    makeCommandLine.append('-f')
-    makeCommandLine.append(makefile)
-
-for k, v in varOverrides.items():
-    makeCommandLine.append(k + '=' + v)
-
-makeCommandLine.extend(parsedArgs.options)
-
-print('Make command line:', makeCommandLine)
-
-
-if parsedArgs.confirm:
-    result = input('Run command? [y/n] (y)').lower()
-    if len(result) > 0 and result[0] != 'y':
-        sys.exit()
-
-subprocess.check_call(makeCommandLine)
+'''

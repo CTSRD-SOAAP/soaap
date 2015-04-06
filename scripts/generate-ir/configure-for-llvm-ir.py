@@ -14,6 +14,7 @@ def changeEnvVar(var, value):
     changedEnvVars[var] = value
     print('set', var, 'to', value)
 
+
 def setIrWrapperEnvVar(var, command):
     splitted = command.split()
     command = splitted[0]
