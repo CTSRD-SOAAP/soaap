@@ -57,6 +57,12 @@ class TestCompilerWrapper(unittest.TestCase):
         self.assertIn('-fno-inline', command)
         self.assertNotIn('-finline', command) # finline mustn't be part of the command line
 
+    def testMuslLibcASM(self):
+        # work around musl libc asm files by compiling the stubs instead
+        command = getIrCommand(['clang++', '-c', 'src/fenv/x86_64/fenv.s'])
+        self.assertEqual(command, ['clang++', '-c', 'src/fenv/fenv.c', '-o', 'src/fenv/fenv.o.bc',
+                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+
     def testRemoveInvalidArgs(self):
         wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c'])
         wrapper.computeWrapperCommand()
@@ -70,6 +76,16 @@ class TestCompilerWrapper(unittest.TestCase):
         # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
         self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
         self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+
+        # same again with '-frounding-math' as well
+        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', '-frounding-math',
+                                                   'foo.c', '-fexcess-precision=standard'])
+        wrapper.computeWrapperCommand()
+        # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+        self.assertNotIn('-frounding-math', wrapper.realCommand)
+        self.assertNotIn('-frounding-math', wrapper.generateIrCommand)
 
 
 if __name__ == '__main__':

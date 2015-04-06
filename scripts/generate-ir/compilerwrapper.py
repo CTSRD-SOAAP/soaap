@@ -36,7 +36,8 @@ class CompilerWrapper(CommandWrapper):
         skipNext = True  # skip executable
         inputFiles = []
         # make a copy since we might be modifying self.realCommand
-        for index, param in enumerate(list(self.realCommand)):
+        originalRealCommand = list(self.realCommand)
+        for index, param in enumerate(originalRealCommand):
             if skipNext:
                 skipNext = False
                 continue
@@ -47,16 +48,20 @@ class CompilerWrapper(CommandWrapper):
                     continue
                 elif param == '-finline':
                     continue
-                elif param == '-fexcess-precision=standard':
-                    # Fix error: unknown argument: '-fexcess-precision=standard'
+                elif param in ('-fexcess-precision=standard', '-frounding-math'):
+                    # Fix the following (both when compiling and when generating LLVM IR):
+                    # error: unknown argument: '-fexcess-precision=standard'
+                    # warning: optimization flag '-frounding-math' is not supported
                     self.realCommand.remove(param)
                     continue
-
+                elif param == '-Wa,--noexecstack':
+                    # this is required in the real command, but not when emitting LLVM IR
+                    continue
                 elif param in clangParamsWithArgument():
-                    if index + 1 >= len(self.realCommand):
-                        raise RuntimeError(param + 'flag without parameter!', self.realCommand)
+                    if index + 1 >= len(originalRealCommand):
+                        raise RuntimeError(param + ' flag without parameter!', originalRealCommand)
                     skipNext = True
-                    next = self.realCommand[index + 1]
+                    next = originalRealCommand[index + 1]
                     if param == '-o':
                         next = correspondingBitcodeName(next)
                         self.output = next
@@ -66,6 +71,14 @@ class CompilerWrapper(CommandWrapper):
                     self.generateIrCommand.append(param)
             else:
                 # this must be an input file
+                if param.endswith('.s') or param.endswith('.S'):
+                    if '/x86_64/' in param:
+                        origParam = param
+                        # workaround for musl libc: compile the stub files instead
+                        param = param.replace('/x86_64/', '/').replace('.s', '.c')
+                        print(infoMsg('Workaround for musl libc: ' + origParam + ' -> ' + param))
+                    else:
+                        raise RuntimeError('Attempting to compile assembly file: ', param, self.realCommand)
                 inputFiles.append(param)
                 self.generateIrCommand.append(param)
 
@@ -78,7 +91,6 @@ class CompilerWrapper(CommandWrapper):
             self.output = correspondingBitcodeName(root + '.o')
             self.generateIrCommand.append('-o')
             self.generateIrCommand.append(self.output)
-
         # FIXME: Is -gline-tables-only enough?
         self.generateIrCommand.append('-gline-tables-only')  # soaap needs debug info
         self.generateIrCommand.append('-emit-llvm')

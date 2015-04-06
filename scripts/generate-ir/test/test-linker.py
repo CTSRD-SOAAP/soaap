@@ -84,6 +84,12 @@ class TestLinkerWrapper(unittest.TestCase):
         command = removeLibs(getIrCommand(['clang++', 'foo.o', '-o', '.libs/libfoo.so.1.2.3']))
         self.assertEqual(command, ['llvm-link', '-o', '.libs/libfoo.so.bc.1.2.3',  'foo.o.bc'])
 
+    def testRemoveInvalidArgs(self):
+        wrapper = linkerwrapper.LinkerWrapper(['clang', 'foo.o', '-fexcess-precision=standard'])
+        wrapper.parseCommandLine()
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+
     def testAddStdlib(self):
         # clang adds libc
         command = getIrCommand(['clang', '-shared', 'foo.o', '-o', 'libfoo.so'])

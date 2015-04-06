@@ -86,7 +86,7 @@ class LinkerWrapper(CommandWrapper):
                     skipNextParam = True
                 # ignore all other -XXX flags
                 continue
-            if param.endswith('.so') or '.so.' in param:
+            elif param.endswith('.so') or '.so.' in param:
                 self.sharedLibs.append(param)
             else:
                 self.linkCandidates.append(param)
@@ -97,15 +97,25 @@ class LinkerWrapper(CommandWrapper):
         if self.mode == Mode.unknown:
             self.mode = Mode.executable
 
+        # remove arguments that clang doesn't understand from the link command
+        try:
+            self.realCommand.remove('-fexcess-precision=standard')
+        except:
+            pass # remove throws an exception if the element wasn't found...
+
 
 class ArWrapper(CommandWrapper):
     def __init__(self, originalCommandLine):
-        super().__init(originalCommandLine)
+        super().__init__(originalCommandLine)
         self.mode = Mode.static_lib
 
     def computeWrapperCommand(self):
-        if len(self.realCommand) < 4:
+        if len(self.realCommand) < 2:
             raise RuntimeError('Cannot parse AR invocation: ', self.realCommand)
+        elif len(self.realCommand) == 3:
+            # seems like it is only creating the file and not adding any members -> skip
+            self.nothingToDo = True
+
         # TODO: how does the append mode interact with the llvm-link module name option
         operation = self.realCommand[1]
         # for now we only understand append 'q' combined with 'c' (create)
@@ -117,13 +127,13 @@ class ArWrapper(CommandWrapper):
             raise RuntimeError('ar wrapper: \'cq\' or \'r\' mode is currently supported: ', self.realCommand)
 
         self.output = correspondingBitcodeName(self.realCommand[2])
-        generateIrCmdline = [soaapLlvmBinary('llvm-link'), '-o', self.output]
-        generateIrCmdline.extend(findBitcodeFiles(self.realCommand[3:]))
+        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
+        self.generateIrCommand.extend(findBitcodeFiles(self.realCommand[3:]))
 
 
 class RanlibWrapper(CommandWrapper):
     def __init__(self, originalCommandLine):
-        super().__init(originalCommandLine)
+        super().__init__(originalCommandLine)
         self.mode = Mode.ranlib
 
     def computeWrapperCommand(self):
