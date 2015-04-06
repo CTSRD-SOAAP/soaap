@@ -29,18 +29,26 @@ if not os.path.isdir(SOAAP_LLVM_BINDIR):
 
 
 def errorMsg(msg):
+    if not os.isatty(sys.stdout.fileno()):
+        return msg
     return colored(msg, 'red', 'on_blue', attrs=['bold'])
 
 
 def infoMsg(msg):
+    if not os.isatty(sys.stdout.fileno()):
+        return msg
     return colored(msg, 'magenta', 'on_green', attrs=[])
 
 
 def warningMsg(msg):
+    if not os.isatty(sys.stdout.fileno()):
+        return msg
     return colored(msg, 'yellow', attrs=['bold'])
 
 
 def highlightForMode(mode, msg):
+    if not os.isatty(sys.stdout.fileno()):
+        return msg
     if mode == Mode.object_file:
         return colored(msg, 'blue', attrs=['bold'])
     elif mode == Mode.static_lib:
