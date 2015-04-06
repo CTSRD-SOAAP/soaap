@@ -57,6 +57,20 @@ class TestCompilerWrapper(unittest.TestCase):
         self.assertIn('-fno-inline', command)
         self.assertNotIn('-finline', command) # finline mustn't be part of the command line
 
+    def testRemoveInvalidArgs(self):
+        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c'])
+        wrapper.computeWrapperCommand()
+        # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+
+        # same again with the flag multiple times
+        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c', '-fexcess-precision=standard'])
+        wrapper.computeWrapperCommand()
+        # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+
 
 if __name__ == '__main__':
     unittest.main()

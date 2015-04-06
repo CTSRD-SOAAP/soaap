@@ -35,7 +35,8 @@ class CompilerWrapper(CommandWrapper):
 
         skipNext = True  # skip executable
         inputFiles = []
-        for index, param in enumerate(self.realCommand):
+        # make a copy since we might be modifying self.realCommand
+        for index, param in enumerate(list(self.realCommand)):
             if skipNext:
                 skipNext = False
                 continue
@@ -46,6 +47,11 @@ class CompilerWrapper(CommandWrapper):
                     continue
                 elif param == '-finline':
                     continue
+                elif param == '-fexcess-precision=standard':
+                    # Fix error: unknown argument: '-fexcess-precision=standard'
+                    self.realCommand.remove(param)
+                    continue
+
                 elif param in clangParamsWithArgument():
                     if index + 1 >= len(self.realCommand):
                         raise RuntimeError(param + 'flag without parameter!', self.realCommand)
