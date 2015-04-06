@@ -8,6 +8,7 @@ from termcolor import colored, cprint
 from enum import Enum
 
 from linkerwrapper import *
+from compilerwrapper import CompilerWrapper
 
 # TODO: always build with optimizations off (does that include DCE?) or maybe -fno-inline is better?
 
@@ -22,20 +23,6 @@ from linkerwrapper import *
 
 # TODO: libtool messes up everything, work around that
 
-# returns (outputStr, outputIndex) tuple
-def getOutputParam(cmdline):
-    outputIdx = -1
-    output = None
-    if '-o' in cmdline:
-        outputIdx = cmdline.index('-o') + 1
-        if outputIdx >= len(cmdline):
-            sys.stderr.write('WARNING: -o flag given but no parameter to it!')
-        else:
-            output = correspondingBitcodeName(cmdline[outputIdx])
-    return (output, outputIdx)
-
-
-# MAIN script:
 
 # why is this not in the stdlib...
 def strip_end(text, suffix):
@@ -47,6 +34,7 @@ def strip_end(text, suffix):
 executable = strip_end(os.path.basename(sys.argv[0]), "-and-emit-llvm-ir.py")
 sys.argv[0] = executable
 
+wrapper = None
 # ar is used to add together .o files to a static library
 if executable == 'ar':
     wrapper = ArWrapper(sys.argv)
@@ -57,13 +45,11 @@ elif executable == 'ranlib':
 elif executable in ('ld', 'lld', 'gold'):
     wrapper = LinkerWrapper(sys.argv)
 elif executable in ('clang', 'clang++'):
-    output, outputIdx = getOutputParam(compile_cmdline)
-    if "-c" in compile_cmdline:
+    if "-c" in sys.argv:
         wrapper = CompilerWrapper(sys.argv)
     else:
-       wrapper = LinkerWrapper(sys.argv)
-
+        wrapper = LinkerWrapper(sys.argv)
 else:
-    raise(RuntimeError('Could not parse command line to determine what\'s happening: ', sys.argv)
+    raise RuntimeError('Could not parse command line to determine what\'s happening: ', sys.argv)
 
 wrapper.run()
