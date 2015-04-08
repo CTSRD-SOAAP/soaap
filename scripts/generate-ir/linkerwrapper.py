@@ -114,7 +114,7 @@ class ArWrapper(CommandWrapper):
         if len(self.realCommand) < 2:
             raise RuntimeError('Cannot parse AR invocation: ', self.realCommand)
         # Only having 3 parameters means creating an empty .a file (e.g. musl libc uses this)
-        self.emptyOutputFile = len(self.realCommand) == 3
+        self.generateEmptyOutput = len(self.realCommand) == 3
         operation = self.realCommand[1]
         # for now we only understand append 'q' combined with 'c' (create)
         if 'r' in operation:
@@ -129,17 +129,19 @@ class ArWrapper(CommandWrapper):
         self.generateIrCommand.extend(findBitcodeFiles(self.realCommand[3:]))
 
     def runGenerateIrCommand(self):
-        if not self.emptyOutputFile:
+        if self.generateEmptyOutput:
+            # we need to create an empty output file (e.g. musl libc creates empty files
+            # for libm.a, libcrypt.a, etc since they are all in libc.a)
+            with tempfile.NamedTemporaryFile() as tmp:
+                # create empty bitcode file and then link it
+                self.createEmptyBitcodeFile(tmp.name)
+                self.generateIrCommand.append(tmp.name)
+                subprocess.check_call(self.generateIrCommand)
+        # otherwise just call the superclass method
+        else:
             super().runGenerateIrCommand()
             return
-        # we need to create an empty output file (e.g. musl libc creates empty files
-        # for libm.a, libcrypt.a, etc since they are all in libc.a)
-        with tempfile.NamedTemporaryFile() as tmp:
-            # create empty bitcode file and then link it
-            subprocess.check_call([soaapLlvmBinary('clang'), '-c', '-emit-llvm', '-o', tmp.name,
-                                   '-x', 'c', '/dev/null'])
-            self.generateIrCommand.append(tmp.name)
-            subprocess.check_call(self.generateIrCommand)
+
 
 
 class RanlibWrapper(CommandWrapper):

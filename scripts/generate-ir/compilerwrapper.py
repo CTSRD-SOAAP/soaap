@@ -36,6 +36,7 @@ class CompilerWrapper(CommandWrapper):
         skipNext = True  # skip executable
         inputFiles = []
         # make a copy since we might be modifying self.realCommand
+        self.generateEmptyOutput = False
         originalRealCommand = list(self.realCommand)
         for index, param in enumerate(originalRealCommand):
             if skipNext:
@@ -47,7 +48,7 @@ class CompilerWrapper(CommandWrapper):
                     # strip all -g parameters, we only want '-gline-tables-only'
                     continue
                 elif param == '-finline':
-                    continue
+                    continue  # finline should never be part of the wrapper command since we add -fno-inline
                 elif param in ('-fexcess-precision=standard', '-frounding-math'):
                     # Fix the following (both when compiling and when generating LLVM IR):
                     # error: unknown argument: '-fexcess-precision=standard'
@@ -81,8 +82,11 @@ class CompilerWrapper(CommandWrapper):
                         # workaround for musl libc: compile the stub files instead
                         param = param.replace('/x86_64/', '/').replace('.s', '.c')
                         print(infoMsg('Workaround for musl libc: ' + origParam + ' -> ' + param))
+                    elif os.getenv('SKIP_ASSEMBLY_FILES'):
+                        self.generateEmptyOutput = True
                     else:
-                        raise RuntimeError('Attempting to compile assembly file: ', param, self.realCommand)
+                        raise RuntimeError('Attempting to compile assembly file (export SKIP_ASSEMBLY_FILES=1' +
+                                           ' to generate an empty file instead): ', param, self.realCommand)
                 inputFiles.append(param)
                 self.generateIrCommand.append(param)
 
@@ -95,7 +99,15 @@ class CompilerWrapper(CommandWrapper):
             self.output = correspondingBitcodeName(root + '.o')
             self.generateIrCommand.append('-o')
             self.generateIrCommand.append(self.output)
+
+        # add the required compiler flags for analysis
         # FIXME: Is -gline-tables-only enough?
         self.generateIrCommand.append('-gline-tables-only')  # soaap needs debug info
         self.generateIrCommand.append('-emit-llvm')
         self.generateIrCommand.append('-fno-inline')  # make sure functions are not inlined
+
+    def runGenerateIrCommand(self):
+        if self.generateEmptyOutput:
+            self.createEmptyBitcodeFile(self.output)
+        else:
+            super().runGenerateIrCommand()
