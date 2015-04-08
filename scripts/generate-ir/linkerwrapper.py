@@ -143,7 +143,6 @@ class ArWrapper(CommandWrapper):
             return
 
 
-
 class RanlibWrapper(CommandWrapper):
     def __init__(self, originalCommandLine):
         super().__init__(originalCommandLine)
@@ -159,6 +158,7 @@ class RanlibWrapper(CommandWrapper):
 def findBitcodeFiles(files):
     found = []
     toTest = []
+    missingFiles = []
     for f in files:
         bitcodeName = correspondingBitcodeName(f)
         if os.path.exists(bitcodeName):
@@ -187,8 +187,12 @@ def findBitcodeFiles(files):
             if 'LLVM IR bitcode' in line:
                 found.append(testedFile)
             else:
-                print(warningMsg('LLVM IR NOT FOUND for: ' + testedFile))
+                missingFiles.append(testedFile)
     if len(found) == 0:
         print(warningMsg('No bitcode files found from input ' + str(files)))
-
+    if len(missingFiles) > 0:
+        if os.getenv('SKIP_MISSING_LINKER_INPUT'):
+            print(warningMsg('LLVM IR NOT FOUND for: ' + str(missingFiles)))
+        else:
+            raise RuntimeError('Missing input files for:', missingFiles)
     return found
