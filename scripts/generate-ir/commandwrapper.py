@@ -148,9 +148,17 @@ class CommandWrapper:
             print(infoMsg(self.executable + ' replacement: nothing to do:' + str(self.realCommand)))
         else:
             #  Do the IR generation first so that if it fails we don't have the Makefile dependencies existing!
-            subprocess.check_call(self.generateIrCommand)
+            self.runGenerateIrCommand()
         # do the actual compilation step:
+        self.runRealCommand()
+
+    # allow overriding this for creating empty output files
+    def runGenerateIrCommand(self):
+        subprocess.check_call(self.generateIrCommand)
+
+    def runRealCommand(self):
         subprocess.check_call(self.realCommand)
+
 
     def computeWrapperCommand(self):
         raise NotImplementedError

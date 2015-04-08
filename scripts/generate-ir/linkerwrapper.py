@@ -17,6 +17,7 @@
 #
 
 from commandwrapper import *
+import tempfile
 
 
 class LinkerWrapper(CommandWrapper):
@@ -112,11 +113,8 @@ class ArWrapper(CommandWrapper):
     def computeWrapperCommand(self):
         if len(self.realCommand) < 2:
             raise RuntimeError('Cannot parse AR invocation: ', self.realCommand)
-        elif len(self.realCommand) == 3:
-            # seems like it is only creating the file and not adding any members -> skip
-            self.nothingToDo = True
-
-        # TODO: how does the append mode interact with the llvm-link module name option
+        # Only having 3 parameters means creating an empty .a file (e.g. musl libc uses this)
+        self.emptyOutputFile = len(self.realCommand) == 3
         operation = self.realCommand[1]
         # for now we only understand append 'q' combined with 'c' (create)
         if 'r' in operation:
@@ -129,6 +127,19 @@ class ArWrapper(CommandWrapper):
         self.output = correspondingBitcodeName(self.realCommand[2])
         self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
         self.generateIrCommand.extend(findBitcodeFiles(self.realCommand[3:]))
+
+    def runGenerateIrCommand(self):
+        if not self.emptyOutputFile:
+            super().runGenerateIrCommand()
+            return
+        # we need to create an empty output file (e.g. musl libc creates empty files
+        # for libm.a, libcrypt.a, etc since they are all in libc.a)
+        with tempfile.NamedTemporaryFile() as tmp:
+            # create empty bitcode file and then link it
+            subprocess.check_call([soaapLlvmBinary('clang'), '-c', '-emit-llvm', '-o', tmp.name,
+                                   '-x', 'c', '/dev/null'])
+            self.generateIrCommand.append(tmp.name)
+            subprocess.check_call(self.generateIrCommand)
 
 
 class RanlibWrapper(CommandWrapper):
