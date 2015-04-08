@@ -88,7 +88,7 @@ class LinkerWrapper(CommandWrapper):
                 # ignore all other -XXX flags
                 continue
             elif param.endswith('.so') or '.so.' in param:
-                self.sharedLibs.append(param)
+                self.sharedLibs.append(correspondingBitcodeName(param))
             else:
                 self.linkCandidates.append(param)
 
@@ -102,7 +102,7 @@ class LinkerWrapper(CommandWrapper):
         try:
             self.realCommand.remove('-fexcess-precision=standard')
         except:
-            pass # remove throws an exception if the element wasn't found...
+            pass  # remove throws an exception if the element wasn't found...
 
 
 class ArWrapper(CommandWrapper):
