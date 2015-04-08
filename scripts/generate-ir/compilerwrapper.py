@@ -63,6 +63,10 @@ class CompilerWrapper(CommandWrapper):
                     skipNext = True
                     next = originalRealCommand[index + 1]
                     if param == '-o':
+                        # work around libtool create object files in ./.libs/foo.o and deletes all other files!
+                        # -> we just create the file one level higher and work around it in the linker wrapper again..
+                        if next.startswith('.libs/'):
+                            next = next.replace('.libs/', '')
                         next = correspondingBitcodeName(next)
                         self.output = next
                     self.generateIrCommand.append(param)

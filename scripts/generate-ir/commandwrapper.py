@@ -159,6 +159,9 @@ class CommandWrapper:
     def runRealCommand(self):
         subprocess.check_call(self.realCommand)
 
+    def createEmptyBitcodeFile(self, output):
+        subprocess.check_call([soaapLlvmBinary('clang'), '-c', '-emit-llvm', '-o', output,
+                               '-x', 'c', '/dev/null'])
 
     def computeWrapperCommand(self):
         raise NotImplementedError
