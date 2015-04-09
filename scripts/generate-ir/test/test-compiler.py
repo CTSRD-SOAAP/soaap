@@ -43,6 +43,14 @@ class TestCompilerWrapper(unittest.TestCase):
         self.assertEqual(command, ['clang++', '-o', '.obj/foo.o.bc', '-c', 'foo.c',
                                    '-gline-tables-only', '-emit-llvm', '-fno-inline'])
 
+    def testSpacesRemoved(self):
+        wrapper = compilerwrapper.CompilerWrapper([' clang++', ' -Wall ',  '-c ', ' foo.c '])
+        wrapper.computeWrapperCommand()
+        for val in wrapper.realCommand:
+            self.assertEqual(val, val.strip())
+        for val in wrapper.generateIrCommand:
+            self.assertEqual(val, val.strip())
+
     def testDebugFlag(self):
         self.assertIn('-gline-tables-only', getIrCommand(['clang++', '-c', 'foo.c']))
         command = getIrCommand(['clang++', '-g', '-c', 'foo.c'])

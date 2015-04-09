@@ -18,6 +18,7 @@
 
 from commandwrapper import *
 import tempfile
+import shutil
 
 
 class LinkerWrapper(CommandWrapper):
@@ -115,12 +116,13 @@ class ArWrapper(CommandWrapper):
             raise RuntimeError('Cannot parse AR invocation: ', self.realCommand)
         # Only having 3 parameters means creating an empty .a file (e.g. musl libc uses this)
         self.generateEmptyOutput = len(self.realCommand) == 3
+        self.replacement = False
         operation = self.realCommand[1]
-        # for now we only understand append 'q' combined with 'c' (create)
+        # for now we only understand append 'q' combined with 'c' (create) or 'r'
         if 'r' in operation:
             # replacement, like q, but replaces existing members, hopefully this will work!
             # TODO: use llvm-ar instead? how will that work?
-            pass
+            self.replacement = True
         elif not ('q' in operation and 'c' in operation):
             raise RuntimeError('ar wrapper: \'cq\' or \'r\' mode is currently supported: ', self.realCommand)
 
@@ -136,11 +138,18 @@ class ArWrapper(CommandWrapper):
                 # create empty bitcode file and then link it
                 self.createEmptyBitcodeFile(tmp.name)
                 self.generateIrCommand.append(tmp.name)
-                subprocess.check_call(self.generateIrCommand)
+                super().runGenerateIrCommand()
+        elif self.replacement and os.path.isfile(self.output):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                movedInput = os.path.join(tmpdir, os.path.basename(self.output))
+                shutil.move(self.output, movedInput)
+                self.generateIrCommand.append(movedInput)
+                print('Moved input:', movedInput)
+                # input('About to run: ' + str(self.generateIrCommand))
+                super().runGenerateIrCommand()
         # otherwise just call the superclass method
         else:
             super().runGenerateIrCommand()
-            return
 
 
 class RanlibWrapper(CommandWrapper):

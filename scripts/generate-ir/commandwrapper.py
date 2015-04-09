@@ -114,13 +114,13 @@ class CommandWrapper:
         #    executable = 'clang'
         # elif executable in ('clang++', 'g++', 'c++'):
         #    executable = 'clang++'
-        self.realCommand = list(originalCommandLine)
+        # remove spaces make a copy and remove spaces
+        self.realCommand = [item.strip() for item in originalCommandLine]
         self.generateIrCommand = list()
         self.nothingToDo = False
-        self.executable = str(originalCommandLine[0])
+        self.executable = str(self.realCommand[0])
         self.mode = Mode.unknown
         self.output = ''
-        map(str.strip, self.realCommand)  # remove spaces
         if os.getenv('LLVM_IR_WRAPPER_DELEGATE_TO_SYSTEM_COMPILER'):
             # clang or clang++ from $PATH
             self.realCommand[0] = findExe(self.executable)
@@ -140,12 +140,9 @@ class CommandWrapper:
         if len(self.generateIrCommand) == 0 and not self.nothingToDo:
             raise RuntimeError('Could not determine IR command line from', self.realCommand)
 
-        print(highlightForMode(self.mode, self.mode.name + ' OUTPUT=' + self.output + '\nCMDLINE=' +
-                               str(self.generateIrCommand) + '\nORIG_CMDLINE=' + str(self.realCommand)))
-
         if self.nothingToDo:
             # no need to run the llvm generation command, only run the original instead
-            print(infoMsg(self.executable + ' replacement: nothing to do:' + str(self.realCommand)))
+            print(highlightForMode(self.mode, self.executable + ' replacement: nothing to do:' + str(self.realCommand)))
         else:
             #  Do the IR generation first so that if it fails we don't have the Makefile dependencies existing!
             self.runGenerateIrCommand()
@@ -154,14 +151,18 @@ class CommandWrapper:
 
     # allow overriding this for creating empty output files
     def runGenerateIrCommand(self):
-        subprocess.check_call(self.generateIrCommand)
+        self.runCommand('LLVM IR:', self.generateIrCommand)
 
     def runRealCommand(self):
-        subprocess.check_call(self.realCommand)
+        self.runCommand('Original:', self.realCommand)
+
+    def runCommand(self, msg, command):
+        print(highlightForMode(self.mode, msg + ' ' + str(command)))
+        subprocess.check_call(command)
 
     def createEmptyBitcodeFile(self, output):
-        subprocess.check_call([soaapLlvmBinary('clang'), '-c', '-emit-llvm', '-o', output,
-                               '-x', 'c', '/dev/null'])
+        self.runCommand('LLVM IR:', [soaapLlvmBinary('clang'), '-c', '-emit-llvm', '-o', output,
+                                     '-x', 'c', '/dev/null'])
 
     def computeWrapperCommand(self):
         raise NotImplementedError
