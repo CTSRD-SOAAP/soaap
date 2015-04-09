@@ -168,118 +168,8 @@ class CommandWrapper:
         raise NotImplementedError
 
 
-# All clang parameters that expect an argument as next parameters:
-# clang --help-hidden | grep -E -e '\-\w+ <'
-#
-# -ccc-install-dir <value>
-# -ccc-arcmt-migrate <value>
-# -ccc-gcc-name <gcc-path>
-# -ccc-objcmt-migrate <value>
-# -arcmt-migrate-report-output <value>
-# -cxx-isystem <directory>
-# -dependency-dot <value> Filename to write DOT-formatted header dependencies to
-# -dependency-file <value>
-# -fmodules-user-build-path <directory>
-# -F <value>              Add directory to framework include search path
-# -idirafter <value>      Add directory to AFTER include search path
-# -iframework <value>     Add directory to SYSTEM framework search path
-# -imacros <file>         Include macros from file before parsing
-# -include-pch <file>     Include precompiled header file
-# -include <file>         Include file before parsing
-# -iprefix <dir>          Set the -iwithprefix/-iwithprefixbefore prefix
-# -iquote <directory>     Add directory to QUOTE include search path
-# -isysroot <dir>         Set the system root directory (usually /)
-# -isystem <directory>    Add directory to SYSTEM include search path
-# -ivfsoverlay <value>    Overlay the virtual filesystem described by file over the real file system
-# -iwithprefixbefore <dir>
-# -iwithprefix <dir>      Set directory to SYSTEM include search path with prefix
-# -iwithsysroot <directory>
-# -I <value>              Add directory to include search path
-# -MF <file>              Write depfile output from -MMD, -MD, -MM, or -M to <file>
-# -mllvm <value>          Additional arguments to forward to LLVM's option processing
-# -module-dependency-dir <value>
-# -MQ <value>             Specify name of main file output to quote in depfile
-# -MT <value>             Specify name of main file output in depfile
-# -o <file>               Write output to <file>
-# -resource-dir <value>   The directory which holds the compiler resource files
-# -serialize-diagnostics <value>
-# -working-directory <value>
-# -Xanalyzer <arg>        Pass <arg> to the static analyzer
-# -Xassembler <arg>       Pass <arg> to the assembler
-# -Xclang <arg>           Pass <arg> to the clang compiler
-# -Xlinker <arg>          Pass <arg> to the linker
-# -Xpreprocessor <arg>    Pass <arg> to the preprocessor
-# -x <language>           Treat subsequent input files as having type <language>
-# -z <arg>                Pass -z <arg> to the linker
-#
-# And gcc: gcc -v --help | grep -E -e '\-\w+ <'
-#
-# -Xassembler <arg>        Pass <arg> on to the assembler
-# -Xpreprocessor <arg>     Pass <arg> on to the preprocessor
-# -Xlinker <arg>           Pass <arg> on to the linker
-# -B <directory>           Add <directory> to the compiler's search paths
-# -o <file>                Place the output into <file>
-# -x <language>            Specify the language of the following input files
-# -F <dir>                    Add <dir> to the end of the main framework
-# -I <dir>                    Add <dir> to the end of the main include path
-# -MF <file>                  Write dependency output to the given file
-# -MQ <target>                Add a MAKE-quoted target
-# -MT <target>                Add an unquoted target
-# -idirafter <dir>            Add <dir> to the end of the system include path
-# -imacros <file>             Accept definition of macros in <file>
-# -imultilib <dir>            Set <dir> to be the multilib include subdirectory
-# -include <file>             Include the contents of <file> before other files
-# -iprefix <path>             Specify <path> as a prefix for next two options
-# -iquote <dir>               Add <dir> to the end of the quote include path
-# -isysroot <dir>             Set <dir> to be the system root directory
-# -isystem <dir>              Add <dir> to the start of the system include path
-# -iwithprefix <dir>          Add <dir> to the end of the system include path
-# -iwithprefixbefore <dir>    Add <dir> to the end of the main include path
-# -o <file>                   Place output into <file>
-# --param <param>=<value>     Set parameter <param> to value.  See below for a
-# -aux-info <file>            Emit declaration information into <file>
-# -dumpbase <file>            Set the file basename to be used for dumps
-# -dumpdir <dir>              Set the directory name to be used for dumps
-#
-# -imultiarch <dir>           Set <dir> to be the multiarch include subdirectory
-#
-# --base_file <basefile>             Generate a base file for relocatable DLLs
-# --file-alignment <size>            Set file alignment
-# --heap <size>                      Set initial size of the heap
-# --image-base <address>             Set start address of the executable
-# --major-image-version <number>     Set version number of the executable
-# --major-os-version <number>        Set minimum required OS version
-# --major-subsystem-version <number> Set minimum required OS subsystem version
-# --minor-image-version <number>     Set revision number of the executable
-# --minor-os-version <number>        Set minimum required OS revision
-# --minor-subsystem-version <number> Set minimum required OS subsystem revision
-# --section-alignment <size>         Set section alignment
-# --stack <size>                     Set size of the initial stack
-# --subsystem <name>[:<version>]     Set required OS subsystem [& version]
-# --out-implib <file>                Generate import library
-# --output-def <file>                Generate a .DEF file for the built DLL
-# --base_file <basefile>             Generate a base file for relocatable DLLs
-# --file-alignment <size>            Set file alignment
-# --heap <size>                      Set initial size of the heap
-# --image-base <address>             Set start address of the executable
-# --major-image-version <number>     Set version number of the executable
-# --major-os-version <number>        Set minimum required OS version
-# --major-subsystem-version <number> Set minimum required OS subsystem version
-# --minor-image-version <number>     Set revision number of the executable
-# --minor-os-version <number>        Set minimum required OS revision
-# --minor-subsystem-version <number> Set minimum required OS subsystem revision
-# --section-alignment <size>         Set section alignment
-# --stack <size>                     Set size of the initial stack
-# --subsystem <name>[:<version>]     Set required OS subsystem [& version]
-# --out-implib <file>                Generate import library
-# --output-def <file>                Generate a .DEF file for the built DLL
-
 # TODO: check if I missed some
-#
-# -L <dir> as two params is deprecated but still supported
-#
 # TODO: does -lfoo work with a space as well?
-# use set() to make sure that we don't have them twice
 _CLANG_PARAMS_WITH_ARGUMENTS = None
 
 
@@ -287,12 +177,14 @@ def clangParamsWithArgument():
     global _CLANG_PARAMS_WITH_ARGUMENTS
     if _CLANG_PARAMS_WITH_ARGUMENTS:
         return _CLANG_PARAMS_WITH_ARGUMENTS
-    # use a set to make sure they are only included once (might also make search faster)
+    # use a frozenset to make sure they are only included once (will probably also make search faster)
     # generated by running --help and then replacing "^\s*(\-[\w|\-]+)(\s*<.*)" with "        '\1',  #\2"
     _CLANG_PARAMS_WITH_ARGUMENTS = frozenset([
         # -L <dir> is not included here, but it works
         '-L',  # <dir> Add <dir> to linker search path
+        #
         # clang --help-hidden | grep -E -e '\-(\w|\-)+ <' | sort
+        #
         '-arcmt-migrate-report-output',  # <value>
         '-ccc-arcmt-migrate',  # <value>
         '-ccc-gcc-name',  # <gcc-path>
