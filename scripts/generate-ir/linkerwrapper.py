@@ -89,7 +89,20 @@ class LinkerWrapper(CommandWrapper):
                 # ignore all other -XXX flags
                 continue
             elif param.endswith('.so') or '.so.' in param:
-                self.sharedLibs.append(correspondingBitcodeName(param))
+                # strip the directory part if it is a path
+                filename = os.path.basename(param)
+                # remove the leading lib
+                if not filename.startswith('lib'):
+                    raise RuntimeError('Found shared library on command line that doesn\'t start "lib" :' +
+                                       param, self.realCommand)
+                # strip the lib part
+                filename = filename[3:]
+                soIndex = filename.find('.so')
+                # strip everything after .so
+                # TODO: do we want to keep version numbers?
+                lflag = '-l' + filename[:soIndex]
+                # print(param, filename, lflag, sep=', ')
+                self.sharedLibs.append(lflag)
             else:
                 self.linkCandidates.append(param)
 

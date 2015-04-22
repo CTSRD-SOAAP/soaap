@@ -107,6 +107,30 @@ class TestLinkerWrapper(unittest.TestCase):
         self.assertNotIn('-lc', command)
         self.assertNotIn('-lc++', command)
 
+    def testSharedLibsToLFlag(self):
+        # absolute path
+        command = getIrCommand("clang -o foo foo.o /usr/lib/libbar.so".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        # absolute path with spaces
+        command = getIrCommand(["clang", "-o", "foo", "foo.o", "/dir/with space/libbar.so"])
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        # versioned absolute path
+        command = getIrCommand("clang -o foo foo.o /usr/lib/libbar.so.1.2.3".split())
+        # TODO: should we keep the version?
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        # relative path
+        command = getIrCommand("clang -o foo foo.o libs/libbar.so".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        # file name
+        command = getIrCommand("clang -o foo foo.o libbar.so".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        # multiple libraries
+        command = getIrCommand("clang -o foo foo.o libbar.so /lib/libm.so".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lm -lc".split())
+        # not prefixed with lib -> for now this results in an error
+        # TODO: if any project needs this figure out how to skip the 'lib' being automatically added in llvm-link
+        with self.assertRaises(RuntimeError):
+            getIrCommand("clang -o foo foo.o myplugin.so".split())
 
 if __name__ == '__main__':
     unittest.main()
