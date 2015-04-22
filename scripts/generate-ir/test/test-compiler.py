@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2015  Alex Richardson <alr48@cam.ac.uk>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+
+import unittest
+import os
+import sys
+sys.path.insert(0, os.path.abspath(".."))
+
+import compilerwrapper
+
+
+def getIrCommand(realCmd):
+    wrapper = compilerwrapper.CompilerWrapper(realCmd)
+    wrapper.computeWrapperCommand()
+    result = list(wrapper.generateIrCommand)
+    # we don't care about the full path to the compiler here
+    result[0] = os.path.basename(result[0])
+    return result
+
+
+class TestCompilerWrapper(unittest.TestCase):
+    def testBasic(self):
+        command = getIrCommand(['clang++', '-c', 'foo.c'])
+        self.assertEqual(command, ['clang++', '-c', 'foo.c', '-o', 'foo.o.bc',
+                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+        command = getIrCommand(['clang++', '-o', '.obj/foo.o', '-c', 'foo.c'])
+        self.assertEqual(command, ['clang++', '-o', '.obj/foo.o.bc', '-c', 'foo.c',
+                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+
+    def testSpacesRemoved(self):
+        wrapper = compilerwrapper.CompilerWrapper([' clang++', ' -Wall ',  '-c ', ' foo.c '])
+        wrapper.computeWrapperCommand()
+        for val in wrapper.realCommand:
+            self.assertEqual(val, val.strip())
+        for val in wrapper.generateIrCommand:
+            self.assertEqual(val, val.strip())
+
+    def testDebugFlag(self):
+        self.assertIn('-gline-tables-only', getIrCommand(['clang++', '-c', 'foo.c']))
+        command = getIrCommand(['clang++', '-g', '-c', 'foo.c'])
+        self.assertIn('-gline-tables-only', command)
+        self.assertNotIn('-g', command)  # -g must be stripped
+        command = getIrCommand(['clang++', '-ggdb', '-c', 'foo.c'])
+        self.assertIn('-gline-tables-only', command)
+        self.assertNotIn('-g', command)  # same for -ggdb must be stripped
+
+    def testInlineFlags(self):
+        command = getIrCommand(['clang++', '-finline', '-c', 'foo.c'])
+        self.assertIn('-fno-inline', command)
+        self.assertNotIn('-finline', command) # finline mustn't be part of the command line
+
+    def testMuslLibcASM(self):
+        # work around musl libc asm files by compiling the stubs instead
+        command = getIrCommand(['clang++', '-c', 'src/fenv/x86_64/fenv.s'])
+        self.assertEqual(command, ['clang++', '-c', 'src/fenv/fenv.c', '-o', 'src/fenv/fenv.o.bc',
+                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+
+    def testRemoveInvalidArgs(self):
+        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c'])
+        wrapper.computeWrapperCommand()
+        # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+
+        # same again with the flag multiple times
+        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c', '-fexcess-precision=standard'])
+        wrapper.computeWrapperCommand()
+        # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+
+        # same again with '-frounding-math' as well
+        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', '-frounding-math',
+                                                   'foo.c', '-fexcess-precision=standard'])
+        wrapper.computeWrapperCommand()
+        # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
+        self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
+        self.assertNotIn('-frounding-math', wrapper.realCommand)
+        self.assertNotIn('-frounding-math', wrapper.generateIrCommand)
+
+
+if __name__ == '__main__':
+    unittest.main()

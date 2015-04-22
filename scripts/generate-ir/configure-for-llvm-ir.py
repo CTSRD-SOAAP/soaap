@@ -14,6 +14,7 @@ def changeEnvVar(var, value):
     changedEnvVars[var] = value
     print('set', var, 'to', value)
 
+
 def setIrWrapperEnvVar(var, command):
     splitted = command.split()
     command = splitted[0]
@@ -26,7 +27,7 @@ def setIrWrapperEnvVar(var, command):
     changeEnvVar(var, wrapper)
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-#parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
+# parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
 parser.add_argument('-f', required=False, default='./configure', help='configure script override')
 parser.add_argument('--ld', required=False, default='clang', type=str,
                     help='LD wrapper script name (and parameters)')
@@ -74,7 +75,7 @@ if parsedArgs.confirm:
     if len(result) > 0 and result[0] != 'y':
         sys.exit()
 
-os.environ['NO_EMIT_LLVM_IR'] = '1' #  very important, otherwise checks might fail!
+os.environ['NO_EMIT_LLVM_IR'] = '1' # very important, otherwise checks might fail!
 # no need for subprocess.call, just use execve
-os.execve(commandline[0], commandline, os.environ)
+os.execvpe(commandline[0], commandline, os.environ)
 sys.exit('Could not execute ' + str(commandline))
