@@ -113,10 +113,9 @@ class TestLinkerWrapper(unittest.TestCase):
         # absolute path with spaces
         command = getIrCommand(["clang", "-o", "foo", "foo.o", "/dir/with space/libbar.so"])
         self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
-        # versioned absolute path
+        # versioned absolute path (here we keep the suffix)
         command = getIrCommand("clang -o foo foo.o /usr/lib/libbar.so.1.2.3".split())
-        # TODO: should we keep the version?
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar.so.bc.1.2.3 -lc".split())
         # relative path
         command = getIrCommand("clang -o foo foo.o libs/libbar.so".split())
         self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())

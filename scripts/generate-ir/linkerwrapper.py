@@ -97,10 +97,12 @@ class LinkerWrapper(CommandWrapper):
                                        param, self.realCommand)
                 # strip the lib part
                 filename = filename[3:]
-                soIndex = filename.find('.so')
-                # strip everything after .so
-                # TODO: do we want to keep version numbers?
-                lflag = '-l' + filename[:soIndex]
+                # if it ends with .so strip that, but if there is a suffix (version) keep it and get the bitcode name
+                if filename.endswith('.so'):
+                    filename = filename[:filename.find('.so')]
+                else:
+                    filename = correspondingBitcodeName(filename)
+                lflag = '-l' + filename
                 # print(param, filename, lflag, sep=', ')
                 self.sharedLibs.append(lflag)
             else:
