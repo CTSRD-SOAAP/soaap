@@ -24,17 +24,20 @@ import sys
 import tempfile
 sys.path.insert(0, os.path.abspath(".."))
 
-import linkerwrapper
+from linkerwrapper import LinkerWrapper
 from commandwrapper import Mode
 
 
-def getIrCommand(realCmd):
-    wrapper = linkerwrapper.LinkerWrapper(realCmd)
+def getWrapper(realCmd):
+    wrapper = LinkerWrapper(realCmd)
     wrapper.computeWrapperCommand()
-    result = list(wrapper.generateIrCommand)
-    # we don't want the soaap path
-    result[0] = os.path.basename(result[0])
-    return result
+    # we only want the executable name not the full path
+    wrapper.generateIrCommand[0] = os.path.basename(wrapper.generateIrCommand[0])
+    return wrapper
+
+
+def getIrCommand(realCmd):
+    return getWrapper(realCmd).generateIrCommand
 
 
 def removeLibs(command):
@@ -57,17 +60,13 @@ class TestLinkerWrapper(unittest.TestCase):
         cls.tempdir.cleanup()
 
     def testMode(self):
-        wrapper = linkerwrapper.LinkerWrapper('clang -shared foo.o'.split())
-        wrapper.parseCommandLine()
+        wrapper = getWrapper("clang -shared foo.o".split())
         self.assertEqual(wrapper.mode, Mode.shared_lib)
-        wrapper = linkerwrapper.LinkerWrapper('clang++ -o libfoo.so.1.0.0 foo.o'.split())
-        wrapper.parseCommandLine()
+        wrapper = getWrapper("clang++ -o libfoo.so.1.0.0 foo.o".split())
         self.assertEqual(wrapper.mode, Mode.shared_lib)
-        wrapper = linkerwrapper.LinkerWrapper('clang foo.o'.split())
-        wrapper.parseCommandLine()
+        wrapper = getWrapper("clang foo.o".split())
         self.assertEqual(wrapper.mode, Mode.executable)
-        wrapper = linkerwrapper.LinkerWrapper('clang foo.o -o foo'.split())
-        wrapper.parseCommandLine()
+        wrapper = getWrapper("clang foo.o -o foo".split())
         self.assertEqual(wrapper.mode, Mode.executable)
 
     def testBasic(self):
@@ -85,8 +84,8 @@ class TestLinkerWrapper(unittest.TestCase):
         self.assertEqual(command, ['llvm-link', '-o', '.libs/libfoo.so.bc.1.2.3',  'foo.o.bc'])
 
     def testRemoveInvalidArgs(self):
-        wrapper = linkerwrapper.LinkerWrapper(['clang', 'foo.o', '-fexcess-precision=standard'])
-        wrapper.parseCommandLine()
+        wrapper = getWrapper(['clang', 'foo.o', '-fexcess-precision=standard'])
+        # has to also be remove from the real command not just the IR generating one
         self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
         self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
 

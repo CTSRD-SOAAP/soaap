@@ -22,16 +22,21 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(".."))
 
-import compilerwrapper
+from compilerwrapper import CompilerWrapper
+
+
+def getWrapper(realCmd):
+    if type(realCmd) == str:
+        realCmd = realCmd.split()
+    wrapper = CompilerWrapper(realCmd)
+    wrapper.computeWrapperCommand()
+    # we only want the executable name not the full path
+    wrapper.generateIrCommand[0] = os.path.basename(wrapper.generateIrCommand[0])
+    return wrapper
 
 
 def getIrCommand(realCmd):
-    wrapper = compilerwrapper.CompilerWrapper(realCmd)
-    wrapper.computeWrapperCommand()
-    result = list(wrapper.generateIrCommand)
-    # we don't care about the full path to the compiler here
-    result[0] = os.path.basename(result[0])
-    return result
+    return getWrapper(realCmd).generateIrCommand
 
 
 class TestCompilerWrapper(unittest.TestCase):
@@ -44,7 +49,7 @@ class TestCompilerWrapper(unittest.TestCase):
                                    '-gline-tables-only', '-emit-llvm', '-fno-inline'])
 
     def testSpacesRemoved(self):
-        wrapper = compilerwrapper.CompilerWrapper([' clang++', ' -Wall ',  '-c ', ' foo.c '])
+        wrapper = getWrapper([' clang++', ' -Wall ',  '-c ', ' foo.c '])
         wrapper.computeWrapperCommand()
         for val in wrapper.realCommand:
             self.assertEqual(val, val.strip())
@@ -67,28 +72,24 @@ class TestCompilerWrapper(unittest.TestCase):
 
     def testMuslLibcASM(self):
         # work around musl libc asm files by compiling the stubs instead
-        command = getIrCommand(['clang++', '-c', 'src/fenv/x86_64/fenv.s'])
+        command = getIrCommand("clang++ -c src/fenv/x86_64/fenv.s")
         self.assertEqual(command, ['clang++', '-c', 'src/fenv/fenv.c', '-o', 'src/fenv/fenv.o.bc',
                                    '-gline-tables-only', '-emit-llvm', '-fno-inline'])
 
     def testRemoveInvalidArgs(self):
-        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c'])
-        wrapper.computeWrapperCommand()
+        wrapper = getWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c'])
         # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
         self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
         self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
 
         # same again with the flag multiple times
-        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c', '-fexcess-precision=standard'])
-        wrapper.computeWrapperCommand()
+        wrapper = getWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c', '-fexcess-precision=standard'])
         # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
         self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
         self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
 
         # same again with '-frounding-math' as well
-        wrapper = compilerwrapper.CompilerWrapper(['clang++', '-fexcess-precision=standard', '-c', '-frounding-math',
-                                                   'foo.c', '-fexcess-precision=standard'])
-        wrapper.computeWrapperCommand()
+        wrapper = getWrapper("clang++ -fexcess-precision=standard -c -frounding-math foo.c")
         # -fexcess-precision=standard mustn't be part of the command line (real and generate IR)
         self.assertNotIn('-fexcess-precision=standard', wrapper.realCommand)
         self.assertNotIn('-fexcess-precision=standard', wrapper.generateIrCommand)
