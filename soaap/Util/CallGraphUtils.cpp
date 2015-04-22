@@ -37,8 +37,7 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
       if (!isa<IntrinsicInst>(&*I)) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           if (isIndirectCall(C)) {
-            if (MDNode* N = C->getMetadata("dbg")) {
-              DILocation loc(N);
+            if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
               if (!displayedFuncName) {
                 // only display function on first function-pointer call
                 SDEBUG("soaap.util.callgraph", 3, dbgs() << F->getName() << "\n");
@@ -51,7 +50,7 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
                 outs() << INDENT_1 << (status == 0 ? demangled : funcName) << sandboxed << ":\n";
                 displayedFuncName = true;
               }
-              outs() << INDENT_2 << "Call: " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
+              outs() << INDENT_2 << "Call: " << loc->getFilename().str() << ":" << loc->getLine() << "\n";
               SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "IR instruction: " << *C << "\n");
             }
             numFPcalls++;
@@ -72,12 +71,11 @@ void CallGraphUtils::listFPTargets(Module& M, SandboxVector& sandboxes) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           if (isIndirectCall(C)) {
             //C->getCalledValue()->stripPointerCasts()->dump();
-            if (MDNode* N = C->getMetadata("dbg")) {
-              DILocation loc(N);
+            if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
               // only display function on first function-pointer call
               string funcName = F->getName();
               outs() << INDENT_1 << "Function \"" << funcName << "\"\n";
-              outs() << INDENT_2 << "Call at " << loc.getFilename().str() << ":" << loc.getLineNumber() << "\n";
+              outs() << INDENT_2 << "Call at " << loc->getFilename().str() << ":" << loc->getLine() << "\n";
               outs() << INDENT_3 << "Targets:\n";
               if (C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL) { // virtual-call
                 for (Function* T : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
@@ -650,11 +648,10 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   int currInstIdx = 0;
   bool shownDots = false;
   for (Instruction* I : callStack) {
-    if (MDNode *N = I->getMetadata("dbg")) {
-      DILocation Loc(N);
+    if (MDLocation* Loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
       Function* EnclosingFunc = I->getParent()->getParent();
-      unsigned Line = Loc.getLineNumber();
-      StringRef File = Loc.getFilename();
+      unsigned Line = Loc->getLine();
+      StringRef File = Loc->getFilename();
       unsigned FileOnlyIdx = File.find_last_of("/");
       StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
       string library = DebugUtils::getEnclosingLibrary(I);

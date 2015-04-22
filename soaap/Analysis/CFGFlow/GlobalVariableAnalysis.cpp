@@ -228,12 +228,12 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
 pair<string,int> GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
   if (NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu")) {
     for (int i=0; i<NMD->getNumOperands(); i++) {
-      DICompileUnit CU(NMD->getOperand(i));
-      DIArray globals = CU.getGlobalVariables();
-      for (int j=0; j<globals.getNumElements(); j++) {
-        DIGlobalVariable GV(globals.getElement(j));
-        if (GV.getGlobal() == G) {
-          return make_pair<string,int>(GV.getFilename().str(), GV.getLineNumber());
+      MDCompileUnit* CU = cast<MDCompileUnit>(NMD->getOperand(i));
+      MDGlobalVariableArray globals = CU->getGlobalVariables();
+      for (int j=0; j<globals.size(); j++) {
+        MDGlobalVariable* GV = globals[j];
+        if (GV->getVariable() == G) {
+          return make_pair<string,int>(GV->getFilename().str(), GV->getLine());
         }
       }
     }

@@ -332,9 +332,8 @@ void ClassHierarchyUtils::cacheAllCalleesForVirtualCalls(Module& M) {
                 if (staticTypeTIVar != NULL) {
                   dbgs() << "   staticTypeTIVar is: " << staticTypeTIVar->getName() << "\n";
                 }
-                if (MDNode* N = I->getMetadata("dbg")) {
-                  DILocation loc(N);
-                  dbgs() << "   location: " << loc.getFilename() << ":" << loc.getLineNumber() << "\n";
+                if (MDLocation* loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+                  dbgs() << "   location: " << loc->getFilename() << ":" << loc->getLine() << "\n";
                 }
               }
             }
@@ -420,17 +419,15 @@ FunctionSet ClassHierarchyUtils::findAllCalleesForVirtualCall(CallInst* C, Globa
       }
     }
     else {
-      if (MDNode* N = C->getMetadata("dbg")) {
-        DILocation loc(N);
-        dbgs() << "Call location: " << loc.getFilename() << ":" << loc.getLineNumber() << "\n";
+      if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+        dbgs() << "Call location: " << loc->getFilename() << ":" << loc->getLine() << "\n";
       }
       report_fatal_error("V-call sequence does not have a gep where expected");
     }
   }
   else {
-    if (MDNode* N = C->getMetadata("dbg")) {
-      DILocation loc(N);
-      dbgs() << "Call location: " << loc.getFilename() << ":" << loc.getLineNumber() << "\n";
+    if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+      dbgs() << "Call location: " << loc->getFilename() << ":" << loc->getLine() << "\n";
     }
     report_fatal_error("V-call sequence does not have a loadinst where expected");
   }

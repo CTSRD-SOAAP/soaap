@@ -65,9 +65,8 @@ void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
               if (vector.size() <= sysCallIdx || !vector.test(sysCallIdx)) {
                 outs() << " *** Sandbox \"" << S->getName() << "\" performs system call \"" << funcName << "\"";
                 outs() << " but is not allowed to for the given fd arg.\n";
-                if (MDNode *N = C->getMetadata("dbg")) {
-                  DILocation loc(N);
-                  outs() << " +++ Line " << loc.getLineNumber() << " of file "<< loc.getFilename().str() << "\n";
+                if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+                  outs() << " +++ Line " << loc->getLine() << " of file " << loc->getFilename().str() << "\n";
                 }
                 outs() << "\n";
               }

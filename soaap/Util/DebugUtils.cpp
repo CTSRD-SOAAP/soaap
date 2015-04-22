@@ -5,6 +5,7 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace soaap;
 
@@ -19,20 +20,24 @@ void DebugUtils::cacheLibraryMetadata(Module* M) {
       MDString* name = cast<MDString>(lib->getOperand(0).get());
       string nameStr = name->getString().str();
       SDEBUG("soaap.util.debug", 3, dbgs() << "Processing lib " << nameStr << "\n");
-      MDNode* cus = cast<MDNode>(lib->getOperand(1).get());
+      MDTuple* cus = cast<MDTuple>(lib->getOperand(1).get());
       for (int j=0; j<cus->getNumOperands(); j++) {
-        DICompileUnit cu(cast<MDNode>(cus->getOperand(j).get()));
-        DIArray funcs = cu.getSubprograms();
-        for (int k=0; k<funcs.getNumElements(); k++) {
-          DISubprogram func = static_cast<DISubprogram>(funcs.getElement(k));
-          Function* F = func.getFunction();
-          SDEBUG("soaap.util.debug", 4, dbgs() << INDENT_1 << "Found func: " << F->getName() << "\n");
-          if (funcToLib.find(F) != funcToLib.end()) {
-            dbgs() << "WARNING: Function " << F->getName()
-                   << " already exists in library "
-                   << funcToLib[F] << "\n";
+        MDCompileUnit* cu = cast<MDCompileUnit>(cus->getOperand(j).get());
+        MDSubprogramArray funcs = cu->getSubprograms();
+        for (int k=0; k<funcs.size(); k++) {
+          MDSubprogram* func = funcs[k];
+          if (Function* F = func->getFunction()) {
+            SDEBUG("soaap.util.debug", 4, dbgs() << INDENT_1 << "Found func: " << F->getName() << "\n");
+            if (funcToLib.find(F) != funcToLib.end()) {
+              dbgs() << "WARNING: Function " << F->getName()
+                     << " already exists in library "
+                     << funcToLib[F] << "\n";
+            }
+            funcToLib[F] = nameStr;
           }
-          funcToLib[F] = nameStr;
+          else {
+            dbgs() << "DISubprogram \"" << func->getName() << "\" has no Function*\n";
+          }
         }
       }
     }

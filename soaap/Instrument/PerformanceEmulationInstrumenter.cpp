@@ -87,8 +87,8 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
            * above
            */
           if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
-            DIVariable varDbg(dbgDecl->getVariable());
-            string annotatedVarName = varDbg.getName().str();
+            MDLocalVariable* varDbg = dbgDecl->getVariable();
+            string annotatedVarName = varDbg->getName().str();
             Argument* annotatedArg = NULL;
 
             for (Argument &arg : enclosingFunc->getArgumentList()) {
@@ -258,9 +258,8 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
           if (S->containsInstruction(C)) {
             if (cgDebugOutput) {
               dbgs() << "Adding call to soaap_perf_callgate invocation of callgate \"" << CGF->getName() << "\" in sandbox: ";
-              if (MDNode* N = C->getMetadata("dbg")) {
-                DILocation loc(N);
-                dbgs() << loc.getFilename() << ":" << loc.getLineNumber();
+              if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+                dbgs() << loc->getFilename() << ":" << loc->getLine();
               }
               dbgs() << "\n";
             }

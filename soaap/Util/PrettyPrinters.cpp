@@ -19,10 +19,9 @@ void PrettyPrinters::ppPrivilegedPathToFunction(Function* Target, Module& M) {
 void PrettyPrinters::ppTaintSource(CallInst* C) {
   outs() << "    Source of untrusted data:\n";
   Function* EnclosingFunc = cast<Function>(C->getParent()->getParent());
-  if (MDNode *N = C->getMetadata("dbg")) {
-    DILocation Loc(N);
-    unsigned Line = Loc.getLineNumber();
-    StringRef File = Loc.getFilename();
+  if (MDLocation* Loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+    unsigned Line = Loc->getLine();
+    StringRef File = Loc->getFilename();
     unsigned FileOnlyIdx = File.find_last_of("/");
     StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
     outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";
@@ -58,11 +57,10 @@ void PrettyPrinters::ppTrace(InstTrace& trace) {
 }
 
 void PrettyPrinters::ppInstruction(Instruction* I) {
-  if (MDNode *N = I->getMetadata("dbg")) {
-    DILocation Loc(N);
+  if (MDLocation* Loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
     Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
-    unsigned Line = Loc.getLineNumber();
-    StringRef File = Loc.getFilename();
+    unsigned Line = Loc->getLine();
+    StringRef File = Loc->getFilename();
     unsigned FileOnlyIdx = File.find_last_of("/");
     StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
     outs() << "      " << EnclosingFunc->getName() << "(" << FileOnly << ":" << Line << ")\n";

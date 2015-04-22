@@ -395,8 +395,8 @@ void Sandbox::findCapabilities() {
                */
               SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Looking for AllocaDbgDeclare\n");
               if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
-                DIVariable varDbg(dbgDecl->getVariable());
-                string annotatedVarName = varDbg.getName().str();
+                MDLocalVariable* varDbg  = dbgDecl->getVariable();
+                string annotatedVarName = varDbg->getName().str();
                 SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found DbgDeclareInst, annotated var: " << annotatedVarName << "\n");
 
                 // find the annotated parameter

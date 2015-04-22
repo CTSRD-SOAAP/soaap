@@ -2,6 +2,7 @@
 
 #include "Common/Debug.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cstdarg>
 
 using namespace llvm;

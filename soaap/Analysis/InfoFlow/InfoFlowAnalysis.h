@@ -354,11 +354,11 @@ namespace soaap {
         if (AllocaInst* AI = dyn_cast<AllocaInst>(Agg)) {
           if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(AI)) {
             enclosingFunc = AI->getParent()->getParent();
-            DIVariable varDbg(dbgDecl->getVariable());
-            int argNum = varDbg.getArgNumber(); // arg nums start from 1
+            MDLocalVariable* varDbg = dbgDecl->getVariable();
+            int argNum = varDbg->getArg(); // arg nums start from 1
             if (argNum > 0) {
               // Agg is a param 
-              string argName = varDbg.getName().str();
+              string argName = varDbg->getName().str();
               for (Argument &arg : enclosingFunc->getArgumentList()) {
                 if (arg.getName().str() == argName) {
                   A = &arg;
