@@ -20,6 +20,7 @@
 import unittest
 import os
 import sys
+import tempfile
 sys.path.insert(0, os.path.abspath(".."))
 
 import linkerwrapper
@@ -28,9 +29,9 @@ import linkerwrapper
 def getIrCommand(realCmd):
     wrapper = linkerwrapper.ArWrapper(realCmd)
     wrapper.computeWrapperCommand()
+    # we only want the executable name not the full path
+    wrapper.generateIrCommand[0] = os.path.basename(wrapper.generateIrCommand[0])
     result = list(wrapper.generateIrCommand)
-    # we don't care about the full path to the compiler here
-    result[0] = realCmd[0]
     return result
 
 
@@ -50,13 +51,10 @@ class TestArWrapper(unittest.TestCase):
         cls.tempdir.cleanup()
 
     def testBasic(self):
-        command = getIrCommand(['ar', '-cqs', 'foo.o'])
-        self.assertEqual(command, ['clang++', '-c', 'foo.c', '-o', 'foo.o.bc',
-                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
-        command = getIrCommand(['clang++', '-o', '.obj/foo.o', '-c', 'foo.c'])
-        self.assertEqual(command, ['clang++', '-o', '.obj/foo.o.bc', '-c', 'foo.c',
-                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
-
+        command = getIrCommand("ar cqs foo foo.o".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc".split())
+        command = getIrCommand("ar r foo foo.o".split())
+        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc".split())
 
 if __name__ == '__main__':
     unittest.main()
