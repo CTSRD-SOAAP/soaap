@@ -53,7 +53,7 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Processing command-line options\n"; 
   processCmdLineArgs(M);
 
-  XO::open_container("soaap");
+  XO::Container soaapContainer("soaap");
 
   llvm::CallGraph& CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
   LLVMAnalyses::setCallGraphAnalysis(&CG);
@@ -158,7 +158,7 @@ bool Soaap::runOnModule(Module& M) {
 
   }
 
-  XO::close_container("soaap");
+  soaapContainer.close();
   XO::finish();
 
   return false;

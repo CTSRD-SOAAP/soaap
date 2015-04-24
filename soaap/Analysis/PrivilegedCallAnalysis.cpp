@@ -36,7 +36,7 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   }          
 
   // now check calls within sandboxes
-  XO::open_list("privileged_call");
+  XO::List privilegedCallList("privileged_call");
   for (Function* privilegedFunc : privAnnotFuncs) {
     for (User* U : privilegedFunc->users()) {
       if (CallInst* C = dyn_cast<CallInst>(U)) {
@@ -44,7 +44,7 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
           Function* enclosingFunc = C->getParent()->getParent();
           for (Sandbox* S : sandboxes) {
             if (!S->hasCallgate(privilegedFunc) && S->containsFunction(enclosingFunc)) {
-              XO::open_instance("privileged_call");
+              XO::Instance privilegedCallInstance(privilegedCallList);
               XO::emit(" *** Sandbox \"{:sandbox}\" calls privileged function "
                        "\"{:privileged_func/%s}\" that they are not allowed to. "
                        "If intended, annotate this permission using the "
@@ -55,14 +55,13 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
               }
-              XO::close_instance("privileged_call");
             }
           }
         }
       }
     }
   }
-  XO::close_list("privileged_call");
+  privilegedCallList.close();
 
   /*
   for (Sandbox* S : sandboxes) {
