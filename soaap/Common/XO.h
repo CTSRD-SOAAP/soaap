@@ -2,6 +2,7 @@
 #define SOAAP_COMMON_XO_H
 
 #include <cstdio>
+#include <cassert>
 
 extern "C" {
 #include <libxo/xo.h>
@@ -48,7 +49,7 @@ namespace soaap {
       /** Instances should be created by referring to the outer element and not from a constant string */
       class Instance : public RAII<open_instance, close_instance> {
         public:
-          Instance(const List& list) : RAII(list.name) {}
+          Instance(const List& list) : RAII(list.name) { assert(list.name && "Creating element for already closed list!"); }
       };
     private:
       static list<xo_handle_t*> handles;
