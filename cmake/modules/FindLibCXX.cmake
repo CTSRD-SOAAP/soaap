@@ -7,8 +7,9 @@
 #
 
 if (LIBCXX_BUILD_DIR)
+  set(LIBCXX_INCLUDE_DIR "${LIBCXX_BUILD_DIR}/include")
   set(LIBCXX_INCLUDE_DIRS
-    "${LIBCXX_BUILD_DIR}/include"
+    "${LIBCXX_INCLUDE_DIR}"
     "${LIBCXX_SOURCE_DIR}/include")
 
   find_library(LIBCXX_LIBRARY c++
