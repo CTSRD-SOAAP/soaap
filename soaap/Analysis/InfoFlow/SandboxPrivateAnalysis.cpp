@@ -47,7 +47,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
 }
 
 void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  XO::open_list("private_access");
+  XO::List privateAccessList("private_access");
   // validate that sandbox-private data is never accessed in other contexts
   for (Function* F : privilegedMethods) {
     if (shouldOutputWarningFor(F)) {
@@ -62,24 +62,22 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             SDEBUG("soaap.analysis.infoflow.private", 3, v->dump());
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << state[ContextUtils::PRIV_CONTEXT][v] << ", " << SandboxUtils::stringifySandboxNames(state[ContextUtils::PRIV_CONTEXT][v]) << "\n");
             if (state[ContextUtils::PRIV_CONTEXT][v] != 0) {
-              XO::open_instance("private_access");
+              XO::Instance privateAccessInstance(privateAccessList);
               XO::emit(" *** Privileged method \"{:function/%s}\" read data "
                        "value belonging to sandboxes: {d:sandboxes_private/%s}\n",
                        F->getName().str().c_str(),
                        SandboxUtils::stringifySandboxNames(state[ContextUtils::PRIV_CONTEXT][v]).c_str());
-              XO::open_list("sandbox_private");
+              XO::List sandboxPrivateList("sandbox_private");
               for (Sandbox* S : SandboxUtils::convertNamesToVector(state[ContextUtils::PRIV_CONTEXT][v], sandboxes)) {
-                XO::open_instance("sandbox_private");
+                XO::Instance sandboxPrivateInstance(sandboxPrivateList);
                 XO::emit("{e:name/%s}", S->getName().c_str());
-                XO::close_instance("sandbox_private");
               }
-              XO::close_list("sandbox_private");
+              sandboxPrivateList.close();
               InstUtils::emitInstLocation(&I);
               if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(F, NULL, M);
               }
               XO::emit("\n");
-              XO::close_instance("private_access");
             }
           }
         }
@@ -103,33 +101,30 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value: "; v->dump(););
               SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
               if (!(state[S][v] == 0 || (state[S][v] & name) == state[S][v])) {
-                XO::open_instance("private_access");
+                XO::Instance privateAccessInstance(privateAccessList);
                 XO::emit(" *** Sandboxed method \"{:function/%s}\" read data "
                          "value belonging to sandboxes: {d:sandboxes_private/%s} "
                          "but it executes in sandboxes: {d:sandboxes_access/%s}\n",
                          F->getName().str().c_str(),
                          SandboxUtils::stringifySandboxNames(state[S][v]).c_str(),
                          SandboxUtils::stringifySandboxNames(name).c_str());
-                XO::open_list("sandbox_private");
+                XO::List sandboxPrivateList("sandbox_private");
                 for (Sandbox* S : SandboxUtils::convertNamesToVector(state[S][v], sandboxes)) {
-                  XO::open_instance("sandbox_private");
+                  XO::Instance sandboxPrivateInstance(sandboxPrivateList);
                   XO::emit("{e:name/%s}", S->getName().c_str());
-                  XO::close_instance("sandbox_private");
                 }
-                XO::close_list("sandbox_private");
-                XO::open_list("sandbox_access");
+                sandboxPrivateList.close();
+                XO::List sandboxAccessList("sandbox_access");
                 for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                  XO::open_instance("sandbox_access");
+                  XO::Instance sandboxAccessInstance(sandboxAccessList);
                   XO::emit("{e:name/%s}", S->getName().c_str());
-                  XO::close_instance("sandbox_access");
                 }
-                XO::close_list("sandbox_access");
+                sandboxPrivateList.close();
                 InstUtils::emitInstLocation(&I);
                 if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                   CallGraphUtils::emitCallTrace(F, S, M);
                 }
                 XO::emit("\n");
-                XO::close_instance("private_access");
               }
             }
           }
@@ -137,7 +132,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
       }
     }
   }
-  XO::close_list("private_access");
+  privateAccessList.close();
 
   // Validate that data cannot leak out of a sandbox.
   // Currently, SOAAP looks for escapement via:
@@ -149,7 +144,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
   //   5) Assignments to environment variables.
   //   6) Arguments to system calls.
   //   7) Return from the sandbox entrypoint.
-  XO::open_list("private_leak");
+  XO::List privateLeakList("private_leak");
   for (Sandbox* S : sandboxes) {
     FunctionVector sandboxedFuncs = S->getFunctions();
     FunctionVector callgates = S->getCallgates();
@@ -169,7 +164,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 Value* rhs = store->getValueOperand();
                 // if the rhs is private to the current sandbox, then flag an error
                 if (state[S][rhs] & name) {
-                  XO::open_instance("private_leak");
+                  XO::Instance privateLeakInstance(privateLeakList);
                   XO::emit("{e:type/%s}", "global_var");
                   XO::emit(" *** Sandboxed method \"{:function/%s}\" executing "
                            "in sandboxes: {d:sandbox_access/%s} may leak "
@@ -178,19 +173,17 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   F->getName().str().c_str(),
                   SandboxUtils::stringifySandboxNames(name).c_str(),
                   gv->getName().str().c_str());
-                  XO::open_list("sandbox_access");
+                  XO::List sandboxAccessList("sandbox_access");
                   for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                    XO::open_instance("sandbox_access");
+                    XO::Instance sandboxAccessInstance(sandboxAccessList);
                     XO::emit("{e:name/%s}", S->getName().c_str());
-                    XO::close_instance("sandbox_access");
                   }
-                  XO::close_list("sandbox_access");
+                  sandboxAccessList.close();
                   InstUtils::emitInstLocation(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                     CallGraphUtils::emitCallTrace(F, S, M);
                   }
                   XO::emit("\n");
-                  XO::close_instance("private_leak");
                 }
               }
             }
@@ -201,7 +194,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 if (Callee->getName() == "setenv") {
                   Value* arg = call->getArgOperand(1);
                   if (state[S][arg] & name) {
-                    XO::open_instance("private_leak");
+                    XO::Instance privateLeakInstance(privateLeakList);
                     XO::emit("{e:type/%s}", "env_var");
                     XO::emit(" *** Sandboxed method \"{:function}\" executing "
                              "in sandboxes: {d:sandboxes/%s} may leak private "
@@ -214,19 +207,17 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::emit("\"{:env_var/%s}\"", envVarName.c_str());
                     }
                     XO::emit("\n");
-                    XO::open_list("sandbox_access");
+                    XO::List sandboxAccessList("sandbox_access");
                     for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                      XO::open_instance("sandbox_access");
+                      XO::Instance sandboxAccessInstance(sandboxAccessList);
                       XO::emit("{e:name/%s}", S->getName().c_str());
-                      XO::close_instance("sandbox_access");
                     }
-                    XO::close_list("sandbox_access");
+                    sandboxAccessList.close();
                     InstUtils::emitInstLocation(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
                     }
                     XO::emit("\n");
-                    XO::close_instance("private_leak");
                   }
                 }
                 else if (Callee->getBasicBlockList().empty()) {
@@ -235,7 +226,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                     Value* arg = dyn_cast<Value>(AI->get());
                     if (state[S][arg] & name) {
-                      XO::open_instance("private_leak");
+                      XO::Instance privateLeakInstance(privateLeakList);
                       XO::emit("{e:type/%s}", "extern");
                       XO::emit(" *** Sandboxed method \"{:function}\" executing "
                                "in sandboxes: {d:sandboxes/%s} may leak private "
@@ -243,19 +234,17 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                                F->getName().str().c_str(),
                                SandboxUtils::stringifySandboxNames(name).c_str(),
                                Callee->getName().str().c_str());
-                      XO::open_list("sandbox_access");
+                      XO::List sandboxAccessList("sandbox_access");
                       for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                        XO::open_instance("sandbox_access");
+                        XO::Instance sandboxAccessInstance(sandboxAccessList);
                         XO::emit("{e:name/%s}", S->getName().c_str());
-                        XO::close_instance("sandbox_access");
                       }
-                      XO::close_list("sandbox_access");
+                      sandboxAccessList.close();
                       InstUtils::emitInstLocation(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
                       }
                       XO::emit("\n");
-                      XO::close_instance("private_leak");
                     }
                   }
                 }
@@ -264,7 +253,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                     Value* arg = dyn_cast<Value>(AI->get());
                     if (state[S][arg] & name) {
-                      XO::open_instance("private_leak");
+                      XO::Instance privateLeakInstance(privateLeakList);
                       XO::emit("{e:type/%s}", "callgate");
                       XO::emit(" *** Sandboxed method \"{:function}\" executing "
                                "in sandboxes: {d:sandboxes/%s} may leak private "
@@ -277,7 +266,6 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                         CallGraphUtils::emitCallTrace(F, S, M);
                       }
                       XO::emit("\n");
-                      XO::close_instance("private_leak");
                     }
                   }
                   XO::emit("\n");
@@ -295,7 +283,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     }
                     
                     if (privateArg) {
-                      XO::open_instance("private_leak");
+                      XO::Instance privateLeakInstance(privateLeakList);
                       XO::emit("{e:type/%s}", "cross_sandbox");
                       XO::emit(" *** Sandboxed method \"{:function}\" executing "
                                "in sandboxes: {d:sandboxes/%s} may leak private "
@@ -304,19 +292,17 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                                F->getName().str().c_str(),
                                SandboxUtils::stringifySandboxNames(name).c_str(),
                                S2->getName().c_str());
-                      XO::open_list("sandbox_access");
+                      XO::List sandboxAccessList("sandbox_access");
                       for (Sandbox* S : SandboxUtils::convertNamesToVector(name, sandboxes)) {
-                        XO::open_instance("sandbox_access");
+                        XO::Instance sandboxAccessInstance(sandboxAccessList);
                         XO::emit("{e:name/%s}", S->getName().c_str());
-                        XO::close_instance("sandbox_access");
                       }
-                      XO::close_list("sandbox_access");
+                      sandboxAccessList.close();
                       InstUtils::emitInstLocation(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
                       }
                       XO::emit("\n");
-                      XO::close_instance("private_leak");
                     }
                   }
                 }
@@ -327,7 +313,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               if (S->isEntryPoint(F)) {
                 if (Value* retVal = ret->getReturnValue()) {
                   if (state[S][retVal] & name) {
-                    XO::open_instance("private_leak");
+                    XO::Instance privateLeakInstance(privateLeakList);
                     XO::emit("{e:type/%s}", "return_from_entrypoint");
                     XO::emit(" *** Sandbox \"{:sandbox/%s}\" "
                              "may leak private data when returning a value "
@@ -338,7 +324,6 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
                     }
-                    XO::close_instance("private_leak");
                   }
                 }
               }
@@ -348,7 +333,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
       }
     }
   }
-  XO::close_list("private_leak");
+  privateLeakList.close();
 }
 
 bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {

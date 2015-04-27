@@ -54,7 +54,7 @@ void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, Sa
 
 // check all system calls made within sandboxes
 void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
-  XO::open_list("syscall_warning");
+  XO::List syscallWarningList("syscall_warning");
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
@@ -85,7 +85,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
 
             // Show warning if system call is not allowed
             if (!sysCallAllowed) {
-              XO::open_instance("syscall_warning");
+              XO::Instance syscallWarningInstance(syscallWarningList);
               XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
                        "\"{:syscall/%s}\" but it is not allowed to,\n"
                        " *** based on the current sandboxing restrictions.\n",
@@ -97,14 +97,12 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
                 CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
               }
               XO::emit("\n");
-              XO::close_instance("syscall_warning");
             }
           }
         }
       }
     }
   }
-  XO::close_list("syscall_warning");
 }
 
 bool SysCallsAnalysis::allowedToPerformNamedSystemCallAtSandboxedPoint(Instruction* I, string sysCall) {

@@ -25,7 +25,5 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-// CHECK: *** Function "f2" has been annotated as only being allowed to execute in the sandboxes: [mybox2] but it executes in the sandboxes: [mybox1] of which [mybox1] are disallowed
-// CHECK-NEXT: Possible trace ([mybox1]):
-// CHECK-NEXT:      foo ({{.*}}:21)
-// CHECK-NEXT:      main ({{.*}}:29)
+// CHECK-DAG: *** Sandboxed method "foo" [mybox] wrote to global variable "x" ({{.*}}) but is not allowed
+// CHECK-DAG: *** Sandboxed method "bar" [mybox] wrote to global variable "x" ({{.*}}) but is not allowed

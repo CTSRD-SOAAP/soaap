@@ -132,26 +132,22 @@ void CallGraphUtils::loadAnnotatedInferredCallGraphEdges(Module& M, SandboxVecto
         }
       }
     }
-    XO::open_list("callgraph_record");
+    XO::List callgraphRecordList("callgraph_record");
     for (pair<Function*,map<Function*,int> > p : funcToCalleeCallCounts) {
-      XO::open_instance("callgraph_record");
+      XO::Instance callgraphRecordInstance(callgraphRecordList);
       Function* caller = p.first;
       XO::emit("{:caller/%s}\n", caller->getName().str().c_str());
-      XO::open_list("callee_count");
+      XO::List calleeCountList("callee_count");
       for (pair<Function*,int> p2 : p.second) {
-        XO::open_instance("callee_count");
+        XO::Instance calleeCountInstance(calleeCountList);
         Function* callee = p2.first;
         int callCount = p2.second;
         XO::emit("  -> {:callee/%s}, {:call_count/%d}\n",
                  callee->getName().str().c_str(),
                  callCount);
-        XO::close_instance("callee_count");
       }
-      XO::close_list("callee_count");
       XO::emit("\n");
-      XO::close_instance("callgraph_record");
     }
-    XO::close_list("callgraph_record");
   }
 
 }
@@ -580,7 +576,7 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
 }
 
 void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
-  XO::open_list("trace");
+  XO::List traceList("trace");
   XO::emit(" Possible trace ({d:context}):\n", ContextUtils::stringifyContext(S ? S : ContextUtils::PRIV_CONTEXT).c_str());
   InstTrace callStack = S
     ? findSandboxedPathToFunction(Target, S, M)
@@ -596,7 +592,7 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
       StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
       string library = DebugUtils::getEnclosingLibrary(I);
 
-      XO::open_instance("trace");
+      XO::Instance traceInstance(traceList);
       bool printCall = CmdLineOpts::SummariseTraces <= 0
                         || currInstIdx < CmdLineOpts::SummariseTraces
                         || (callStack.size()-(currInstIdx+1))
@@ -604,7 +600,7 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
       if (printCall) {
         XO::emit("      {:function/%s} ",
                   EnclosingFunc->getName().str().c_str());
-        XO::open_container("location");
+        XO::Container locationContainer("location");
         XO::emit("({:file/%s}:{:line/%d})",
                   FileOnly.str().c_str(),
                   Line);
@@ -612,7 +608,6 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
           XO::emit(" [{:library/%s} library]", library.c_str());
         }
         XO::emit("\n");
-        XO::close_container("location");
       }
       else {
         // output call only in machine-readable reports, and
@@ -625,21 +620,18 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
         }
         XO::emit("{e:function/%s}",
                   EnclosingFunc->getName().str().c_str());
-        XO::open_container("location");
+        XO::Container locationContainer("location");
         XO::emit("{e:file/%s}{e:line/%d}",
                   FileOnly.str().c_str(),
                   Line);
         if (!library.empty()) {
           XO::emit("{e:library/%s}", library.c_str());
         }
-        XO::close_container("location");
       }
-      XO::close_instance("trace");
     }
     currInstIdx++;
   }
   //XO::emit("\n\n");
-  XO::close_list("trace");
 }
 
 FPTargetsAnalysis& CallGraphUtils::getFPInferredTargetsAnalysis() {

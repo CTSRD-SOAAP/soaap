@@ -141,7 +141,7 @@ void RPCGraph::build(SandboxVector& sandboxes, FunctionSet& privilegedMethods, M
 void RPCGraph::dump(Module& M) {
   //map<Sandbox*,SmallVector<RPCCallRecord, 16>>
   //typedef std::tuple<CallInst*,string,Sandbox*,Function*> RPCCallRecord;
-  XO::open_list("rpc_call");
+  XO::List rpcCallList("rpc_call");
   for (map<Sandbox*,SmallVector<RPCCallRecord,16>>::iterator I=rpcLinks.begin(), E=rpcLinks.end(); I!=E; I++) {
     Sandbox* S = I->first;
     SmallVector<RPCCallRecord,16> Calls = I->second;
@@ -151,7 +151,7 @@ void RPCGraph::dump(Module& M) {
       Function* Source = Call->getParent()->getParent();
       Sandbox* Dest = get<2>(R);
       Function* Handler = get<3>(R);
-      XO::open_instance("rpc_call");
+      XO::Instance rpcCallInstance(rpcCallList);
       XO::emit("{:sender_func/%s} ({:sender_sandbox/%s}) ---{:message_type/%s}--> ",
         Source->getName().str().c_str(), getName(S).str().c_str(),
         get<1>(R).c_str());
@@ -167,10 +167,9 @@ void RPCGraph::dump(Module& M) {
       if (CmdLineOpts::SysCallTraces) {
         CallGraphUtils::emitCallTrace(Source, S, M);
       }
-      XO::close_instance("rpc_call");
     }
   }
-  XO::close_list("rpc_call");
+  rpcCallList.close();
 
   // output clusters
   map<Sandbox*,set<Function*> > sandboxToSendRecvFuncs;

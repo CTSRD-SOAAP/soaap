@@ -154,7 +154,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
   //
   // TODO: check that error messages appropriate for both types of annotations
   //
-  XO::open_list("cap_rights_warning");
+  XO::List capRightsWarningList("cap_rights_warning");
   for (Sandbox* S : sandboxes) {
     SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "sandbox: " << S->getName() << "\n")
     for (CallInst* C : S->getCalls()) {
@@ -197,7 +197,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
               }
 
               if (noRights) {
-                XO::open_instance("cap_rights_warning");
+                XO::Instance capRightsWarning(capRightsWarningList);
                 XO::emit(" *** Sandbox \"{:sandbox/%s}\" performs system call "
                          "\"{:syscall/%s}\" but is not allowed to for the "
                          "given fd arg.\n",
@@ -208,7 +208,6 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
                   CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
                 }
                 XO::emit("\n");
-                XO::close_instance("cap_rights_warning");
               }
             }
           }
@@ -216,7 +215,6 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
       }
     }
   }
-  XO::close_list("cap_rights_warning");
 }
 
 string CapabilitySysCallsAnalysis::stringifyFact(BitVector vector) {

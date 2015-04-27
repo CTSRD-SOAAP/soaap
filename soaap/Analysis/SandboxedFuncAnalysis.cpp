@@ -56,7 +56,7 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
   }
 
   // now check calls within sandboxes
-  XO::open_list("sandboxed_func");
+  XO::List sandboxedFuncList("sandboxed_func");
   for (pair<Function*,SandboxVector> p : funcToSandboxes) {
     Function* F = p.first;
     if (shouldOutputWarningFor(F)) {
@@ -79,7 +79,7 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
       // now output the warning
       if (outputWarning) {
         XO::emit("\n");
-        XO::open_instance("sandboxed_func");
+        XO::Instance sandboxedFuncInstance(sandboxedFuncList);
         XO::emit("{e:function}", F->getName().str().c_str());
         
         // output first bit of warning, as it is common
@@ -89,27 +89,25 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                    F->getName().str().c_str());
         }
         else {
-          XO::open_list("sandbox_restriction");
+          XO::List sandboxRestrictionList("sandbox_restriction");
           for (Sandbox* S : sandboxingRestriction) {
-            XO::open_instance("sandbox_restriction");
+            XO::Instance sandboxRestrictionInstance(sandboxRestrictionList);
             XO::emit("{e:name/%s}", S->getName().c_str());
-            XO::close_instance("sandbox_restriction");
           }
-          XO::close_list("sandbox_restriction");
+          sandboxRestrictionList.close();
           XO::emit(" *** Function \"{d:function}\" has been annotated as only being allowed to execute in the sandboxes: {d:restricted_sandboxes} but ",
                    F->getName().str().c_str(),
                    SandboxUtils::stringifySandboxVector(sandboxingRestriction).c_str());
         }
 
-        XO::open_list("sandbox_violation");
+        XO::List sandboxViolationList("sandbox_violation");
         if (privileged) {
-          XO::open_instance("sandbox_violation");
+          XO::Instance sandboxViolationInstance(sandboxViolationList);
           XO::emit("{e:type/privileged}");
           XO::emit("it may execute in a privileged context\n");
           if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
             CallGraphUtils::emitCallTrace(F, NULL, M);
           }
-          XO::close_instance("sandbox_violation");
         }
 
         if (!disallowedSandboxes.empty()) {
@@ -119,7 +117,7 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                    SandboxUtils::stringifySandboxVector(disallowedSandboxes).c_str());
           bool first = true;
           for (Sandbox* S : disallowedSandboxes) {
-            XO::open_instance("sandbox_violation");
+            XO::Instance sandboxViolationInstance(sandboxViolationList);
             XO::emit("{e:type/sandbox}{e:name/%s}", S->getName().c_str());
             if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
               if (!first) {
@@ -128,14 +126,11 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               //XO::emit(" Sandbox: {d:sandbox}\n", S->getName().c_str());
               CallGraphUtils::emitCallTrace(F, S, M);
             }
-            XO::close_instance("sandbox_violation");
             first = false;
           }
         }
-        XO::close_instance("sandboxed_func");
         XO::emit("\n");
       }
     }
   }
-  XO::close_list("sandboxed_func");
 }
