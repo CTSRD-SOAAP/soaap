@@ -26,6 +26,7 @@ fi
 
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} || exit 1
+echo '*' > ${BUILD_DIR}/.gitignore
 cd ${BUILD_DIR} || exit 1
 
 PATH=${PATH}:${LLVM_PREFIX}/bin \
