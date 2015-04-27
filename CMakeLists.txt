@@ -80,31 +80,17 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 
 # libxo
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-  set(GMAKE "make")
+set(LIBXO_NEED_VERSION "0.2.0")
+
+include(FindLibXO)
+if ("${LIBXO_VERSION}" STREQUAL ${LIBXO_NEED_VERSION})
+  message(STATUS "Found libxo: ${LIBXO_PREFIX}")
 else()
-  set(GMAKE "gmake")
-endif()
+  include(ExternalLibXO)
+  message(STATUS "Building libxo: ${LIBXO_PREFIX}")
+endif ()
 
-include(ExternalProject)
-ExternalProject_Add(libxo
-  GIT_REPOSITORY https://github.com/Juniper/libxo.git
-  GIT_TAG 0.2.0
-  BUILD_IN_SOURCE 1
-  CONFIGURE_COMMAND rm -rf configure m4
-                    COMMAND sh bin/setup.sh
-                    COMMAND cd build
-                    COMMAND ../configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-  BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE}
-  INSTALL_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE} install
-  STEP_TARGETS build install
-)
-
-ExternalProject_Get_Property(libxo install_dir)
-include_directories(${install_dir}/include)
-set(LIBXO_LIBDIR ${install_dir}/lib)
-link_directories(${LIBXO_LIBDIR})
-message(STATUS "Found libxo: ${LIBXO_LIBDIR}")
+include_directories(${LIBXO_INCLUDE_DIRS})
 
 # Default to libc++ if installed
 find_package(LibCXX)
