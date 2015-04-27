@@ -324,7 +324,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             }
             else if (ReturnInst* ret = dyn_cast<ReturnInst>(&I)) {
               // we are returning from the sandbox entrypoint function
-              if (F == S->getEntryPoint()) {
+              if (S->isEntryPoint(F)) {
                 if (Value* retVal = ret->getReturnValue()) {
                   if (state[S][retVal] & name) {
                     XO::open_instance("private_leak");

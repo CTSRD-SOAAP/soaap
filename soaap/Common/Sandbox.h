@@ -12,11 +12,11 @@ namespace soaap {
   typedef map<GlobalVariable*,int> GlobalVariableIntMap;
   class Sandbox : public Context {
     public:
-      Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c);
+      Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c);
       Sandbox(string n, int i, InstVector& region, bool p, Module& m);
       string getName();
       int getNameIdx();
-      Function* getEntryPoint();
+      FunctionSet getEntryPoints();
       Function* getEnclosingFunc();
       bool isRegionWithin(Function* F);
       FunctionVector getFunctions();
@@ -28,6 +28,7 @@ namespace soaap {
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
       FunctionVector getCallgates();
       bool isCallgate(Function* F);
+      bool isEntryPoint(Function* F);
       int getClearances();
       int getOverhead();
       bool isPersistent();
@@ -46,7 +47,7 @@ namespace soaap {
       Module& module;
       string name;
       int nameIdx;
-      Function* entryPoint;
+      FunctionSet entryPoints;
       InstVector region;
       bool persistent;
       int clearances;

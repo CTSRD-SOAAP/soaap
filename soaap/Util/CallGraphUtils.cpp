@@ -225,22 +225,32 @@ void CallGraphUtils::buildBasicCallGraph(Module& M, SandboxVector& sandboxes) {
 
   if (Function* MainFn = M.getFunction("main")) {
     set<Function*> visited;
-    buildBasicCallGraphHelper(M, sandboxes, MainFn, ContextUtils::PRIV_CONTEXT, visited);
+    FunctionSet initialFuncs;
+    initialFuncs.insert(MainFn);
+    buildBasicCallGraphHelper(M, sandboxes, initialFuncs, ContextUtils::PRIV_CONTEXT, visited);
   }
 
   for (Sandbox* S : sandboxes) {
     set<Function*> visited;
-    buildBasicCallGraphHelper(M, sandboxes, S->getEntryPoint(), S, visited);
+    buildBasicCallGraphHelper(M, sandboxes, S->getEntryPoints(), S, visited);
   }
 
 }
 
-void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, Function* entryPoint, Context* Ctx, set<Function*>& visited) {
+void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandboxes, FunctionSet initialFuncs, Context* Ctx, set<Function*>& visited) {
   
   vector<Function*> worklist;
   set<Function*> processed;
   
-  worklist.push_back(entryPoint);
+  if (initialFuncs.empty()) {
+    // this is the outermost level of a sandboxed region
+    worklist.push_back(nullptr);
+  }
+  else {
+    for (Function* F : initialFuncs) {
+      worklist.push_back(F);
+    }
+  }
 
   while (!worklist.empty()) {
     Function* F = worklist.back();
@@ -310,78 +320,6 @@ void CallGraphUtils::buildBasicCallGraphHelper(Module& M, SandboxVector& sandbox
     }
   }
 
-}
-
-void CallGraphUtils::buildBasicCallGraphHelperRecursive(Module& M, SandboxVector& sandboxes, Function* F, Context* Ctx, set<Function*>& visited) {
-  
-  static int nestingDepth = 0;
-
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << "Nesting depth: " << nestingDepth << "\n");
-
-  if (F && F->isDeclaration()) {
-    return;
-  }
-
-  if (visited.count(F) > 0) {
-    // cycle
-    return;
-  }
-
-  // check for change of context. TODO: check callgates
-  if (SandboxUtils::isSandboxEntryPoint(M, F) && SandboxUtils::getSandboxForEntryPoint(F, sandboxes) != Ctx) {
-    return;
-  }
-  
-  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_2 << "Processing " << (F ? F->getName() : "sandboxed region") << "\n");
-  
-  CallInstVector calls;
-
-  if (!F) {
-    // we are at the outermost level of a sandboxed region
-    Sandbox* S = dyn_cast<Sandbox>(Ctx);
-    for (Instruction* I : S->getRegion()) {
-      if (CallInst* C = dyn_cast<CallInst>(I)) {
-        calls.push_back(C);
-      }
-    }
-  }
-  else {
-    visited.insert(F);
-    for (inst_iterator I=inst_begin(F), E=inst_end(F); I != E; I++) {
-      if (Ctx == ContextUtils::PRIV_CONTEXT && SandboxUtils::isWithinSandboxedRegion(&*I, sandboxes)) {
-        continue; // skip
-      }
-      if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-        calls.push_back(C);
-      }
-    }
-  }
-
-  for (CallInst* C : calls) {
-    FunctionSet callees;
-    if (Function* callee = getDirectCallee(C)) {
-      if (!callee->isIntrinsic()) {
-        SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding direct callee " << callee->getName() << "\n");
-        callees.insert(callee);
-      }
-    }
-    else if (Value* FP = C->getCalledValue()->stripPointerCasts())  { // c++ virtual funcs
-      bool isVCall = C->getMetadata("soaap_defining_vtable_var") != NULL || C->getMetadata("soaap_defining_vtable_name") != NULL;
-      if (isVCall) {
-        for (Function* callee : ClassHierarchyUtils::getCalleesForVirtualCall(C, M)) {
-          SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_3 << "Adding virtual-callee " << callee->getName() << "\n");
-          callees.insert(callee);
-        }
-      }
-    }
-
-    addCallees(C, Ctx, callees, false);
-    for (Function* callee : callees) {
-      nestingDepth++;
-      buildBasicCallGraphHelperRecursive(M, sandboxes, callee, Ctx, visited);
-      nestingDepth--;
-    }
-  }
 }
 
 bool CallGraphUtils::isIndirectCall(CallInst* C) {
@@ -467,7 +405,7 @@ bool CallGraphUtils::isReachableFromHelper(Function* Source, Function* Curr, Fun
   else if (visited.count(Curr) > 0) {
     return false;
   }
-  else if (SandboxUtils::isSandboxEntryPoint(M, Curr) && (Ctx != NULL && Ctx->getEntryPoint() != Curr)) {
+  else if (SandboxUtils::isSandboxEntryPoint(M, Curr) && (Ctx != NULL && !Ctx->isEntryPoint(Curr))) {
     return false;
   }
   else {
@@ -512,7 +450,7 @@ void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privil
     // b) in the non-privileged case, if N is a sandbox entrypoint it must be S's
     // (i.e. in both case we are not entering a different protection domain)
     if (!(privileged && SandboxUtils::isSandboxEntryPoint(M, F2))
-        && !(!privileged && SandboxUtils::isSandboxEntryPoint(M, F2) && F2 != S->getEntryPoint())){
+        && !(!privileged && SandboxUtils::isSandboxEntryPoint(M, F2) && !S->isEntryPoint(F2))){
       for (CallGraphEdge E : getCallGraphEdges(F2, S ? S : ContextUtils::PRIV_CONTEXT, M)) {
         CallInst* C = E.first;
         Function* SuccFunc = E.second;
@@ -564,15 +502,17 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
   SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path to function \"" << Target->getName() << "\" (from main)\n");
   InstTrace privStack;
   InstTrace sboxStack;
-  if (Function* F = S->getEntryPoint()) {
-    SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path for function-level sandbox\n");
-    if (funcToShortestCallPaths[F].empty()) {
-      SDEBUG("soaap.util.callgraph", 3, dbgs() << "populating short call paths (from " << F->getName() << ") cache\n");
-      calculateShortestCallPathsFromFunc(F, false, S, M);
+  if (!S->getEntryPoints().empty()) {
+    for (Function* F : S->getEntryPoints()) {
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path for function-level sandbox\n");
+      if (funcToShortestCallPaths[F].empty()) {
+        SDEBUG("soaap.util.callgraph", 3, dbgs() << "populating short call paths (from " << F->getName() << ") cache\n");
+        calculateShortestCallPathsFromFunc(F, false, S, M);
+      }
+      // Find path to Target (in sandbox S) from main() and via S's entrypoint
+      privStack = findPrivilegedPathToFunction(F,M);
+      sboxStack = funcToShortestCallPaths[F][Target];
     }
-    // Find path to Target (in sandbox S) from main() and via S's entrypoint
-    privStack = findPrivilegedPathToFunction(F,M);
-    sboxStack = funcToShortestCallPaths[F][Target];
   }
   else {
     SDEBUG("soaap.util.callgraph", 3, dbgs() << "finding sandboxed path for sandboxed region\n");

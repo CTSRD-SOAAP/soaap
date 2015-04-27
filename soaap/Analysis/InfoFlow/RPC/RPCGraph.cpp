@@ -205,7 +205,7 @@ void RPCGraph::dump(Module& M) {
         funcToId[S][F] = nextFuncId++;
       }
       myfile << "\t\tn" << funcToId[S][F] << " [label=\"" << F->getName().str() << "\"";
-      if (S != NULL && S->getEntryPoint() == F) {
+      if (S != NULL && S->isEntryPoint(F)) {
         myfile << ",style=\"bold\"";
       }
       myfile << "];\n";

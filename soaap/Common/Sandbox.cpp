@@ -20,12 +20,12 @@
 
 using namespace soaap;
 
-Sandbox::Sandbox(string n, int i, Function* entry, bool p, Module& m, int o, int c) 
-  : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoint(entry), persistent(p), module(m), overhead(o), clearances(c) {
+Sandbox::Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c) 
+  : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoints(entries), persistent(p), module(m), overhead(o), clearances(c) {
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
-  : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), entryPoint(NULL), persistent(p), module(m), overhead(0), clearances(0) {
+  : Context(CK_SANDBOX), name(n), nameIdx(i), region(r), persistent(p), module(m), overhead(0), clearances(0) {
 }
 
 void Sandbox::init() {
@@ -37,7 +37,7 @@ void Sandbox::init() {
   findSharedGlobalVariables();
 	SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding callgates\n");
   findCallgates();
-  if (entryPoint) {
+  if (!entryPoints.empty()) {
 	  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding capabilities\n");
     findCapabilities();
   }
@@ -65,12 +65,12 @@ void Sandbox::reinit() {
   init();
 }
 
-Function* Sandbox::getEntryPoint() {
-  return entryPoint;
+FunctionSet Sandbox::getEntryPoints() {
+  return entryPoints;
 }
 
 Function* Sandbox::getEnclosingFunc() {
-  if (entryPoint == NULL) {
+  if (entryPoints.empty()) {
     Instruction* firstI = region.front();
     return firstI->getParent()->getParent();
   }
@@ -78,7 +78,7 @@ Function* Sandbox::getEnclosingFunc() {
 } 
 
 bool Sandbox::isRegionWithin(Function* F) {
-  if (entryPoint == NULL) {
+  if (entryPoints.empty()) {
     if (!region.empty()) {
       Instruction* firstI = region.front();
       Function* enclosingFunc = firstI->getParent()->getParent();
@@ -157,7 +157,7 @@ bool Sandbox::containsFunction(Function* F) {
 }
 
 bool Sandbox::containsInstruction(Instruction* I) {
-  if (entryPoint == NULL) {
+  if (entryPoints.empty()) {
     // This is a sandboxed region; first search the top-level
     // instructions in it.
     if (find(region.begin(), region.end(), I) != region.end()) {
@@ -175,7 +175,7 @@ bool Sandbox::hasCallgate(Function* F) {
 
 void Sandbox::findSandboxedFunctions() {
   FunctionVector initialFuncs;
-  if (entryPoint == NULL) {
+  if (entryPoints.empty()) {
     // scan the code region for the set of top-level functions being called
     for (Instruction* I : region) {
       if (CallInst* C  = dyn_cast<CallInst>(I)) {
@@ -189,7 +189,9 @@ void Sandbox::findSandboxedFunctions() {
     }
   }
   else {
-    initialFuncs.push_back(entryPoint);
+    for (Function* F : entryPoints) {
+      initialFuncs.push_back(F);
+    }
   }
   for (Function* F : initialFuncs) {
     findSandboxedFunctionsHelper(F);
@@ -206,7 +208,7 @@ void Sandbox::findSandboxedFunctionsHelper(Function* F) {
   }
 
   // check if entry point to another sandbox
-  if (SandboxUtils::isSandboxEntryPoint(module, F) && F != entryPoint) {
+  if (SandboxUtils::isSandboxEntryPoint(module, F) && !isEntryPoint(F)) {
     return;
   }
 
@@ -230,7 +232,7 @@ void Sandbox::findSandboxedCalls() {
   }
   // if this sandbox doesn't have an entrypoint then search region instructions also
   // At the same time also record top-level call insts
-  if (entryPoint == NULL) {
+  if (entryPoints.empty()) {
     for (Instruction* I : region) {
       if (CallInst* C = dyn_cast<CallInst>(I)) {
         callInsts.push_back(C);
@@ -239,9 +241,11 @@ void Sandbox::findSandboxedCalls() {
     }
   }
   else {
-    for (inst_iterator I=inst_begin(entryPoint), E=inst_end(entryPoint); I!=E; I++) {
-      if (CallInst* C = dyn_cast<CallInst>(&*I)) {
-        tlCallInsts.push_back(C);
+    for (Function* entryPoint : entryPoints) {
+      for (inst_iterator I=inst_begin(entryPoint), E=inst_end(entryPoint); I!=E; I++) {
+        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+          tlCallInsts.push_back(C);
+        }
       }
     }
   }
@@ -372,119 +376,121 @@ void Sandbox::findCapabilities() {
    * @.str3 = private unnamed_addr constant [30 x i8] c"../../tests/test-param-decl.c\00", section "llvm.metadata"
    */
    
-  for (BasicBlock& BB : entryPoint->getBasicBlockList()) {
-    for (Instruction& I : BB.getInstList()) {
-      if (CallInst* call = dyn_cast<CallInst>(&I)) {
-        if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(call)) {
-          switch (II->getIntrinsicID()) {
-            case Intrinsic::var_annotation: {
-              Value* annotatedVar = dyn_cast<Value>(call->getOperand(0)->stripPointerCasts());
+  for (Function* entryPoint : entryPoints) {
+    for (BasicBlock& BB : entryPoint->getBasicBlockList()) {
+      for (Instruction& I : BB.getInstList()) {
+        if (CallInst* call = dyn_cast<CallInst>(&I)) {
+          if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(call)) {
+            switch (II->getIntrinsicID()) {
+              case Intrinsic::var_annotation: {
+                Value* annotatedVar = dyn_cast<Value>(call->getOperand(0)->stripPointerCasts());
 
-              GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(call->getOperand(1)->stripPointerCasts());
-              ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-              StringRef annotationStrValStr = annotationStrValArray->getAsCString();
+                GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(call->getOperand(1)->stripPointerCasts());
+                ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+                StringRef annotationStrValStr = annotationStrValArray->getAsCString();
 
-              SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Annotation: " << annotationStrValStr << "\n");
+                SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Annotation: " << annotationStrValStr << "\n");
 
-              /*
-               * Find out the enclosing function and record which
-               * param was annotated. We have to do this because
-               * llvm creates a local var for the param by appending
-               * '.addr1' and associates the annotation with the newly
-               * created local var i.e. see ifd and ifd.addr1 above
-               */
-              SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Looking for AllocaDbgDeclare\n");
-              if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
-                MDLocalVariable* varDbg  = dbgDecl->getVariable();
-                string annotatedVarName = varDbg->getName().str();
-                SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found DbgDeclareInst, annotated var: " << annotatedVarName << "\n");
+                /*
+                 * Find out the enclosing function and record which
+                 * param was annotated. We have to do this because
+                 * llvm creates a local var for the param by appending
+                 * '.addr1' and associates the annotation with the newly
+                 * created local var i.e. see ifd and ifd.addr1 above
+                 */
+                SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Looking for AllocaDbgDeclare\n");
+                if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar)) {
+                  MDLocalVariable* varDbg  = dbgDecl->getVariable();
+                  string annotatedVarName = varDbg->getName().str();
+                  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found DbgDeclareInst, annotated var: " << annotatedVarName << "\n");
 
-                // find the annotated parameter
-                Argument* annotatedArg = NULL;
-                for (Argument& arg : entryPoint->getArgumentList()) {
-                  if (arg.getName().str() == annotatedVarName) {
-                    annotatedArg = &arg;
-                  }
-                }
-
-                if (annotatedArg != NULL) {
-                  if (annotationStrValStr.startswith(SOAAP_FD)) {
-                    FunctionSet sysCalls;
-                    int subStrStartIdx = strlen(SOAAP_FD) + 1; //+1 because of _
-                    string sysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
-                    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
-                    istringstream ss(sysCallListCsv);
-                    string sysCallName;
-                    while(getline(ss, sysCallName, ',')) {
-                      // trim leading and trailing spaces
-                      size_t start = sysCallName.find_first_not_of(" ");
-                      size_t end = sysCallName.find_last_not_of(" ");
-                      sysCallName = sysCallName.substr(start, end-start+1);
-                      SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
-                      if (sysCallName == SOAAP_NO_SYSCALLS_ALLOWED) {
-                        // Defensive: ideally no other system calls should have been listed
-                        // but we play it safe and remove any that may have been annotated 
-                        sysCalls.clear();
-                        break;
-                      }
-                      if (Function* sysCallFn = module.getFunction(sysCallName)) {
-                        SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
-                        sysCalls.insert(sysCallFn);
-                      }
+                  // find the annotated parameter
+                  Argument* annotatedArg = NULL;
+                  for (Argument& arg : entryPoint->getArgumentList()) {
+                    if (arg.getName().str() == annotatedVarName) {
+                      annotatedArg = &arg;
                     }
-                    caps[annotatedArg] = sysCalls;
                   }
-                  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
-                }
-              }
-              break;
-            }
-            case Intrinsic::ptr_annotation: {
-              // annotation on struct member
-              Value* annotatedVar = dyn_cast<Value>(II->getOperand(0)->stripPointerCasts());
 
-              GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(II->getOperand(1)->stripPointerCasts());
-              ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
-              StringRef annotationStrValStr = annotationStrValArray->getAsCString();
-              
-              if (annotationStrValStr.startswith(SOAAP_FD)) {
-                int subStrStartIdx = strlen(SOAAP_FD) + 1; //+1 because of _
-                string sandboxNameAndSysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
-                size_t quotePos = sandboxNameAndSysCallListCsv.find("\"");
-                if (quotePos != string::npos) {
-                  size_t quote2Pos = sandboxNameAndSysCallListCsv.find("\"", quotePos+1);
-                  if (quote2Pos != string::npos) {
-                    string sandboxName = sandboxNameAndSysCallListCsv.substr(quotePos+1, quote2Pos-(quotePos+1));
-                    if (sandboxName == name) {
-                      outs() << "sandbox name: \"" << sandboxName << "\"\n";
-                      string sysCallListCsv = sandboxNameAndSysCallListCsv.substr(quote2Pos+1);
-                      outs() << "sysCallList: " << sysCallListCsv << "\n";
+                  if (annotatedArg != NULL) {
+                    if (annotationStrValStr.startswith(SOAAP_FD)) {
                       FunctionSet sysCalls;
+                      int subStrStartIdx = strlen(SOAAP_FD) + 1; //+1 because of _
+                      string sysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
                       SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
                       istringstream ss(sysCallListCsv);
                       string sysCallName;
                       while(getline(ss, sysCallName, ',')) {
-                        outs() << "syscall: " << sysCallName << "\n";
                         // trim leading and trailing spaces
                         size_t start = sysCallName.find_first_not_of(" ");
                         size_t end = sysCallName.find_last_not_of(" ");
-                        if (start != string::npos && end != string::npos) {
-                          sysCallName = sysCallName.substr(start, end-start+1);
-                          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
-                          if (Function* sysCallFn = module.getFunction(sysCallName)) {
-                            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
-                            sysCalls.insert(sysCallFn);
-                          }
+                        sysCallName = sysCallName.substr(start, end-start+1);
+                        SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
+                        if (sysCallName == SOAAP_NO_SYSCALLS_ALLOWED) {
+                          // Defensive: ideally no other system calls should have been listed
+                          // but we play it safe and remove any that may have been annotated 
+                          sysCalls.clear();
+                          break;
+                        }
+                        if (Function* sysCallFn = module.getFunction(sysCallName)) {
+                          SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
+                          sysCalls.insert(sysCallFn);
                         }
                       }
-                      caps[II] = sysCalls;
+                      caps[annotatedArg] = sysCalls;
+                    }
+                    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
+                  }
+                }
+                break;
+              }
+              case Intrinsic::ptr_annotation: {
+                // annotation on struct member
+                Value* annotatedVar = dyn_cast<Value>(II->getOperand(0)->stripPointerCasts());
+
+                GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(II->getOperand(1)->stripPointerCasts());
+                ConstantDataArray* annotationStrValArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+                StringRef annotationStrValStr = annotationStrValArray->getAsCString();
+                
+                if (annotationStrValStr.startswith(SOAAP_FD)) {
+                  int subStrStartIdx = strlen(SOAAP_FD) + 1; //+1 because of _
+                  string sandboxNameAndSysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
+                  size_t quotePos = sandboxNameAndSysCallListCsv.find("\"");
+                  if (quotePos != string::npos) {
+                    size_t quote2Pos = sandboxNameAndSysCallListCsv.find("\"", quotePos+1);
+                    if (quote2Pos != string::npos) {
+                      string sandboxName = sandboxNameAndSysCallListCsv.substr(quotePos+1, quote2Pos-(quotePos+1));
+                      if (sandboxName == name) {
+                        outs() << "sandbox name: \"" << sandboxName << "\"\n";
+                        string sysCallListCsv = sandboxNameAndSysCallListCsv.substr(quote2Pos+1);
+                        outs() << "sysCallList: " << sysCallListCsv << "\n";
+                        FunctionSet sysCalls;
+                        SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
+                        istringstream ss(sysCallListCsv);
+                        string sysCallName;
+                        while(getline(ss, sysCallName, ',')) {
+                          outs() << "syscall: " << sysCallName << "\n";
+                          // trim leading and trailing spaces
+                          size_t start = sysCallName.find_first_not_of(" ");
+                          size_t end = sysCallName.find_last_not_of(" ");
+                          if (start != string::npos && end != string::npos) {
+                            sysCallName = sysCallName.substr(start, end-start+1);
+                            SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Syscall: " << sysCallName << "\n");
+                            if (Function* sysCallFn = module.getFunction(sysCallName)) {
+                              SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
+                              sysCalls.insert(sysCallFn);
+                            }
+                          }
+                        }
+                        caps[II] = sysCalls;
+                      }
                     }
                   }
                 }
+                break;
               }
-              break;
+              default: { }
             }
-            default: { }
           }
         }
       }
@@ -534,7 +540,7 @@ void Sandbox::findAllowedSysCalls() {
         if (annotationStrValCString.startswith(SOAAP_SYSCALLS)) {
           // is this annotate call within this sandbox?
           bool inThisSandbox = false;
-          if (entryPoint == NULL) {
+          if (entryPoints.empty()) {
             // first scan the code region for annotateCall
             for (Instruction* I : region) {
               if (I == annotateCall) {
@@ -618,10 +624,10 @@ bool Sandbox::validateCreationPointsHelper(BasicBlock* BB, BasicBlockVector& vis
         FunctionSet callees = CallGraphUtils::getCallees(CI, ContextUtils::PRIV_CONTEXT, module);
         for (Function* callee : callees) {
           if (callee->isDeclaration()) continue;
-          if (callee == entryPoint) {
+          if (isEntryPoint(callee)) {
             // error
             outs() << "\n";
-            outs() << " *** Found call to sandbox entrypoint \"" << entryPoint->getName() << "\" that is not preceded by sandbox creation\n";
+            outs() << " *** Found call to sandbox entrypoint \"" << callee->getName() << "\" that is not preceded by sandbox creation\n";
             outs() << " Possible trace:\n";
             PrettyPrinters::ppTrace(trace);
             outs() << "\n";
@@ -732,4 +738,8 @@ ValueSet Sandbox::getPrivateData() {
 
 InstVector Sandbox::getRegion() {
   return region;
+}
+
+bool Sandbox::isEntryPoint(Function* F) {
+  return entryPoints.count(F) == 1;
 }

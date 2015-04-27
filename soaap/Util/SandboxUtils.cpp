@@ -93,7 +93,8 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   FunctionIntMap funcToOverhead;
   FunctionIntMap funcToClearances;
   map<Function*,string> funcToSandboxName;
-  FunctionVector ephemeralSandboxes;
+  map<string,FunctionSet> sandboxNameToEntryPoints;
+  StringSet ephemeralSandboxes;
 
   SandboxVector sandboxes;
 
@@ -122,7 +123,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
           }
           else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
             sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_EPHEMERAL)+1);
-            ephemeralSandboxes.push_back(annotatedFunc);
+            ephemeralSandboxes.insert(sandboxName);
           }
           outs() << INDENT_2 << "Sandbox name: " << sandboxName << "\n";
           if (funcToSandboxName.find(annotatedFunc) != funcToSandboxName.end()) {
@@ -130,6 +131,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
           }
           else {
             funcToSandboxName[annotatedFunc] = sandboxName;
+            sandboxNameToEntryPoints[sandboxName].insert(annotatedFunc);
           }
         }
         else if (sboxPerfRegex->match(annotationStrArrayCString, &matches)) {
@@ -152,6 +154,30 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   // TODO: sanity check overhead and clearance annotations
 
   // Combine all annotation information for function-level sandboxes to create Sandbox instances
+  for (pair<string,FunctionSet> p : sandboxNameToEntryPoints) {
+    string sandboxName = p.first;
+    FunctionSet entryPoints = p.second;
+    int idx = assignBitIdxToSandboxName(sandboxName);
+    int overhead = 0;
+    int clearances = 0; 
+    bool persistent = find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), sandboxName) == ephemeralSandboxes.end();
+
+    // set overhead and clearances; any of the entry points could be annotated
+    for (Function* entryPoint : entryPoints) {
+      if (funcToOverhead.find(entryPoint) != funcToOverhead.end()) {
+        overhead = funcToOverhead[entryPoint];
+      }
+      if (funcToClearances.find(entryPoint) != funcToClearances.end()) {
+        clearances = funcToClearances[entryPoint];
+      }
+    }
+
+		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Creating new Sandbox instance for " << sandboxName << "\n");
+    sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoints, persistent, M, overhead, clearances));
+		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Created new Sandbox instance\n");
+  }
+
+  /*
   for (map<Function*,string>::iterator I=funcToSandboxName.begin(), E=funcToSandboxName.end(); I!=E; I++) {
     Function* entryPoint = I->first;
     string sandboxName = I->second;
@@ -163,6 +189,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoint, persistent, M, overhead, clearances));
 		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Created new Sandbox instance\n");
   }
+  */
 
   // Handle sandboxed code regions, i.e. start_sandboxed_code(N) and end_sandboxed_code(N) blocks 
   if (Function* SboxStart = M.getFunction("llvm.annotation.i32")) {
@@ -431,7 +458,7 @@ bool SandboxUtils::isPrivilegedInstruction(Instruction* I, SandboxVector& sandbo
 
 Sandbox* SandboxUtils::getSandboxForEntryPoint(Function* F, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
-    if (S->getEntryPoint() == F) {
+    if (S->isEntryPoint(F)) {
       return S;
     }
   }
@@ -529,7 +556,7 @@ void SandboxUtils::validateSandboxCreations(SandboxVector& sandboxes) {
 
 bool SandboxUtils::isWithinSandboxedRegion(Instruction* I, SandboxVector& sandboxes) {
   for (Sandbox* S : sandboxes) {
-    if (S->getEntryPoint() == NULL) {
+    if (S->getEntryPoints().empty()) {
       InstVector region = S->getRegion();
       if (find(region.begin(), region.end(), I) != region.end()) {
         return true;
