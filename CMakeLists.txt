@@ -90,6 +90,11 @@ else()
   message(STATUS "Building libxo: ${LIBXO_PREFIX}")
 endif ()
 
+# NOTE: CMake discourages the use of global link_directories(), but this
+#       seems to be the only way we can work with an external project:
+#       the output files aren't exposed by the build, so we can't link
+#       against libraries directly (dependency without build details).
+link_directories(${LIBXO_PREFIX}/lib)
 include_directories(${LIBXO_INCLUDE_DIRS})
 
 # Default to libc++ if installed
