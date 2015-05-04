@@ -42,7 +42,7 @@
 #define PAST_VULNERABILITY "PAST_VULNERABILITY"
 #define __soaap_vuln_fn(CVE) __attribute__((annotate(PAST_VULNERABILITY "_" CVE))) __attribute__((noinline))
 #define __soaap_vuln_pt(CVE) __soaap_past_vulnerability_at_point(CVE);
-__attribute__((noinline)) static void __soaap_past_vulnerability_at_point(char* cve) {
+__attribute__((noinline)) static void __soaap_past_vulnerability_at_point(const char* cve) {
   int result;
   // hack to prevent LLVM from inlining cve
   __asm__ volatile( "addl %%ebx, %%eax;"
@@ -174,8 +174,8 @@ __attribute__((noinline)) static void __soaap_declassify(void* v) { }
 #define SOAAP_FD_SETTER "SOAAP_FD_SETTER"
 #define __soaap_fd_setter __attribute__((annotate(SOAAP_FD_SETTER))) __attribute__((noinline))
 
-__attribute__((noinline)) static void __soaap_rpc_send_helper(char* recipient, char* message_type,...) { }
-__attribute__((noinline)) static void __soaap_rpc_send_recv_helper(char* recipient, char* message_type,...) { }
+__attribute__((noinline)) static void __soaap_rpc_send_helper(const char* recipient, char* message_type,...) { }
+__attribute__((noinline)) static void __soaap_rpc_send_recv_helper(const char* recipient, char* message_type,...) { }
 #define __soaap_rpc_send(RECIPIENT, MESSAGE_TYPE) \
   __soaap_rpc_send_helper(RECIPIENT, #MESSAGE_TYPE);
 #define __soaap_rpc_send_with_params(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
@@ -183,8 +183,8 @@ __attribute__((noinline)) static void __soaap_rpc_send_recv_helper(char* recipie
 //#define __soaap_rpc_send_recv_sync(RECIPIENT, MESSAGE_TYPE, PARAMS...) \
 //  __soaap_rpc_send_recv_helper(RECIPIENT, #MESSAGE_TYPE, PARAMS);
 
-__attribute__((noinline)) static void __soaap_rpc_recv_helper(char* sender, char* message_type, void* handler) { }
-__attribute__((noinline)) static void __soaap_rpc_recv_sync_helper(char* sender, char* message_type) { }
+__attribute__((noinline)) static void __soaap_rpc_recv_helper(const char* sender, char* message_type, void* handler) { }
+__attribute__((noinline)) static void __soaap_rpc_recv_sync_helper(const char* sender, char* message_type) { }
 #define __soaap_rpc_recv(SENDER, MESSAGE_TYPE, HANDLER) \
   __soaap_rpc_recv_helper(SENDER, #MESSAGE_TYPE, HANDLER);
 #define __soaap_rpc_recv_sync(SENDER, MESSAGE_TYPE) \
