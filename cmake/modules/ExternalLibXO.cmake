@@ -26,7 +26,9 @@ ExternalProject_Add(libxo
                     COMMAND ../configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
   BUILD_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE}
   INSTALL_COMMAND cd <SOURCE_DIR>/build COMMAND ${GMAKE} install
-  PATCH_COMMAND patch < ${CMAKE_SOURCE_DIR}/patches/libxo.patch
+  PATCH_COMMAND
+    patch --forward --quiet -i ${CMAKE_SOURCE_DIR}/patches/libxo.patch
+    || true    # `patch` returns non-zero if the only hunk is alreaady applied
   STEP_TARGETS build install
 )
 
