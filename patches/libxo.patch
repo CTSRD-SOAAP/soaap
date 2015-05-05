@@ -1,0 +1,11 @@
+--- libxo/xo.h	2015-05-05 17:00:41.556176962 +0000
++++ libxo/xo.h	2015-05-05 16:52:23.705312518 +0000
+@@ -17,6 +17,8 @@
+ #ifndef INCLUDE_XO_H
+ #define INCLUDE_XO_H
+ 
++#include <stdarg.h>
++
+ /** Formatting types */
+ typedef unsigned xo_style_t;
+ #define XO_STYLE_TEXT	0	/** Generate text output */
