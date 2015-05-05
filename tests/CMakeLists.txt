@@ -12,21 +12,8 @@ else ()
   set(LIT_OPTIONS "-qv")
 endif ()
 
-
-#
-# If we have David's llvm-lit patch, we can export XUnit-style XML to be
-# read by continuous integration tools like Jenkins.
-#
-set(EXPORT_XUNIT_XML false CACHE BOOL
-    "Export test results as XUnit XML (requires David's lit patches")
-
-if (EXPORT_XUNIT_XML)
-  message(STATUS "Will export test results XUnit XML")
-  set(LIT_EXTRA --junit-xml-output=test-results.xml)
-else ()
-  message(STATUS "Will not export test results XUnit XML")
-endif ()
-
+# Export test results to XUnit XML format.
+set(LIT_EXTRA --xunit-xml-output=test-results.xml)
 
 #
 # Have we set platform-specific CFLAGS for tests?
