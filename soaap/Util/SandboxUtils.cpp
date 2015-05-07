@@ -388,13 +388,13 @@ void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string sboxName,
   }
   // TODO: XO::emit?
   errs() << "Sandbox '" << sboxName << "' starts at ";
-  if (MDLocation* loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+  if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
     errs() << loc->getFilename().str() << ':' << loc->getLine();
   } else {
     errs() << "<unknown location>";
   }
   errs() << " and ends at ";
-  if (MDLocation* loc = dyn_cast_or_null<MDLocation>(endInstr->getMetadata("dbg"))) {
+  if (DILocation* loc = dyn_cast_or_null<DILocation>(endInstr->getMetadata("dbg"))) {
     errs() << loc->getFilename().str() << ':' << loc->getLine() << '\n';
   } else {
     errs() << "<unknown location>\n";
@@ -504,7 +504,7 @@ void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
       // get filename of file
       Instruction* I = F->getEntryBlock().getTerminator();
       //dbgs() << INDENT_3 << "I: " << *I << "\n";
-      if (MDLocation* loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+      if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
         outs() << " (" << loc->getFilename().str() << ")";
       }
       outs() << "\n";
@@ -520,7 +520,7 @@ void SandboxUtils::outputPrivilegedFunctions() {
     outs() << INDENT_2 << F->getName();
     // output location
     Instruction* I = F->getEntryBlock().getTerminator();
-    if (MDLocation* loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+    if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
       outs() << " (" << loc->getFilename().str() << ")";
     }
     outs() << "\n";

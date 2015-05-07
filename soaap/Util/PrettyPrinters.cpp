@@ -19,7 +19,7 @@ void PrettyPrinters::ppPrivilegedPathToFunction(Function* Target, Module& M) {
 void PrettyPrinters::ppTaintSource(CallInst* C) {
   outs() << "    Source of untrusted data:\n";
   Function* EnclosingFunc = cast<Function>(C->getParent()->getParent());
-  if (MDLocation* Loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+  if (DILocation* Loc = dyn_cast_or_null<DILocation>(C->getMetadata("dbg"))) {
     unsigned Line = Loc->getLine();
     StringRef File = Loc->getFilename();
     unsigned FileOnlyIdx = File.find_last_of("/");
@@ -57,7 +57,7 @@ void PrettyPrinters::ppTrace(InstTrace& trace) {
 }
 
 void PrettyPrinters::ppInstruction(Instruction* I) {
-  if (MDLocation* Loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+  if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
     Function* EnclosingFunc = cast<Function>(I->getParent()->getParent());
     unsigned Line = Loc->getLine();
     StringRef File = Loc->getFilename();

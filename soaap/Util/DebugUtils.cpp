@@ -22,10 +22,10 @@ void DebugUtils::cacheLibraryMetadata(Module* M) {
       SDEBUG("soaap.util.debug", 3, dbgs() << "Processing lib " << nameStr << "\n");
       MDTuple* cus = cast<MDTuple>(lib->getOperand(1).get());
       for (int j=0; j<cus->getNumOperands(); j++) {
-        MDCompileUnit* cu = cast<MDCompileUnit>(cus->getOperand(j).get());
-        MDSubprogramArray funcs = cu->getSubprograms();
+        DICompileUnit* cu = cast<DICompileUnit>(cus->getOperand(j).get());
+        DISubprogramArray funcs = cu->getSubprograms();
         for (int k=0; k<funcs.size(); k++) {
-          MDSubprogram* func = funcs[k];
+          DISubprogram* func = funcs[k];
           if (Function* F = func->getFunction()) {
             SDEBUG("soaap.util.debug", 4, dbgs() << INDENT_1 << "Found func: " << F->getName() << "\n");
             if (funcToLib.find(F) != funcToLib.end()) {

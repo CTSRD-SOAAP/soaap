@@ -8,7 +8,7 @@
 using namespace soaap;
 
 void InstUtils::emitInstLocation(Instruction* I) {
-  if (MDLocation* loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+  if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
     XO::Container locationContainer("location");
     XO::emit(
       " +++ Line {:line/%d} of file {:file/%s}",

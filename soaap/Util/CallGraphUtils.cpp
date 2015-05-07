@@ -37,7 +37,7 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
       if (!isa<IntrinsicInst>(&*I)) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           if (isIndirectCall(C)) {
-            if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+            if (DILocation* loc = dyn_cast_or_null<DILocation>(C->getMetadata("dbg"))) {
               if (!displayedFuncName) {
                 // only display function on first function-pointer call
                 SDEBUG("soaap.util.callgraph", 3, dbgs() << F->getName() << "\n");
@@ -71,7 +71,7 @@ void CallGraphUtils::listFPTargets(Module& M, SandboxVector& sandboxes) {
         if (CallInst* C = dyn_cast<CallInst>(&*I)) {
           if (isIndirectCall(C)) {
             //C->getCalledValue()->stripPointerCasts()->dump();
-            if (MDLocation* loc = dyn_cast_or_null<MDLocation>(C->getMetadata("dbg"))) {
+            if (DILocation* loc = dyn_cast_or_null<DILocation>(C->getMetadata("dbg"))) {
               // only display function on first function-pointer call
               string funcName = F->getName();
               outs() << INDENT_1 << "Function \"" << funcName << "\"\n";
@@ -584,7 +584,7 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   int currInstIdx = 0;
   bool shownDots = false;
   for (Instruction* I : callStack) {
-    if (MDLocation* Loc = dyn_cast_or_null<MDLocation>(I->getMetadata("dbg"))) {
+    if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
       Function* EnclosingFunc = I->getParent()->getParent();
       unsigned Line = Loc->getLine();
       StringRef File = Loc->getFilename();

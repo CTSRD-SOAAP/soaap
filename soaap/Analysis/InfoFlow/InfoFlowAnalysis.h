@@ -354,7 +354,7 @@ namespace soaap {
         if (AllocaInst* AI = dyn_cast<AllocaInst>(Agg)) {
           if (DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(AI)) {
             enclosingFunc = AI->getParent()->getParent();
-            MDLocalVariable* varDbg = dbgDecl->getVariable();
+            DILocalVariable* varDbg = dbgDecl->getVariable();
             int argNum = varDbg->getArg(); // arg nums start from 1
             if (argNum > 0) {
               // Agg is a param 
