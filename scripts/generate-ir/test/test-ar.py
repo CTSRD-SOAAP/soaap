@@ -1,4 +1,23 @@
-#!/usr/bin/env python3
+#! /bin/sh
+# This file is used as both a shell script and as a Python script.
+""":"
+# This part is run by the shell.  It looks for an appropriate Python
+# interpreter then uses it to re-exec this script.
+
+if test `which python3`
+then
+  echo "Py3 found"
+  PYTHON=`which python3`
+elif test `which python2`
+then
+  PYTHON=`which python2`
+else
+  echo 1>&2 "No usable Python interpreter was found!"
+  exit 1
+fi
+
+exec $PYTHON "$0" "$@"
+" """
 #
 # Copyright (C) 2015  Alex Richardson <alr48@cam.ac.uk>
 #
@@ -55,6 +74,10 @@ class TestArWrapper(unittest.TestCase):
         self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc".split())
         command = getIrCommand("ar r foo foo.o".split())
         self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc".split())
+
+    def testMultipleDef(self):
+        command = getIrCommand("ar r foo foo.o foo.o".split())
+        self.assertEqual(command, "llvm-link -o foo.bc --override foo.o.bc --override foo.o.bc".split())
 
 if __name__ == '__main__':
     unittest.main()
