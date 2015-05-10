@@ -28,7 +28,7 @@ class CompilerWrapper(CommandWrapper):
         self.mode = Mode.object_file
 
     def computeWrapperCommand(self):
-        assert '-c' in self.realCommand
+        assert '-c' in self.realCommand or '-S' in self.realCommand
 
         self.mode = Mode.object_file
         self.generateIrCommand.append(soaapLlvmBinary(self.executable))  # clang or clang++
@@ -77,14 +77,19 @@ class CompilerWrapper(CommandWrapper):
             else:
                 # this must be an input file
                 if param.endswith('.s') or param.endswith('.S'):
+                    valid = False
                     if '/x86_64/' in param:
                         origParam = param
                         # workaround for musl libc: compile the stub files instead
-                        param = param.replace('/x86_64/', '/').replace('.s', '.c')
-                        print(infoMsg('Workaround for musl libc: ' + origParam + ' -> ' + param))
-                    elif os.getenv('SKIP_ASSEMBLY_FILES'):
+                        param = param.replace('/x86_64/', '/').replace('.s', '.c').replace('.S', '.c')
+                        if os.path.isfile(param):
+                            print(infoMsg('Workaround for musl libc: ' + origParam + ' -> ' + param))
+                            valid = True
+                    if os.getenv('SKIP_ASSEMBLY_FILES'):
                         self.generateEmptyOutput = True
-                    else:
+                        valid = True
+
+                    if not valid:
                         raise RuntimeError('Attempting to compile assembly file (export SKIP_ASSEMBLY_FILES=1' +
                                            ' to generate an empty file instead): ', param, self.realCommand)
                 inputFiles.append(param)
