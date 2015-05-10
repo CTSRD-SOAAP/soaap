@@ -21,12 +21,7 @@ import sys
 import subprocess
 from enum import Enum
 from termcolor import colored
-
-#  TODO: let cmake set this at configure time
-SOAAP_LLVM_BINDIR = os.getenv('SOAAP_LLVM_BINDIR', os.path.expanduser('~') + '/devel/soaap/llvm/release-build/bin/')
-if not os.path.isdir(SOAAP_LLVM_BINDIR):
-    sys.exit('could not find SOAAP_LLVM_BINDIR, please make sure the env var is set correctly')
-
+from checksetup import *
 
 def errorMsg(msg):
     if not os.isatty(sys.stdout.fileno()):
