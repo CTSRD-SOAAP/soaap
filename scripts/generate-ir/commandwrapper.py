@@ -125,7 +125,7 @@ class CommandWrapper:
         assert self.realCommand[0]
 
     def run(self):
-        if os.getenv('NO_EMIT_LLVM_IR'):
+        if os.getenv('NO_EMIT_LLVM_IR') or '--version' in self.realCommand or '--help' in self.realCommand:
             os.execv(self.realCommand[0], self.realCommand)
             raise RuntimeError('execve failed!')
 
