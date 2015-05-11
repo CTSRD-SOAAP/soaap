@@ -271,6 +271,15 @@ void Soaap::processCmdLineArgs(Module& M) {
   if (CmdLineOpts::Mode != SoaapMode::Custom) {
     CmdLineOpts::SoaapAnalyses.clear();
     switch (CmdLineOpts::Mode) {
+      case SoaapMode::All: {
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Vuln);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Globals);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SysCalls);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::PrivCalls);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::SandboxedFuncs);
+        CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::InfoFlow);
+        break;
+      }
       case SoaapMode::Vuln: {
         CmdLineOpts::SoaapAnalyses.push_back(SoaapAnalysis::Vuln);
         break;
