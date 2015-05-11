@@ -143,7 +143,11 @@ class ArWrapper(CommandWrapper):
 
         self.output = correspondingBitcodeName(self.realCommand[2])
         self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
-        self.generateIrCommand.extend(findBitcodeFiles(self.realCommand[3:]))
+        for file in findBitcodeFiles(self.realCommand[3:]):
+            if self.replacement:
+                # we add the --override flag to make sure multiple definitions are fine
+                self.generateIrCommand.append('--override')
+            self.generateIrCommand.append(file)
 
     def runGenerateIrCommand(self):
         if self.generateEmptyOutput:
@@ -154,11 +158,17 @@ class ArWrapper(CommandWrapper):
                 self.createEmptyBitcodeFile(tmp.name)
                 self.generateIrCommand.append(tmp.name)
                 super().runGenerateIrCommand()
-        elif self.replacement and os.path.isfile(self.output):
+        elif self.replacement:
             with tempfile.TemporaryDirectory() as tmpdir:
                 movedInput = os.path.join(tmpdir, os.path.basename(self.output))
-                shutil.move(self.output, movedInput)
-                self.generateIrCommand.append(movedInput)
+                # create an empty input file if it doesn't exist yet to make sure llvm-link has the right number of params
+                if os.path.isfile(self.output):
+                    shutil.move(self.output, movedInput)
+                else:
+                    self.createEmptyBitcodeFile(movedInput)
+
+                self.generateIrCommand.insert(3, movedInput)
+                self.generateIrCommand.insert(3, '-v')
                 print('Moved input:', movedInput)
                 # input('About to run: ' + str(self.generateIrCommand))
                 super().runGenerateIrCommand()

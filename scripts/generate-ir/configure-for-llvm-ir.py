@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import pprint
+from checksetup import *
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 changedEnvVars = {}

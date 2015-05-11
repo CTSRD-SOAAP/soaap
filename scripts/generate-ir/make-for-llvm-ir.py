@@ -6,6 +6,8 @@ import re
 import subprocess
 import sys
 
+from checksetup import *
+
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 overrides = {}
 

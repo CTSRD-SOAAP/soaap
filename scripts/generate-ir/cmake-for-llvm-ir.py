@@ -2,6 +2,7 @@
 
 import sys
 import os
+from checksetup import *
 
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 
