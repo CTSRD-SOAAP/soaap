@@ -164,9 +164,7 @@ void RPCGraph::dump(Module& M) {
       else {
         XO::emit("<handler missing>\n");
       }
-      if (CmdLineOpts::SysCallTraces) {
-        CallGraphUtils::emitCallTrace(Source, S, M);
-      }
+      CallGraphUtils::emitCallTrace(Source, S, M);
     }
   }
   rpcCallList.close();

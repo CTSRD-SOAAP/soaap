@@ -159,12 +159,6 @@ static cl::opt<string, true> ClReportFilePrefix("soaap-report-file-prefix",
        cl::location(CmdLineOpts::ReportFilePrefix),
        cl::init("soaap-output"));
 
-bool CmdLineOpts::SysCallTraces;
-static cl::opt<bool, true> ClSysCallTraces("soaap-syscall-traces",
-       cl::cat(CmdLineOpts::SoaapCategory),
-       cl::desc("Show traces for system call warnings"),
-       cl::location(CmdLineOpts::SysCallTraces));
-
 SoaapMode CmdLineOpts::Mode;
 static cl::opt<SoaapMode, true> ClMode("soaap-mode",
        cl::cat(CmdLineOpts::SoaapCategory),
