@@ -29,14 +29,17 @@ void DebugUtils::cacheLibraryMetadata(Module* M) {
           if (Function* F = func->getFunction()) {
             SDEBUG("soaap.util.debug", 4, dbgs() << INDENT_1 << "Found func: " << F->getName() << "\n");
             if (funcToLib.find(F) != funcToLib.end()) {
-              dbgs() << "WARNING: Function " << F->getName()
-                     << " already exists in library "
-                     << funcToLib[F] << "\n";
+              SDEBUG("soaap.util.debug", 3, dbgs() << "WARNING: Function "
+                                                   << F->getName()
+                                                   << " already exists in library "
+                                                   << funcToLib[F] << "\n");
             }
-            funcToLib[F] = nameStr;
+            else {
+              funcToLib[F] = nameStr;
+            }
           }
           else {
-            dbgs() << "DISubprogram \"" << func->getName() << "\" has no Function*\n";
+            SDEBUG("soaap.util.debug", 3, dbgs() << "DISubprogram \"" << func->getName() << "\" has no Function*\n");
           }
         }
       }
