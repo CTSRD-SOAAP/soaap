@@ -144,9 +144,11 @@ class ArWrapper(CommandWrapper):
         self.output = correspondingBitcodeName(self.realCommand[2])
         self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
         for file in findBitcodeFiles(self.realCommand[3:]):
-            if self.replacement:
-                # we add the --override flag to make sure multiple definitions are fine
-                self.generateIrCommand.append('--override')
+            # TODO: --override only replaces existing symbols, it doesn't add new ones.
+            # -> --override is useless in this case
+            #if self.replacement:
+            #    # we add the --override flag to make sure multiple definitions are fine
+            #    self.generateIrCommand.append('--override')
             self.generateIrCommand.append(file)
 
     def runGenerateIrCommand(self):
