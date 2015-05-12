@@ -366,6 +366,11 @@ static Instruction* findAllSandboxedInstructionsHelper(Instruction* I, string st
     if (Instruction* endInstr = findAllSandboxedInstructionsHelper(SBB->begin(), startSandboxName, insts, visitedBlocks)) {
       foundEnd = endInstr;
     }
+    else {
+      errs() << "WARNING: Could not find matching __soaap_sandboxed_region_end(\"" << startSandboxName
+             << "\") for __soaap_sandboxed_region_start(\"" << startSandboxName 
+             << "\") on all execution paths\n";
+    }
   }
   return foundEnd;
 }
