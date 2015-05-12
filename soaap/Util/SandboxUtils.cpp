@@ -341,7 +341,7 @@ static Instruction* findAllSandboxedInstructionsHelper(Instruction* I, string st
         SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found end of sandboxed code region: "; I->dump());
         if (endSandboxName == startSandboxName) {
           // we have found the end of the region
-          errs() << "End for " << startSandboxName << " found in " << BB->getName() << " (" << (void*)BB << ")\n";
+          SDEBUG("soaap.util.sandbox", 3, dbgs() << "End for " << startSandboxName << " found in " << BB->getName() << " (" << (void*)BB << ")\n");
           return II;
         }
       }
