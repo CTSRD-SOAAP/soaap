@@ -73,12 +73,12 @@ authenticated:
 // CHECK-NOT:  *** Function "do_authentication" has been annotated as only being allowed to execute in the sandboxes: [preauth] but it may execute in a privileged context
 
 
+//CHECK:  *** Sandbox "postauth" performs system call "open" but it is not allowed to,
+//CHECK:  *** based on the current sandboxing restrictions.
+//CHECK:  +++ Line 32 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
 //CHECK:  *** Sandbox "preauth" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
 //CHECK:  +++ Line 21 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
 //CHECK:  *** Sandbox "preauth" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
 //CHECK:  +++ Line 26 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
-//CHECK:  *** Sandbox "postauth" performs system call "open" but it is not allowed to,
-//CHECK:  *** based on the current sandboxing restrictions.
-//CHECK:  +++ Line 32 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
