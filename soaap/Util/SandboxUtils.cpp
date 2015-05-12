@@ -348,6 +348,7 @@ static Instruction* findAllSandboxedInstructionsHelper(Instruction* I, string st
     }
   }
 
+  Instruction* foundEnd = nullptr;
   // recurse on successor BBs
   for (BasicBlock* SBB : successors(BB)) {
 //     errs() << "\n" << SBB->getName() << " (" << (void*)SBB << ") is a successor of "
@@ -363,10 +364,10 @@ static Instruction* findAllSandboxedInstructionsHelper(Instruction* I, string st
       continue;
     }
     if (Instruction* endInstr = findAllSandboxedInstructionsHelper(SBB->begin(), startSandboxName, insts, visitedBlocks)) {
-      return endInstr;
+      foundEnd = endInstr;
     }
   }
-  return nullptr;
+  return foundEnd;
 }
 
 void SandboxUtils::findAllSandboxedInstructions(Instruction* I, string sboxName, InstVector& insts)
