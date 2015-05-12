@@ -17,7 +17,6 @@
 import os
 # make sure we have enum and termcolor
 from enum import Enum
-import termcolor
 
 #  TODO: let cmake set this at configure time
 SOAAP_LLVM_BINDIR = os.getenv('SOAAP_LLVM_BINDIR', os.path.expanduser('~') + '/devel/soaap/llvm/build/bin/')

@@ -20,8 +20,22 @@ import os
 import sys
 import subprocess
 from enum import Enum
-from termcolor import colored
 from checksetup import *
+
+
+try:
+    import termcolor
+    haveTermcolor = True
+except ImportError:
+    haveTermcolor = False
+
+
+def colored(msg, *args, **kwargs):
+    if haveTermcolor:
+        return termcolor.colored(msg, *args, **kwargs)
+    else:
+        return msg
+
 
 def errorMsg(msg):
     if not os.isatty(sys.stdout.fileno()):
