@@ -35,6 +35,14 @@ alternatively manually applying the patch from https://codereview.qt-project.org
 
 `configure-for-llvm-ir.py && make`
 
+# krb5
+
+We need a symlink for libss.a.bc since otherwise it isn't found when linking
+
+`git clone https://github.com/krb5/krb5.git`
+`cd krb5/src/lib && ln -s ../util/ss/libss.a.bc . && cd ..`
+`configure-for-llvm-ir.py --without-libedit && make`
+
 # openssl
 `configure-for-llvm-ir.py -f ./config no-asm zlib shared && make`
 

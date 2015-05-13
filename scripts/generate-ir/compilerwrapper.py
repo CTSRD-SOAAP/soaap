@@ -69,6 +69,9 @@ class CompilerWrapper(CommandWrapper):
                         if next.startswith('.libs/'):
                             next = next.replace('.libs/', '')
                         next = correspondingBitcodeName(next)
+                        # krb5 build system creates various .so.o files and then does a mv foo.so.o -> foo.so
+                        if next.endswith('.so.bc.o'):
+                            next = next[:-2]  # remove the additional .o at the end
                         self.output = next
                     self.generateIrCommand.append(param)
                     self.generateIrCommand.append(next)
