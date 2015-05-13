@@ -111,13 +111,15 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
         }
 
         if (!disallowedSandboxes.empty()) {
-          XO::emit("{d:additonal_text}it executes in the sandboxes: {d:containing_sandboxes} of which {d:disallowed_sandboxes} are disallowed\n",
-                   privileged ? "\n Additionally, " : "",
-                   SandboxUtils::stringifySandboxVector(containingSandboxes).c_str(),
-                   SandboxUtils::stringifySandboxVector(disallowedSandboxes).c_str());
           bool first = true;
           for (Sandbox* S : disallowedSandboxes) {
             XO::Instance sandboxViolationInstance(sandboxViolationList);
+            if (first) {
+              XO::emit("{d:additonal_text}it executes in the sandboxes: {d:containing_sandboxes} of which {d:disallowed_sandboxes} are disallowed\n",
+                       privileged ? "\n Additionally, " : "",
+                       SandboxUtils::stringifySandboxVector(containingSandboxes).c_str(),
+                       SandboxUtils::stringifySandboxVector(disallowedSandboxes).c_str());
+            }
             XO::emit("{e:type/%s}{e:name/%s}", "sandbox", S->getName().c_str());
             if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
               if (!first) {
