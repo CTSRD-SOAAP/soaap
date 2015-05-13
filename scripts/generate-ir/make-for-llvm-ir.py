@@ -65,6 +65,10 @@ if parsedArgs.cpp_linker:
 setIrWrapperVar('LD', parsedArgs.ld)
 setIrWrapperVar('LINK', parsedArgs.link)
 
+setIrWrapperVar('MV', 'mv')
+setIrWrapperVar('am__mv', 'mv -f')
+setIrWrapperVar('LN_S', 'ln -s')
+
 # now replace the manual overrides:
 for s in (parsedArgs.var or []):
     (var, value) = s.split('=')

@@ -69,6 +69,8 @@ def highlightForMode(mode, msg):
         return colored(msg, 'green', attrs=['bold'])
     elif mode == Mode.ranlib:
         return colored(msg, 'yellow', attrs=['bold'])
+    elif mode == Mode.coreutils:
+        return colored(msg, 'cyan', attrs=['bold'])
     else:
         print(warningMsg('WARNING: invalid mode: ' + mode.name))
         return infoMsg(msg)
@@ -105,12 +107,21 @@ def correspondingBitcodeName(fname):
     # if the output file is something like libfoo.so.1.2.3 we want libfoo.so.bc.1.2.3 to be emitted
     if '.so.' in fname:
         return fname.replace('.so.', '.so.bc.')
+    if '.a.' in fname:
+        return fname.replace('.a.', '.a.bc.')
     return str(fname) + '.bc'
 
 
 def quoteCommand(command: list):
     newList = [shlex.quote(s) for s in command]
     return " ".join(newList)
+
+
+def isLibrary(fname: str):
+    if fname.endswith('.so') or fname.endswith('.a'):
+        return True
+    if '.so.' in fname or '.a.' in fname:
+        return True
 
 
 class Mode(Enum):
@@ -120,6 +131,7 @@ class Mode(Enum):
     object_file = 3
     executable = 4
     ranlib = 5  # not really needed
+    coreutils = 6
 
 
 class CommandWrapperError(RuntimeError):
@@ -303,5 +315,9 @@ def clangParamsWithArgument():
         #
         '-Wl,--version-script',  # Read version information script
         '-Wl,--version-exports-section', # SYMBOL as the version
+        #
+        # other options that were not in --help
+        #
+        '-rpath',
     ])
     return _CLANG_PARAMS_WITH_ARGUMENTS

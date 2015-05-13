@@ -56,6 +56,12 @@ and then run `make` again. Or alternatively you can do `git clean -dfx` to start
 
 `configure-for-llvm-ir.py && make`
 
+
+# linux-pam
+
+`./autogen.sh`
+`configure-for-llvm-ir.py --enable-static-modules && make-for-llvm-ir.py`
+
 # Almost every CMake project:
 
 `mkdir -p build && cd build && cmake-for-llvm-ir.py .. && make`
