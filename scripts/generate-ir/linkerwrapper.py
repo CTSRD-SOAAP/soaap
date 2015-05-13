@@ -35,13 +35,13 @@ class LinkerWrapper(CommandWrapper):
         self.parseCommandLine()
 
         if len(self.linkCandidates) == 0:
-            raise RuntimeError('NO LINK CANDIDATES FOUND IN CMDLINE: ', self.realCommand)
+            raise CommandWrapperError('NO LINK CANDIDATES FOUND IN CMDLINE: ', self.realCommand)
 
         self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
 
         inputFiles = findBitcodeFiles(self.linkCandidates)
         if len(inputFiles) == 0:
-            raise RuntimeError('NO FILES FOUND FOR LINKING!', self.realCommand)
+            raise CommandWrapperError('NO FILES FOUND FOR LINKING!', self.realCommand)
         # print(infoMsg("InputFiles:" + str(inputFiles)))
         self.generateIrCommand.extend(inputFiles)
         self.generateIrCommand.extend(self.sharedLibs)
@@ -52,7 +52,7 @@ class LinkerWrapper(CommandWrapper):
                 self.generateIrCommand.append('-lc')
                 self.generateIrCommand.append('-lc++')
             else:
-                raise RuntimeError('Unsupported linker command: ' + self.executable)
+                raise CommandWrapperError('Unsupported linker command: ' + self.executable, self.realCommand)
 
     def parseCommandLine(self):
         # iterate over command line and convert all known options and input files
@@ -67,7 +67,7 @@ class LinkerWrapper(CommandWrapper):
             if param.startswith('-'):
                 if param == '-o':
                     if index + 1 >= len(self.realCommand):
-                        raise RuntimeError('-o flag without parameter!')
+                        raise CommandWrapperError('-o flag without parameter!', self.realCommand)
                     skipNextParam = True
                     self.output = correspondingBitcodeName(self.realCommand[index + 1])
                     if '.so.bc' in self.output:
@@ -128,7 +128,7 @@ class ArWrapper(CommandWrapper):
 
     def computeWrapperCommand(self):
         if len(self.realCommand) < 2:
-            raise RuntimeError('Cannot parse AR invocation: ', self.realCommand)
+            raise CommandWrapperError('Cannot parse AR invocation: ', self.realCommand)
         # Only having 3 parameters means creating an empty .a file (e.g. musl libc uses this)
         self.generateEmptyOutput = len(self.realCommand) == 3
         self.replacement = False
@@ -139,7 +139,7 @@ class ArWrapper(CommandWrapper):
             # TODO: use llvm-ar instead? how will that work?
             self.replacement = True
         elif not ('q' in operation and 'c' in operation):
-            raise RuntimeError('ar wrapper: \'cq\' or \'r\' mode is currently supported: ', self.realCommand)
+            raise CommandWrapperError('ar wrapper: \'cq\' or \'r\' mode is currently supported: ', self.realCommand)
 
         self.output = correspondingBitcodeName(self.realCommand[2])
         self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
@@ -230,5 +230,5 @@ def findBitcodeFiles(files):
         if os.getenv('SKIP_MISSING_LINKER_INPUT'):
             print(warningMsg('LLVM IR NOT FOUND for: ' + str(missingFiles)))
         else:
-            raise RuntimeError('Missing input files for:', missingFiles)
+            raise RuntimeError('Missing input files for:', missingFiles, os.getcwd())
     return found

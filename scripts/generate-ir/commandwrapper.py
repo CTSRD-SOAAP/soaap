@@ -19,6 +19,7 @@
 import os
 import sys
 import subprocess
+import shlex
 from enum import Enum
 from checksetup import *
 
@@ -107,6 +108,11 @@ def correspondingBitcodeName(fname):
     return str(fname) + '.bc'
 
 
+def quoteCommand(command: list):
+    newList = [shlex.quote(s) for s in command]
+    return " ".join(newList)
+
+
 class Mode(Enum):
     unknown = 0  # this is an error
     shared_lib = 1
@@ -114,6 +120,11 @@ class Mode(Enum):
     object_file = 3
     executable = 4
     ranlib = 5  # not really needed
+
+
+class CommandWrapperError(RuntimeError):
+    def __init__(self, msg, args):
+        super().__init__(msg, quoteCommand(args))
 
 
 class CommandWrapper:
@@ -141,17 +152,18 @@ class CommandWrapper:
     def run(self):
         if os.getenv('NO_EMIT_LLVM_IR') or '--version' in self.realCommand or '--help' in self.realCommand:
             os.execv(self.realCommand[0], self.realCommand)
-            raise RuntimeError('execve failed!')
+            raise CommandWrapperError('execve failed!', self.realCommand)
 
         # parse the original command line and compute the IR generation one
         self.computeWrapperCommand()
 
         if len(self.generateIrCommand) == 0 and not self.nothingToDo:
-            raise RuntimeError('Could not determine IR command line from', self.realCommand)
+            raise CommandWrapperError('Could not determine IR command line from', self.realCommand)
 
         if self.nothingToDo:
             # no need to run the llvm generation command, only run the original instead
-            print(highlightForMode(self.mode, self.executable + ' replacement: nothing to do:' + str(self.realCommand)))
+            print(highlightForMode(self.mode, self.executable + ' replacement: nothing to do:' +
+                                   quoteCommand(self.realCommand)))
         else:
             #  Do the IR generation first so that if it fails we don't have the Makefile dependencies existing!
             self.runGenerateIrCommand()
@@ -166,8 +178,14 @@ class CommandWrapper:
         self.runCommand('Original:', self.realCommand)
 
     def runCommand(self, msg, command):
-        print(highlightForMode(self.mode, msg + ' ' + str(command)))
-        subprocess.check_call(command)
+        print(highlightForMode(self.mode, msg + ' ' + quoteCommand(command)))
+        try:
+            subprocess.check_call(command)
+        except subprocess.CalledProcessError as e:
+            # we want the error message as a plain string so we can copy-paste it to the shell
+            # raise RuntimeError("Command", quoteCommand(e.cmd), "failed with exit code", e.returncode, "in", os.getcwd())
+            e.cmd = quoteCommand(e.cmd)
+            raise
 
     def createEmptyBitcodeFile(self, output):
         self.runCommand('LLVM IR:', [soaapLlvmBinary('clang'), '-c', '-emit-llvm', '-o', output,

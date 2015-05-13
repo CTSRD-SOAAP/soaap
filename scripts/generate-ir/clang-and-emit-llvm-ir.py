@@ -9,6 +9,7 @@ from enum import Enum
 
 from linkerwrapper import *
 from compilerwrapper import CompilerWrapper
+from commandwrapper import CommandWrapperError
 
 # TODO: always build with optimizations off (does that include DCE?) or maybe -fno-inline is better?
 
@@ -50,6 +51,6 @@ elif executable in ('clang', 'clang++'):
     else:
         wrapper = LinkerWrapper(sys.argv)
 else:
-    raise RuntimeError('Could not parse command line to determine what\'s happening: ', sys.argv)
+    raise CommandWrapperError('Could not parse command line to determine what\'s happening: ', sys.argv)
 
 wrapper.run()

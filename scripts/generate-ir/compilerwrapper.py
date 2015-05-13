@@ -60,7 +60,7 @@ class CompilerWrapper(CommandWrapper):
                     continue
                 elif param in clangParamsWithArgument():
                     if index + 1 >= len(originalRealCommand):
-                        raise RuntimeError(param + ' flag without parameter!', originalRealCommand)
+                        raise CommandWrapperError(param + ' flag without parameter!', originalRealCommand)
                     skipNext = True
                     next = originalRealCommand[index + 1]
                     if param == '-o':
@@ -90,16 +90,16 @@ class CompilerWrapper(CommandWrapper):
                         valid = True
 
                     if not valid:
-                        raise RuntimeError('Attempting to compile assembly file (export SKIP_ASSEMBLY_FILES=1' +
-                                           ' to generate an empty file instead): ', param, self.realCommand)
+                        raise CommandWrapperError('Attempting to compile assembly file (export SKIP_ASSEMBLY_FILES=1' +
+                                                  ' to generate an empty file instead): ' + param, self.realCommand)
                 inputFiles.append(param)
                 self.generateIrCommand.append(param)
 
         if len(inputFiles) == 0:
-            raise RuntimeError('No input files found!', self.realCommand)
+            raise CommandWrapperError('No input files found!', self.realCommand)
         if not self.output:
             if len(inputFiles) != 1:
-                raise RuntimeError('No -o flag, but multiple input files!', inputFiles, self.realCommand)
+                raise CommandWrapperError('No -o flag, but multiple input files:' + str(inputFiles), self.realCommand)
             root, ext = os.path.splitext(inputFiles[0])  # src/foo.c -> ('src/foo', '.c')
             self.output = correspondingBitcodeName(root + '.o')
             self.generateIrCommand.append('-o')
