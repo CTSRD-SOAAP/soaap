@@ -66,19 +66,19 @@ authenticated:
 
 // CHECK: * Listing sandboxed functions
 // CHECK:   Sandbox: postauth (ephemeral)
-// CHECK:     do_postauth (/home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c)
+// CHECK:     do_postauth ([[TESTDIR:.*]]/sandboxedregions/start-end.c)
 // CHECK:   Sandbox: preauth (ephemeral)
-// CHECK:     do_authentication2 (/home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c)
-// CHECK:     do_authentication (/home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c)
+// CHECK:     do_authentication2 ([[TESTDIR]]/sandboxedregions/start-end.c)
+// CHECK:     do_authentication ([[TESTDIR]]/sandboxedregions/start-end.c)
 // CHECK-NOT:  *** Function "do_authentication" has been annotated as only being allowed to execute in the sandboxes: [preauth] but it may execute in a privileged context
 
 
 //CHECK:  *** Sandbox "postauth" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
-//CHECK:  +++ Line 32 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
+//CHECK:  +++ Line 32 of file [[TESTDIR]]/sandboxedregions/start-end.c
 //CHECK:  *** Sandbox "preauth" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
-//CHECK:  +++ Line 21 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
+//CHECK:  +++ Line 21 of file [[TESTDIR]]/sandboxedregions/start-end.c
 //CHECK:  *** Sandbox "preauth" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
-//CHECK:  +++ Line 26 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/start-end.c
+//CHECK:  +++ Line 26 of file [[TESTDIR]]/sandboxedregions/start-end.c
