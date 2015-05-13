@@ -627,10 +627,8 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
     }
   }
   else {
-    dbgs() << "Add stack to map, size before: " << callStackToID.size() << ", ";
     static int nextCallStackId = 0;
     callStackToID[callStack] = nextCallStackId++;
-    dbgs() << "size after: " << callStackToID.size() << "\n";
     XO::List traceList("trace");
     int currInstIdx = 0;
     bool shownDots = false;
