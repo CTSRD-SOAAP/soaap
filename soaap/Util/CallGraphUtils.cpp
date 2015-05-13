@@ -585,7 +585,8 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   if (callStackToID.find(callStack) != callStackToID.end()) {
     // refer to ID
     referencedCallStacks.insert(callStack);
-    XO::emit("{e:trace_reference/!trace%d}", callStackToID[callStack]);
+
+    XO::emit("{e:trace_reference/%s}", ("!trace" + llvm::Twine(callStackToID[callStack])).str().c_str());
     int currInstIdx = 0;
     bool shownDots = false;
     for (Instruction* I : callStack) {
