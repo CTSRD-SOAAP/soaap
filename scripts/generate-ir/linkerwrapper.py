@@ -89,14 +89,19 @@ class LinkerWrapper(CommandWrapper):
                 # ignore all other -XXX flags
                 continue
             elif param.endswith('.so') or '.so.' in param:
+                if os.path.isfile(param):
+                    self.linkCandidates.append(param)
+                    continue
+
                 # strip the directory part if it is a path
                 filename = os.path.basename(param)
                 # remove the leading lib
                 if not filename.startswith('lib'):
-                    raise RuntimeError('Found shared library on command line that doesn\'t start "lib" :' +
-                                       param, self.realCommand)
-                # strip the lib part
-                filename = filename[3:]
+                    print(warningMsg('Found shared library on command line that doesn\'t start with "lib" :' +
+                                     param, self.realCommand))
+                else:
+                    # strip the lib part
+                    filename = filename[3:]
                 # if it ends with .so strip that, but if there is a suffix (version) keep it and get the bitcode name
                 if filename.endswith('.so'):
                     filename = filename[:filename.find('.so')]
