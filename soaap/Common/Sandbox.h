@@ -66,7 +66,7 @@ namespace soaap {
       
       void init();
       void findSandboxedFunctions();
-      void findSandboxedFunctionsHelper(Function* F);
+      void findSandboxedFunctionsHelper(FunctionSet funcs);
       void findSandboxedCalls();
       void findSharedGlobalVariables();
       void findCallgates();

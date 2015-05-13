@@ -174,52 +174,55 @@ bool Sandbox::hasCallgate(Function* F) {
 }
 
 void Sandbox::findSandboxedFunctions() {
-  FunctionVector initialFuncs;
+  FunctionSet initialFuncs;
   if (entryPoints.empty()) {
     // scan the code region for the set of top-level functions being called
     for (Instruction* I : region) {
       if (CallInst* C  = dyn_cast<CallInst>(I)) {
         for (Function* F : CallGraphUtils::getCallees(C, this, module)) {
           if (F->isDeclaration()) continue;
-          if (find(initialFuncs.begin(), initialFuncs.end(), F) == initialFuncs.end()) {
-            initialFuncs.push_back(F);
-          }
+          initialFuncs.insert(F);
         }
       }
     }
   }
   else {
     for (Function* F : entryPoints) {
-      initialFuncs.push_back(F);
+      initialFuncs.insert(F);
     }
   }
-  for (Function* F : initialFuncs) {
-    findSandboxedFunctionsHelper(F);
-  }
+  findSandboxedFunctionsHelper(initialFuncs);
   SDEBUG("soaap.util.sandbox", 3, dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
 }
 
-void Sandbox::findSandboxedFunctionsHelper(Function* F) {
-  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
+void Sandbox::findSandboxedFunctionsHelper(FunctionSet fringe) {
+
+  if (fringe.empty()) {
+    return;
+  }
    
-  // check for cycle
-  if (functionsSet.find(F) != functionsSet.end()) {
-    return;
+  for (Function* F : fringe) {
+    functionsVec.push_back(F);
+    functionsSet.insert(F);
   }
 
-  // check if entry point to another sandbox
-  if (SandboxUtils::isSandboxEntryPoint(module, F) && !isEntryPoint(F)) {
-    return;
+  FunctionSet newFringe;
+  for (Function* F : fringe) {
+    SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Visiting " << F->getName() << "\n");
+    SDEBUG("soaap.util.sandbox", 4, dbgs() << "Recursing on successors\n");
+    for (Function* SuccFunc : CallGraphUtils::getCallees(F, this, module)) {
+      SDEBUG("soaap.util.sandbox", 4, dbgs() << "succ: " << SuccFunc->getName() << "\n");
+      // check if entry point to another sandbox
+      if (SandboxUtils::isSandboxEntryPoint(module, SuccFunc) && !isEntryPoint(SuccFunc)) {
+        continue;
+      }
+      else if (functionsSet.count(SuccFunc) == 0) {
+        newFringe.insert(SuccFunc);
+      }
+    }
   }
 
-  functionsVec.push_back(F);
-  functionsSet.insert(F);
-
-  SDEBUG("soaap.util.sandbox", 4, dbgs() << "Recursing on successors\n");
-  for (Function* SuccFunc : CallGraphUtils::getCallees(F, this, module)) {
-    SDEBUG("soaap.util.sandbox", 4, dbgs() << "succ: " << SuccFunc->getName() << "\n");
-    findSandboxedFunctionsHelper(SuccFunc);
-  }
+  findSandboxedFunctionsHelper(newFringe);
 }
 
 void Sandbox::findSandboxedCalls() {
