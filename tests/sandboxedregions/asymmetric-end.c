@@ -32,11 +32,11 @@ int main() {
 
 // CHECK: * Listing sandboxed functions
 // CHECK:   Sandbox: box (ephemeral)
-// CHECK:     endSandbox (/home/alex/devel/soaap/soaap/tests/sandboxedregions/asymmetric-end.c)
+// CHECK:     endSandbox ([[TESTDIR:.*]]/sandboxedregions/asymmetric-end.c)
 
 //CHECK:  *** Sandbox "box" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
-//CHECK:  +++ Line 15 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/asymmetric-end.c
+//CHECK:  +++ Line 15 of file [[TESTDIR]]/sandboxedregions/asymmetric-end.c
 //CHECK:  *** Sandbox "box" performs system call "open" but it is not allowed to,
 //CHECK:  *** based on the current sandboxing restrictions.
-//CHECK:  +++ Line 26 of file /home/alex/devel/soaap/soaap/tests/sandboxedregions/asymmetric-end.c
+//CHECK:  +++ Line 26 of file [[TESTDIR]]/sandboxedregions/asymmetric-end.c
