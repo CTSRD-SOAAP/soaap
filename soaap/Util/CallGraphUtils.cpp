@@ -27,6 +27,8 @@ map<const Function*, map<Context*, set<CallGraphEdge> > > CallGraphUtils::funcTo
 map<const Function*, map<Context*, CallInstSet> > CallGraphUtils::calleeToCalls;
 bool CallGraphUtils::caching = false;
 map<Function*, map<Function*,InstTrace> > CallGraphUtils::funcToShortestCallPaths;
+map<InstTrace,int> CallGraphUtils::callStackToID;
+set<InstTrace> CallGraphUtils::referencedCallStacks;
 
 void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
   unsigned long numFPcalls = 0;
@@ -577,47 +579,128 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
 
 void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   XO::emit(" Possible trace ({d:context}):\n", ContextUtils::stringifyContext(S ? S : ContextUtils::PRIV_CONTEXT).c_str());
-  XO::List traceList("trace");
   InstTrace callStack = S
     ? findSandboxedPathToFunction(Target, S, M)
     : findPrivilegedPathToFunction(Target, M);
-  int currInstIdx = 0;
-  bool shownDots = false;
-  for (Instruction* I : callStack) {
-    if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
-      Function* EnclosingFunc = I->getParent()->getParent();
-      unsigned Line = Loc->getLine();
-      StringRef File = Loc->getFilename();
-      unsigned FileOnlyIdx = File.find_last_of("/");
-      StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-      string library = DebugUtils::getEnclosingLibrary(I);
+  if (callStackToID.find(callStack) != callStackToID.end()) {
+    // refer to ID
+    referencedCallStacks.insert(callStack);
+    XO::emit("{e:trace_reference/!trace%d}", callStackToID[callStack]);
+    int currInstIdx = 0;
+    bool shownDots = false;
+    for (Instruction* I : callStack) {
+      if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
+        Function* EnclosingFunc = I->getParent()->getParent();
+        unsigned Line = Loc->getLine();
+        StringRef File = Loc->getFilename();
+        unsigned FileOnlyIdx = File.find_last_of("/");
+        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+        string library = DebugUtils::getEnclosingLibrary(I);
 
-      XO::Instance traceInstance(traceList);
-      bool printCall = CmdLineOpts::SummariseTraces <= 0
-                        || currInstIdx < CmdLineOpts::SummariseTraces
-                        || (callStack.size()-(currInstIdx+1))
-                            < CmdLineOpts::SummariseTraces;
-      if (printCall) {
-        XO::emit("      {:function/%s} ",
-                  EnclosingFunc->getName().str().c_str());
-        XO::Container locationContainer("location");
-        XO::emit("({:file/%s}:{:line/%d})",
-                  FileOnly.str().c_str(),
-                  Line);
-        if (!library.empty()) {
-          XO::emit(" [{:library/%s} library]", library.c_str());
+        bool printCall = CmdLineOpts::SummariseTraces <= 0
+                          || currInstIdx < CmdLineOpts::SummariseTraces
+                          || (callStack.size()-(currInstIdx+1))
+                              < CmdLineOpts::SummariseTraces;
+        if (printCall) {
+          XO::emit("      {d:function/%s} ",
+                    EnclosingFunc->getName().str().c_str());
+          XO::emit("({d:file/%s}:{d:line/%d})",
+                    FileOnly.str().c_str(),
+                    Line);
+          if (!library.empty()) {
+            XO::emit(" [{d:library/%s} library]", library.c_str());
+          }
+          XO::emit("\n");
         }
-        XO::emit("\n");
+        else {
+          // output call only in machine-readable reports, and
+          // three lines of "..." otherwise
+          if (!shownDots) {
+            XO::emit("      ...\n");
+            XO::emit("      ...\n");
+            XO::emit("      ...\n");
+            shownDots = true;
+          }
+        }
       }
-      else {
-        // output call only in machine-readable reports, and
-        // three lines of "..." otherwise
-        if (!shownDots) {
-          XO::emit("      ...\n");
-          XO::emit("      ...\n");
-          XO::emit("      ...\n");
-          shownDots = true;
+      currInstIdx++;
+    }
+  }
+  else {
+    dbgs() << "Add stack to map, size before: " << callStackToID.size() << ", ";
+    static int nextCallStackId = 0;
+    callStackToID[callStack] = nextCallStackId++;
+    dbgs() << "size after: " << callStackToID.size() << "\n";
+    XO::List traceList("trace");
+    int currInstIdx = 0;
+    bool shownDots = false;
+    for (Instruction* I : callStack) {
+      if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
+        Function* EnclosingFunc = I->getParent()->getParent();
+        unsigned Line = Loc->getLine();
+        StringRef File = Loc->getFilename();
+        unsigned FileOnlyIdx = File.find_last_of("/");
+        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+        string library = DebugUtils::getEnclosingLibrary(I);
+
+        XO::Instance traceInstance(traceList);
+        bool printCall = CmdLineOpts::SummariseTraces <= 0
+                          || currInstIdx < CmdLineOpts::SummariseTraces
+                          || (callStack.size()-(currInstIdx+1))
+                              < CmdLineOpts::SummariseTraces;
+        if (printCall) {
+          XO::emit("      {:function/%s} ",
+                    EnclosingFunc->getName().str().c_str());
+          XO::Container locationContainer("location");
+          XO::emit("({:file/%s}:{:line/%d})",
+                    FileOnly.str().c_str(),
+                    Line);
+          if (!library.empty()) {
+            XO::emit(" [{:library/%s} library]", library.c_str());
+          }
+          XO::emit("\n");
         }
+        else {
+          // output call only in machine-readable reports, and
+          // three lines of "..." otherwise
+          if (!shownDots) {
+            XO::emit("      ...\n");
+            XO::emit("      ...\n");
+            XO::emit("      ...\n");
+            shownDots = true;
+          }
+          XO::emit("{e:function/%s}",
+                    EnclosingFunc->getName().str().c_str());
+          XO::Container locationContainer("location");
+          XO::emit("{e:file/%s}{e:line/%d}",
+                    FileOnly.str().c_str(),
+                    Line);
+          if (!library.empty()) {
+            XO::emit("{e:library/%s}", library.c_str());
+          }
+        }
+      }
+      currInstIdx++;
+    }
+    //XO::emit("\n\n");
+  }
+}
+
+void CallGraphUtils::emitTraceReferences() {
+  for (InstTrace trace : referencedCallStacks) {
+    stringstream ss;
+    ss << "!trace" << callStackToID[trace];
+    XO::List traceList(ss.str().c_str());
+    for (Instruction* I : trace) {
+      if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
+        Function* EnclosingFunc = I->getParent()->getParent();
+        unsigned Line = Loc->getLine();
+        StringRef File = Loc->getFilename();
+        unsigned FileOnlyIdx = File.find_last_of("/");
+        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+        string library = DebugUtils::getEnclosingLibrary(I);
+
+        XO::Instance traceInstance(traceList);
         XO::emit("{e:function/%s}",
                   EnclosingFunc->getName().str().c_str());
         XO::Container locationContainer("location");
@@ -629,9 +712,7 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
         }
       }
     }
-    currInstIdx++;
   }
-  //XO::emit("\n\n");
 }
 
 FPTargetsAnalysis& CallGraphUtils::getFPInferredTargetsAnalysis() {

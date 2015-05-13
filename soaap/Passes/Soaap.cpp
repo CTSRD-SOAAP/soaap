@@ -155,8 +155,10 @@ bool Soaap::runOnModule(Module& M) {
       outs() << "* Checking propagation of sandbox-private data\n";
       checkPropagationOfSandboxPrivateData(M);
     }
-
+    
   }
+  
+  CallGraphUtils::emitTraceReferences();
 
   soaapContainer.close();
   XO::finish();

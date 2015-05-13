@@ -36,6 +36,7 @@ namespace soaap {
        * If @p S is null then a privileged call graph will be emitted instead.
        */
       static void emitCallTrace(Function* Target, Sandbox* S, Module& M);
+      static void emitTraceReferences();
     private:
       static map<const CallInst*, map<Context*, FunctionSet> > callToCallees;
       static map<const Function*, map<Context*, FunctionSet> > funcToCallees;
@@ -48,7 +49,8 @@ namespace soaap {
       static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*>& visited, Module& M);
       static FPTargetsAnalysis& getFPAnnotatedTargetsAnalysis();
       static FPTargetsAnalysis& getFPInferredTargetsAnalysis();
-      
+      static map<InstTrace,int> callStackToID;
+      static set<InstTrace> referencedCallStacks;
   };
 }
 namespace llvm {
