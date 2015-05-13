@@ -103,7 +103,7 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
         XO::List sandboxViolationList("sandbox_violation");
         if (privileged) {
           XO::Instance sandboxViolationInstance(sandboxViolationList);
-          XO::emit("{e:type/privileged}");
+          XO::emit("{e:type/%s}","privileged");
           XO::emit("it may execute in a privileged context\n");
           if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
             CallGraphUtils::emitCallTrace(F, NULL, M);
@@ -118,7 +118,7 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
           bool first = true;
           for (Sandbox* S : disallowedSandboxes) {
             XO::Instance sandboxViolationInstance(sandboxViolationList);
-            XO::emit("{e:type/sandbox}{e:name/%s}", S->getName().c_str());
+            XO::emit("{e:type/%s}{e:name/%s}", "sandbox", S->getName().c_str());
             if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::OutputTraces)) {
               if (!first) {
                 XO::emit("\n");
