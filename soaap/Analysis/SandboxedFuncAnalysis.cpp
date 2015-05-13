@@ -78,8 +78,8 @@ void SandboxedFuncAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
 
       // now output the warning
       if (outputWarning) {
-        XO::emit("\n");
         XO::Instance sandboxedFuncInstance(sandboxedFuncList);
+        XO::emit("\n");
         XO::emit("{e:function}", F->getName().str().c_str());
         
         // output first bit of warning, as it is common
