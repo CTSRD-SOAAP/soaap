@@ -24,6 +24,8 @@ if executable == 'mv':
     wrapper = MvWrapper(sys.argv)
 elif executable == 'ln':
     wrapper = LnWrapper(sys.argv)
+elif executable == 'cp':
+    wrapper = CpWrapper(sys.argv)
 else:
     raise CommandWrapperError('Could not parse command line to determine what\'s happening: ', sys.argv)
 

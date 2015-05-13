@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 parser.add_argument('-f', required=False, default='./configure', help='configure script override')
 parser.add_argument('--ld', required=False, default='clang', type=str,
                     help='LD wrapper script name (and parameters)')
-parser.add_argument('--link', required=False, default='clang', type=str,
+parser.add_argument('--link', required=False, default='', type=str,
                     help='LINK wrapper script name (and parameters)')
 parser.add_argument('--ar', required=False, default='ar', type=str,
                     help='AR wrapper script name (and parameters)')
@@ -51,6 +51,7 @@ commandline.extend(unknownArgs)  # append all the user passed flags
 
 # no need to add an override option for CC and CXX, this can be done via --env
 setIrWrapperEnvVar('CC', 'clang')
+setIrWrapperEnvVar('LTCC', 'clang')
 setIrWrapperEnvVar('CXX', 'clang++')
 setIrWrapperEnvVar('AR', parsedArgs.ar)
 setIrWrapperEnvVar('RANLIB', parsedArgs.ranlib)
@@ -62,7 +63,13 @@ if parsedArgs.cpp_linker:
         parsedArgs.link = 'clang++'
 
 setIrWrapperEnvVar('LD', parsedArgs.ld)
-setIrWrapperEnvVar('LINK', parsedArgs.link)
+if parsedArgs.link:
+    setIrWrapperEnvVar('LINK', parsedArgs.link)
+
+setIrWrapperEnvVar('MV', 'mv -f')
+setIrWrapperEnvVar('am__mv', 'mv -f')
+setIrWrapperEnvVar('LN_S', 'ln -s')
+setIrWrapperEnvVar('CP', 'cp')
 
 # now replace the manual overrides:
 for s in (parsedArgs.env or []):

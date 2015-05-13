@@ -34,7 +34,7 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 parser.add_argument('-f', required=False, default='./Makefile', help='Makefile override')
 parser.add_argument('--ld', required=False, default='clang', type=str,
                     help='LD wrapper script name (and parameters)')
-parser.add_argument('--link', required=False, default='clang', type=str,
+parser.add_argument('--link', required=False, default='', type=str,
                     help='LINK wrapper script name (and parameters)')
 parser.add_argument('--ar', required=False, default='ar', type=str,
                     help='AR wrapper script name (and parameters)')
@@ -52,6 +52,7 @@ commandline = ['make', '-f', makefile]
 
 # no need to add an override option for CC and CXX, this can be done via --env
 setIrWrapperVar('CC', 'clang')
+setIrWrapperVar('LTCC', 'clang')
 setIrWrapperVar('CXX', 'clang++')
 setIrWrapperVar('AR', parsedArgs.ar)
 setIrWrapperVar('RANLIB', parsedArgs.ranlib)
@@ -63,11 +64,13 @@ if parsedArgs.cpp_linker:
         parsedArgs.link = 'clang++'
 
 setIrWrapperVar('LD', parsedArgs.ld)
-setIrWrapperVar('LINK', parsedArgs.link)
+if parsedArgs.link:
+    setIrWrapperVar('LINK', parsedArgs.link)
 
 setIrWrapperVar('MV', 'mv')
 setIrWrapperVar('am__mv', 'mv -f')
 setIrWrapperVar('LN_S', 'ln -s')
+setIrWrapperVar('CP', 'cp')
 
 # now replace the manual overrides:
 for s in (parsedArgs.var or []):

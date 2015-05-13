@@ -174,8 +174,8 @@ class CommandWrapper:
 
         if self.nothingToDo:
             # no need to run the llvm generation command, only run the original instead
-            print(highlightForMode(self.mode, self.executable + ' replacement: nothing to do:' +
-                                   quoteCommand(self.realCommand)))
+            # print(highlightForMode(self.mode, self.executable + ' replacement: nothing to do:' + quoteCommand(self.realCommand)))
+            pass
         else:
             #  Do the IR generation first so that if it fails we don't have the Makefile dependencies existing!
             self.runGenerateIrCommand()
@@ -184,13 +184,21 @@ class CommandWrapper:
 
     # allow overriding this for creating empty output files
     def runGenerateIrCommand(self):
-        self.runCommand('LLVM IR:', self.generateIrCommand)
+        try:
+            self.runCommand('LLVM IR:', self.generateIrCommand)
+        except:
+            print(errorMsg("WRAPPER COMMAND FOR " + quoteCommand(self.realCommand) + " FAILED"))
+            raise
 
     def runRealCommand(self):
         self.runCommand('Original:', self.realCommand)
 
     def runCommand(self, msg, command):
-        print(highlightForMode(self.mode, msg + ' ' + quoteCommand(command)))
+        if self.nothingToDo:
+            print(colored(msg + ' ' + quoteCommand(command), 'white', attrs=['bold']))
+        else:
+            print(highlightForMode(self.mode, msg + ' ' + quoteCommand(command)))
+
         try:
             subprocess.check_call(command)
         except subprocess.CalledProcessError as e:

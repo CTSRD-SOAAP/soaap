@@ -89,9 +89,9 @@ class LinkerWrapper(CommandWrapper):
                 # ignore all other -XXX flags
                 continue
             elif param.endswith('.so') or '.so.' in param:
-                if os.path.isfile(param):
-                    self.linkCandidates.append(param)
-                    continue
+                # if os.path.isfile(param):
+                #     self.linkCandidates.append(param)
+                #     continue
 
                 # strip the directory part if it is a path
                 filename = os.path.basename(param)
@@ -114,7 +114,7 @@ class LinkerWrapper(CommandWrapper):
                 self.linkCandidates.append(param)
 
         if not self.output:
-            print(warningMsg('WARNING: could not determine output file, assuming a.out.bc: ' + str(self.realCommand)))
+            print(warningMsg('WARNING: could not determine output file, assuming a.out.bc: ' + quoteCommand(self.realCommand)))
             self.output = 'a.out.bc'
         if self.mode == Mode.unknown:
             self.mode = Mode.executable
@@ -230,10 +230,10 @@ def findBitcodeFiles(files):
             else:
                 missingFiles.append(testedFile)
     if len(found) == 0:
-        print(warningMsg('No bitcode files found from input ' + str(files)))
+        print(warningMsg('No bitcode files found from input ' + quoteCommand(files)))
     if len(missingFiles) > 0:
         if os.getenv('SKIP_MISSING_LINKER_INPUT'):
-            print(warningMsg('LLVM IR NOT FOUND for: ' + str(missingFiles)))
+            print(warningMsg('LLVM IR NOT FOUND for: ' + quoteCommand(missingFiles)))
         else:
             raise RuntimeError('Missing input files for:', missingFiles, os.getcwd())
     return found

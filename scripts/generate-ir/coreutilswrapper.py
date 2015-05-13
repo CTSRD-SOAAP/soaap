@@ -48,3 +48,8 @@ class MvWrapper(CoreUtilsWrapper):
 class LnWrapper(CoreUtilsWrapper):
     def __init__(self, originalCommandLine):
         super().__init__(originalCommandLine)
+
+
+class CpWrapper(CoreUtilsWrapper):
+    def __init__(self, originalCommandLine):
+        super().__init__(originalCommandLine)
