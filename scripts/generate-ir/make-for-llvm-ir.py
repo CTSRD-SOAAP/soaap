@@ -11,6 +11,11 @@ from checksetup import *
 scriptDir = os.path.dirname(os.path.realpath(__file__))
 overrides = {}
 
+bindir = os.path.join(scriptDir, "bin")
+
+if not os.path.isdir(bindir):
+    sys.exit(bindir + "does not exist")
+
 
 def setIrWrapperVar(var, command):
     splitted = command.split()
@@ -67,10 +72,8 @@ setIrWrapperVar('LD', parsedArgs.ld)
 if parsedArgs.link:
     setIrWrapperVar('LINK', parsedArgs.link)
 
-setIrWrapperVar('MV', 'mv')
-setIrWrapperVar('am__mv', 'mv -f')
-setIrWrapperVar('LN_S', 'ln -s')
-setIrWrapperVar('CP', 'cp')
+# set PATH so that our ln/mv/cp/rm commands are found
+os.environ["PATH"] = bindir + ":" + os.environ["PATH"]
 
 # now replace the manual overrides:
 for s in (parsedArgs.var or []):

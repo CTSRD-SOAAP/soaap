@@ -66,11 +66,6 @@ setIrWrapperEnvVar('LD', parsedArgs.ld)
 if parsedArgs.link:
     setIrWrapperEnvVar('LINK', parsedArgs.link)
 
-setIrWrapperEnvVar('MV', 'mv -f')
-setIrWrapperEnvVar('am__mv', 'mv -f')
-setIrWrapperEnvVar('LN_S', 'ln -s')
-setIrWrapperEnvVar('CP', 'cp')
-
 # now replace the manual overrides:
 for s in (parsedArgs.env or []):
     (var, value) = s.split('=')
