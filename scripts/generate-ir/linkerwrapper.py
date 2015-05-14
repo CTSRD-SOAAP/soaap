@@ -37,7 +37,7 @@ class LinkerWrapper(CommandWrapper):
         if len(self.linkCandidates) == 0:
             raise CommandWrapperError('NO LINK CANDIDATES FOUND IN CMDLINE: ', self.realCommand)
 
-        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
+        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-libmd', '-o', self.output]
 
         inputFiles = findBitcodeFiles(self.linkCandidates)
         if len(inputFiles) == 0:
@@ -97,8 +97,9 @@ class LinkerWrapper(CommandWrapper):
                 filename = os.path.basename(param)
                 # remove the leading lib
                 if not filename.startswith('lib'):
-                    print(warningMsg('Found shared library on command line that doesn\'t start with "lib" :' +
-                                     param, self.realCommand))
+                    print(infoMsg('Found shared library on command line that doesn\'t start with "lib" -> linking in: ' + param))
+                    self.linkCandidates.append(param)
+                    continue
                 else:
                     # strip the lib part
                     filename = filename[3:]
@@ -147,7 +148,9 @@ class ArWrapper(CommandWrapper):
             raise CommandWrapperError('ar wrapper: \'cq\' or \'r\' mode is currently supported: ', self.realCommand)
 
         self.output = correspondingBitcodeName(self.realCommand[2])
-        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output]
+        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output, '-libmd']
+        if 'v' in operation:
+            self.generateIrCommand.append('-v')
         for file in findBitcodeFiles(self.realCommand[3:]):
             # TODO: --override only replaces existing symbols, it doesn't add new ones.
             # -> --override is useless in this case
@@ -174,8 +177,7 @@ class ArWrapper(CommandWrapper):
                 else:
                     self.createEmptyBitcodeFile(movedInput)
 
-                self.generateIrCommand.insert(3, movedInput)
-                self.generateIrCommand.insert(3, '-v')
+                self.generateIrCommand.append(movedInput)
                 print('Moved input:', movedInput)
                 # input('About to run: ' + str(self.generateIrCommand))
                 super().runGenerateIrCommand()
