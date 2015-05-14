@@ -524,6 +524,10 @@ void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
       if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
         XO::emit(" ({:file/%s})", loc->getFilename().str().c_str());
       }
+      string library = DebugUtils::getEnclosingLibrary(I);
+      if (!library.empty()) {
+        XO::emit(" [{:library/%s} library]", library.c_str());
+      }
       XO::emit("\n");
     }
     XO::emit("\n");
@@ -542,6 +546,10 @@ void SandboxUtils::outputPrivilegedFunctions() {
     Instruction* I = F->getEntryBlock().getTerminator();
     if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
       XO::emit(" ({:file/%s})", loc->getFilename().str().c_str());
+    }
+    string library = DebugUtils::getEnclosingLibrary(I);
+    if (!library.empty()) {
+      XO::emit(" [{:library/%s} library]", library.c_str());
     }
     XO::emit("\n");
   }
