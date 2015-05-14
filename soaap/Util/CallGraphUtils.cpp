@@ -27,8 +27,10 @@ map<const Function*, map<Context*, set<CallGraphEdge> > > CallGraphUtils::funcTo
 map<const Function*, map<Context*, CallInstSet> > CallGraphUtils::calleeToCalls;
 bool CallGraphUtils::caching = false;
 map<Function*, map<Function*,InstTrace> > CallGraphUtils::funcToShortestCallPaths;
-map<InstTrace,int> CallGraphUtils::callStackToID;
-set<InstTrace> CallGraphUtils::referencedCallStacks;
+
+DAGNode* CallGraphUtils::bottom = new DAGNode;
+map<int,DAGNode*> CallGraphUtils::idToDAGNode;
+map<DAGNode*,int> CallGraphUtils::dagNodeToId;
 
 void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
   unsigned long numFPcalls = 0;
@@ -577,97 +579,127 @@ InstTrace CallGraphUtils::findSandboxedPathToFunction(Function* Target, Sandbox*
   return sboxStack;
 }
 
+int CallGraphUtils::insertIntoTraceDAG(InstTrace& trace) {
+  DAGNode* currNode = bottom;
+  bool newNode = false;
+  for (InstTrace::reverse_iterator I=trace.rbegin(), E=trace.rend(); I!=E; I++) {
+    Instruction* inst = *I;
+    if (currNode->hasChild(inst)) {
+      currNode = currNode->getChild(inst);
+    }
+    else {
+      currNode = currNode->addChild(inst);
+      newNode = true;
+    }
+  }
+  int id;
+  if (newNode || dagNodeToId.find(currNode) == dagNodeToId.end()) {
+    static int nextId = 0;
+    id = nextId++;
+    //dbgs() << "Setting id to " << id << "\n";
+    idToDAGNode[id] = currNode;
+    dagNodeToId[currNode] = id;
+  }
+  else {
+    id = dagNodeToId[currNode];
+  }
+  return id;
+}
+
 void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   XO::emit(" Possible trace ({d:context}):\n", ContextUtils::stringifyContext(S ? S : ContextUtils::PRIV_CONTEXT).c_str());
   InstTrace callStack = S
     ? findSandboxedPathToFunction(Target, S, M)
     : findPrivilegedPathToFunction(Target, M);
-  if (callStackToID.find(callStack) != callStackToID.end()) {
-    // refer to ID
-    referencedCallStacks.insert(callStack);
-
-    XO::emit("{e:trace_reference/%s}", ("!trace" + llvm::Twine(callStackToID[callStack])).str().c_str());
-    int currInstIdx = 0;
-    bool shownDots = false;
-    for (Instruction* I : callStack) {
-      if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
-        Function* EnclosingFunc = I->getParent()->getParent();
-        unsigned Line = Loc->getLine();
-        StringRef File = Loc->getFilename();
-        unsigned FileOnlyIdx = File.find_last_of("/");
-        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-        string library = DebugUtils::getEnclosingLibrary(I);
-
-        bool printCall = CmdLineOpts::SummariseTraces <= 0
-                          || currInstIdx < CmdLineOpts::SummariseTraces
-                          || (callStack.size()-(currInstIdx+1))
-                              < CmdLineOpts::SummariseTraces;
-        if (printCall) {
-          XO::emit("      {d:function/%s} ",
-                    EnclosingFunc->getName().str().c_str());
-          XO::emit("({d:file/%s}:{d:line/%d})",
-                    FileOnly.str().c_str(),
-                    Line);
-          if (!library.empty()) {
-            XO::emit(" [{d:library/%s} library]", library.c_str());
-          }
-          XO::emit("\n");
-        }
-        else {
-          // output call only in machine-readable reports, and
-          // three lines of "..." otherwise
-          if (!shownDots) {
-            XO::emit("      ...\n");
-            XO::emit("      ...\n");
-            XO::emit("      ...\n");
-            shownDots = true;
-          }
-        }
-      }
-      currInstIdx++;
-    }
+  if (callStack.empty()) {
+    return;
   }
-  else {
-    static int nextCallStackId = 0;
-    callStackToID[callStack] = nextCallStackId++;
-    XO::List traceList("trace");
-    int currInstIdx = 0;
-    bool shownDots = false;
-    for (Instruction* I : callStack) {
-      if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
-        Function* EnclosingFunc = I->getParent()->getParent();
-        unsigned Line = Loc->getLine();
-        StringRef File = Loc->getFilename();
-        unsigned FileOnlyIdx = File.find_last_of("/");
-        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-        string library = DebugUtils::getEnclosingLibrary(I);
 
-        XO::Instance traceInstance(traceList);
-        bool printCall = CmdLineOpts::SummariseTraces <= 0
-                          || currInstIdx < CmdLineOpts::SummariseTraces
-                          || (callStack.size()-(currInstIdx+1))
-                              < CmdLineOpts::SummariseTraces;
-        if (printCall) {
-          XO::emit("      {:function/%s} ",
-                    EnclosingFunc->getName().str().c_str());
-          XO::Container locationContainer("location");
-          XO::emit("({:file/%s}:{:line/%d})",
-                    FileOnly.str().c_str(),
-                    Line);
-          if (!library.empty()) {
-            XO::emit(" [{:library/%s} library]", library.c_str());
-          }
-          XO::emit("\n");
+  int traceId = insertIntoTraceDAG(callStack);
+  XO::emit("{e:trace_ref/%s}", ("!trace" + Twine(traceId)).str().c_str());
+
+  int currInstIdx = 0;
+  bool shownDots = false;
+  for (Instruction* I : callStack) {
+    if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
+      Function* EnclosingFunc = I->getParent()->getParent();
+      unsigned Line = Loc->getLine();
+      StringRef File = Loc->getFilename();
+      unsigned FileOnlyIdx = File.find_last_of("/");
+      StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+      string library = DebugUtils::getEnclosingLibrary(I);
+
+      bool printCall = CmdLineOpts::SummariseTraces <= 0
+                        || currInstIdx < CmdLineOpts::SummariseTraces
+                        || (callStack.size()-(currInstIdx+1))
+                            < CmdLineOpts::SummariseTraces;
+      if (printCall) {
+        XO::emit("      {d:function/%s} ",
+                  EnclosingFunc->getName().str().c_str());
+        XO::emit("({d:file/%s}:{d:line/%d})",
+                  FileOnly.str().c_str(),
+                  Line);
+        if (!library.empty()) {
+          XO::emit(" [{d:library/%s} library]", library.c_str());
         }
-        else {
-          // output call only in machine-readable reports, and
-          // three lines of "..." otherwise
-          if (!shownDots) {
-            XO::emit("      ...\n");
-            XO::emit("      ...\n");
-            XO::emit("      ...\n");
-            shownDots = true;
-          }
+        XO::emit("\n");
+      }
+      else {
+        // output call only in machine-readable reports, and
+        // three lines of "..." otherwise
+        if (!shownDots) {
+          XO::emit("      ...\n");
+          XO::emit("      ...\n");
+          XO::emit("      ...\n");
+          shownDots = true;
+        }
+        /*
+        XO::emit("{e:function/%s}",
+                  EnclosingFunc->getName().str().c_str());
+        XO::Container locationContainer("location");
+        XO::emit("{e:file/%s}{e:line/%d}",
+                  FileOnly.str().c_str(),
+                  Line);
+        if (!library.empty()) {
+          XO::emit("{e:library/%s}", library.c_str());
+        }
+        */
+      }
+    }
+    currInstIdx++;
+  }
+  //XO::emit("\n\n");
+}
+
+void CallGraphUtils::emitTraceReferences() {
+  for (pair<int,DAGNode*> p : idToDAGNode) {
+    int id = p.first;
+    DAGNode* currNode = p.second;
+    if (currNode == bottom) {
+      continue;
+    }
+    string traceLabel = ("!trace" + Twine(id)).str();
+    XO::Container traceContainer(traceLabel.c_str());
+    XO::emit("{e:name/%s}", traceLabel.c_str());
+    XO::List trace("trace");
+    while (currNode != bottom) {
+      if (currNode != p.second && dagNodeToId.find(currNode) != dagNodeToId.end()) {
+        id = dagNodeToId[currNode];
+        XO::Instance traceRefInst(trace);
+        XO::emit("{e:trace_ref/%s}", ("!trace" + Twine(id)).str().c_str());
+        break;
+      }
+      else {
+        Instruction* I = currNode->getInstruction();
+        if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
+          Function* EnclosingFunc = I->getParent()->getParent();
+          unsigned Line = Loc->getLine();
+          StringRef File = Loc->getFilename();
+          unsigned FileOnlyIdx = File.find_last_of("/");
+          StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
+          string library = DebugUtils::getEnclosingLibrary(I);
+          XO::Instance traceInst(trace);
+
           XO::emit("{e:function/%s}",
                     EnclosingFunc->getName().str().c_str());
           XO::Container locationContainer("location");
@@ -678,37 +710,7 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
             XO::emit("{e:library/%s}", library.c_str());
           }
         }
-      }
-      currInstIdx++;
-    }
-    //XO::emit("\n\n");
-  }
-}
-
-void CallGraphUtils::emitTraceReferences() {
-  for (InstTrace trace : referencedCallStacks) {
-    stringstream ss;
-    ss << "!trace" << callStackToID[trace];
-    XO::List traceList(ss.str().c_str());
-    for (Instruction* I : trace) {
-      if (DILocation* Loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
-        Function* EnclosingFunc = I->getParent()->getParent();
-        unsigned Line = Loc->getLine();
-        StringRef File = Loc->getFilename();
-        unsigned FileOnlyIdx = File.find_last_of("/");
-        StringRef FileOnly = FileOnlyIdx == -1 ? File : File.substr(FileOnlyIdx+1);
-        string library = DebugUtils::getEnclosingLibrary(I);
-
-        XO::Instance traceInstance(traceList);
-        XO::emit("{e:function/%s}",
-                  EnclosingFunc->getName().str().c_str());
-        XO::Container locationContainer("location");
-        XO::emit("{e:file/%s}{e:line/%d}",
-                  FileOnly.str().c_str(),
-                  Line);
-        if (!library.empty()) {
-          XO::emit("{e:library/%s}", library.c_str());
-        }
+        currNode = currNode->getParent();
       }
     }
   }

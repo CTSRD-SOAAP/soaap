@@ -11,6 +11,39 @@ using namespace llvm;
 
 namespace soaap {
   class FPTargetsAnalysis;
+  class DAGNode {
+    public:
+      DAGNode() : DAGNode(nullptr, nullptr) { }
+      DAGNode(DAGNode* p, Instruction* i) : parent(p), inst(i) { }
+
+      DAGNode* parent;
+      Instruction* inst;
+      list<DAGNode*> children;
+
+      bool hasChild(Instruction* I) {
+        for (DAGNode* c : children) {
+          if (c->getInstruction() == I) {
+            return true;
+          }
+        }
+        return false;
+      }
+      DAGNode* addChild(Instruction* I) {
+        DAGNode* c = new DAGNode(this, I);
+        children.push_back(c);
+        return c;
+      }
+      DAGNode* getChild(Instruction* I) {
+        for (DAGNode* c : children) {
+          if (c->getInstruction() == I) {
+            return c;
+          }
+        }
+        return nullptr;
+      }
+      Instruction* getInstruction() { return inst; }
+      DAGNode* getParent() { return parent; }
+  };
   class CallGraphUtils {
     public:
       static void buildBasicCallGraph(Module& M, SandboxVector& sandboxes);
@@ -37,6 +70,7 @@ namespace soaap {
        */
       static void emitCallTrace(Function* Target, Sandbox* S, Module& M);
       static void emitTraceReferences();
+      static int insertIntoTraceDAG(InstTrace& trace);
     private:
       static map<const CallInst*, map<Context*, FunctionSet> > callToCallees;
       static map<const Function*, map<Context*, FunctionSet> > funcToCallees;
@@ -49,8 +83,10 @@ namespace soaap {
       static bool isReachableFromHelper(Function* Source, Function* Curr, Function* Dest, Sandbox* Ctx, set<Function*>& visited, Module& M);
       static FPTargetsAnalysis& getFPAnnotatedTargetsAnalysis();
       static FPTargetsAnalysis& getFPInferredTargetsAnalysis();
-      static map<InstTrace,int> callStackToID;
-      static set<InstTrace> referencedCallStacks;
+      
+      static DAGNode* bottom;
+      static map<int,DAGNode*> idToDAGNode;
+      static map<DAGNode*,int> dagNodeToId;
   };
 }
 namespace llvm {
