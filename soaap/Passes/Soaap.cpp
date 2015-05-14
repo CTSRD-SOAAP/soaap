@@ -28,6 +28,7 @@
 #include "OS/Sandbox/Capsicum.h"
 #include "OS/Sandbox/SandboxPlatform.h"
 #include "OS/Sandbox/Seccomp.h"
+#include "OS/Sandbox/SeccompBPF.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassHierarchyUtils.h"
 #include "Util/ContextUtils.h"
@@ -206,7 +207,7 @@ void Soaap::processCmdLineArgs(Module& M) {
     }
     case SandboxPlatformName::Seccomp: {
       if (CmdLineOpts::OperatingSystem != OperatingSystemName::Linux) {
-        errs() << "ERROR: Linux is only currently being modelled for Linux, please specify --soaap-os=linux";
+        errs() << "ERROR: Seccomp is only currently being modelled for Linux, please specify --soaap-os=linux";
         exit(-1);
       }
       sandboxPlatform.reset(new class Seccomp);
@@ -214,9 +215,13 @@ void Soaap::processCmdLineArgs(Module& M) {
     }
     case SandboxPlatformName::SeccompBPF: {
       if (CmdLineOpts::OperatingSystem != OperatingSystemName::Linux) {
-        errs() << "ERROR: Linux is only currently being modelled for Linux, please specify --soaap-os=linux";
+        errs() << "ERROR: Seccomp-BPF is only currently being modelled for Linux, please specify --soaap-os=linux";
         exit(-1);
       }
+      if (CmdLineOpts::SandboxPolicy.empty()) {
+        errs() << "WARNING: No seccomp sandbox policy file specified, will assume deny-all semantics\n";
+      }
+      sandboxPlatform.reset(new class SeccompBPF);
       break;
     }
     default: {

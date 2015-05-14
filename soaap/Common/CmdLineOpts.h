@@ -45,6 +45,7 @@ namespace soaap {
       static bool DumpRPCGraph;
       static OperatingSystemName OperatingSystem;
       static SandboxPlatformName SandboxPlatform;
+      static string SandboxPolicy;
       static bool DumpDOTCallGraph;
       static bool PrintCallGraph;
       static list<ReportOutputFormat> ReportOutputFormats;

@@ -28,6 +28,7 @@ add_llvm_library(SOAAP
   OS/Sandbox/Capsicum.cpp
   OS/Sandbox/SandboxPlatform.cpp
   OS/Sandbox/Seccomp.cpp
+  OS/Sandbox/SeccompBPF.cpp
   Util/CallGraphUtils.cpp
   Util/ClassHierarchyUtils.cpp
   Util/ContextUtils.cpp

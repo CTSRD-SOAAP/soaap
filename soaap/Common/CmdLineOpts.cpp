@@ -138,6 +138,12 @@ static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platf
        cl::location(CmdLineOpts::SandboxPlatform),
        cl::init(SandboxPlatformName::Capsicum)); // default value is Capsicum
 
+string CmdLineOpts::SandboxPolicy;
+static cl::opt<string, true> ClSandboxPolicyFile("soaap-sandbox-policy",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Sandbox-policy file"),
+       cl::location(CmdLineOpts::SandboxPolicy));
+
 bool CmdLineOpts::DumpDOTCallGraph;
 static cl::opt<bool, true> ClDumpDOTCallGraph("soaap-dump-dot-callgraph",
        cl::cat(CmdLineOpts::SoaapCategory),
