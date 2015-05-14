@@ -10,7 +10,7 @@ using namespace std;
 
 namespace soaap {
   enum class SandboxPlatformName {
-    None, Annotated, Capsicum, Seccomp
+    None, Annotated, Capsicum, ChrootFreeBSD, ChrootLinux, Seccomp, SeccompBPF
   };
   enum class ReportOutputFormat {
     Text, HTML, JSON, XML

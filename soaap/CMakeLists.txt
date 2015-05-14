@@ -22,6 +22,7 @@ add_llvm_library(SOAAP
   Analysis/InfoFlow/RPC/RPCGraph.cpp
   Instrument/PerformanceEmulationInstrumenter.cpp
   OS/FreeBSDSysCallProvider.cpp
+  OS/LinuxSysCallProvider.cpp
   OS/SysCallProvider.cpp
   OS/Sandbox/NoSandboxPlatform.cpp
   OS/Sandbox/Capsicum.cpp

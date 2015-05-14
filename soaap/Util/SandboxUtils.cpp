@@ -1,4 +1,5 @@
 #include "Common/Debug.h"
+#include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/ClassifiedUtils.h"
 #include "Util/ContextUtils.h"
@@ -502,36 +503,49 @@ Sandbox* SandboxUtils::getSandboxWithName(string name, SandboxVector& sandboxes)
 }
 
 void SandboxUtils::outputSandboxedFunctions(SandboxVector& sandboxes) {
+  XO::List sandboxedFuncsList("sandboxedFuncs");
   for (Sandbox* S : sandboxes) {
-    outs() << INDENT_1 << "Sandbox: " << S->getName() << " (" << (S->isPersistent() ? "persistent" : "ephemeral") << ")\n";
+    XO::Instance sandboxedFuncsInst(sandboxedFuncsList);
+    
+    XO::emit(INDENT_1);
+    XO::emit("Sandbox: {:name/%s} (", S->getName().c_str());
+    XO::emit(S->isPersistent() ? "persistent" : "ephemeral");
+    XO::emit(")\n");
+
+    XO::List funcsList("funcs");
     for (Function* F : S->getFunctions()) {
       if (F->isDeclaration()) { continue; }
-      outs() << INDENT_2 << F->getName();
+      XO::Instance funcInst(funcsList);
+      XO::emit(INDENT_2);
+      XO::emit("{:name}", F->getName().str().c_str());
       // get filename of file
       Instruction* I = F->getEntryBlock().getTerminator();
       //dbgs() << INDENT_3 << "I: " << *I << "\n";
       if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
-        outs() << " (" << loc->getFilename().str() << ")";
+        XO::emit(" ({:file/%s})", loc->getFilename().str().c_str());
       }
-      outs() << "\n";
+      XO::emit("\n");
     }
-    outs() << "\n";
+    XO::emit("\n");
   }
 }
 
 void SandboxUtils::outputPrivilegedFunctions() {
-  outs() << INDENT_1 << "Privileged methods:\n";
+  XO::emit((INDENT_1 + Twine("Privileged methods:\n")).str().c_str());
+  XO::List privFuncsList("privilegedFuncs");
   for (Function* F : privilegedMethods) {
     if (F->isDeclaration()) { continue; }
-    outs() << INDENT_2 << F->getName();
+    XO::Instance privFuncInst(privFuncsList);
+    XO::emit(INDENT_2);
+    XO::emit("{:func/%s}", F->getName().str().c_str());
     // output location
     Instruction* I = F->getEntryBlock().getTerminator();
     if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
-      outs() << " (" << loc->getFilename().str() << ")";
+      XO::emit(" ({:file/%s})", loc->getFilename().str().c_str());
     }
-    outs() << "\n";
+    XO::emit("\n");
   }
-  outs() << "\n";
+  XO::emit("\n");
 }
 
 bool SandboxUtils::isSandboxedFunction(Function* F, SandboxVector& sandboxes) {

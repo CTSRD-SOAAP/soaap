@@ -44,6 +44,7 @@ namespace soaap {
       SandboxVector sandboxes;
       FunctionSet privilegedMethods;
       shared_ptr<SandboxPlatform> sandboxPlatform;
+      shared_ptr<SysCallProvider> sysCallProvider;
       void processCmdLineArgs(Module& M);
       void checkPrivilegedCalls(Module& M);
       void checkLeakedRights(Module& M);

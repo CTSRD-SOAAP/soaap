@@ -119,8 +119,11 @@ static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platf
        cl::values(
          clEnumValN(SandboxPlatformName::None, "none", "None"),
          clEnumValN(SandboxPlatformName::Annotated, "annotated", "Annotated"),
-         clEnumValN(SandboxPlatformName::Capsicum, "capsicum", "Capsicum (default)"),
+         clEnumValN(SandboxPlatformName::Capsicum, "capsicum", "Capsicum on FreeBSD (default)"),
+         clEnumValN(SandboxPlatformName::ChrootFreeBSD, "chroot-freebsd", "Chroot on FreeBSD"),
+         clEnumValN(SandboxPlatformName::ChrootLinux, "chroot-linux", "Chroot on Linux"),
          clEnumValN(SandboxPlatformName::Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),
+         clEnumValN(SandboxPlatformName::SeccompBPF, "seccomp-bpf", "Secure Computing Mode 2 on Linux (Seccomp-BPF)"),
        clEnumValEnd),
        cl::location(CmdLineOpts::SandboxPlatform),
        cl::init(SandboxPlatformName::Capsicum)); // default value is Capsicum

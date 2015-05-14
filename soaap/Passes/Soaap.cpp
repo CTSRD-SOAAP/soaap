@@ -186,6 +186,9 @@ void Soaap::processCmdLineArgs(Module& M) {
       sandboxPlatform.reset(new class Seccomp);
       break;
     }
+    case SandboxPlatformName::SeccompBPF: {
+      break;
+    }
     default: {
       errs() << "Unrecognised Sandbox Platform\n";
     }
