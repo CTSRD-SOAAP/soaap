@@ -16,24 +16,34 @@
 #
 #
 
+import os
 from commandwrapper import *
 
 
 class CoreUtilsWrapper(CommandWrapper):
     def __init__(self, originalCommandLine):
+        originalCommandLine[0] = os.path.join("/usr/bin/", os.path.basename(originalCommandLine[0]))
+        # TODO: remove our bindir from path and the search instead, since /usr/bin/foo might not always be correct
         super().__init__(originalCommandLine)
         self.mode = Mode.coreutils
+        self.needForce = False
 
     def computeWrapperCommand(self):
         haveLibs = False
+        hasForceFlag = False
         # we have a .so or .a that is being moved -> move the bitcode lib as well
         self.generateIrCommand.append(self.realCommand[0])
         for i in self.realCommand[1:]:
             if isLibrary(i):
                 self.generateIrCommand.append(correspondingBitcodeName(i))
                 haveLibs = True
-            else:
-                self.generateIrCommand.append(i)
+                continue
+            if i.startswith("-") and "f" in i:
+                hasForceFlag = True
+            self.generateIrCommand.append(i)
+
+        if not hasForceFlag and self.needForce:
+            self.generateIrCommand.insert(1, "-f")
 
         if not haveLibs:
             self.nothingToDo = True
@@ -43,13 +53,16 @@ class CoreUtilsWrapper(CommandWrapper):
 class MvWrapper(CoreUtilsWrapper):
     def __init__(self, originalCommandLine):
         super().__init__(originalCommandLine)
+        self.needForce = True
 
 
 class LnWrapper(CoreUtilsWrapper):
     def __init__(self, originalCommandLine):
         super().__init__(originalCommandLine)
+        self.needForce = True
 
 
 class CpWrapper(CoreUtilsWrapper):
     def __init__(self, originalCommandLine):
         super().__init__(originalCommandLine)
+        # TODO: do we need -f here as well?
