@@ -48,7 +48,7 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
               XO::emit(" *** Sandbox \"{:sandbox}\" calls privileged function "
                        "\"{:privileged_func/%s}\" that they are not allowed to. "
                        "If intended, annotate this permission using the "
-                       "__soaap_callgates annotation.\n",
+                       "__soaap_callgates annotation.\n\n",
                        S->getName().c_str(),
                        privilegedFunc->getName().str().c_str());
               InstUtils::emitInstLocation(C);
