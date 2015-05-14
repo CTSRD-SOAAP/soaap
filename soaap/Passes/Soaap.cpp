@@ -22,6 +22,8 @@
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/RPC/RPCGraph.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
+#include "OS/FreeBSDSysCallProvider.h"
+#include "OS/LinuxSysCallProvider.h"
 #include "OS/Sandbox/NoSandboxPlatform.h"
 #include "OS/Sandbox/Capsicum.h"
 #include "OS/Sandbox/SandboxPlatform.h"
@@ -167,6 +169,22 @@ bool Soaap::runOnModule(Module& M) {
 }
 
 void Soaap::processCmdLineArgs(Module& M) {
+  // process ClOperatingSystem
+  switch (CmdLineOpts::OperatingSystem) {
+    case OperatingSystemName::FreeBSD: {
+      operatingSystem.reset(new class FreeBSDSysCallProvider);
+      break;
+    }
+    case OperatingSystemName::Linux: {
+      operatingSystem.reset(new class LinuxSysCallProvider);
+      break;
+    }
+  }
+
+  if (operatingSystem) {
+    operatingSystem->initSysCalls();
+  }
+
   // process ClSandboxPlatform
   switch (CmdLineOpts::SandboxPlatform) {
     case SandboxPlatformName::None: {
@@ -179,14 +197,26 @@ void Soaap::processCmdLineArgs(Module& M) {
       break;
     }
     case SandboxPlatformName::Capsicum: {
+      if (CmdLineOpts::OperatingSystem != OperatingSystemName::FreeBSD) {
+        errs() << "ERROR: Capsicum is only currently being modelled for FreeBSD, please specify --soaap-os=freebsd";
+        exit(-1);
+      }
       sandboxPlatform.reset(new class Capsicum);
       break;
     }
     case SandboxPlatformName::Seccomp: {
+      if (CmdLineOpts::OperatingSystem != OperatingSystemName::Linux) {
+        errs() << "ERROR: Linux is only currently being modelled for Linux, please specify --soaap-os=linux";
+        exit(-1);
+      }
       sandboxPlatform.reset(new class Seccomp);
       break;
     }
     case SandboxPlatformName::SeccompBPF: {
+      if (CmdLineOpts::OperatingSystem != OperatingSystemName::Linux) {
+        errs() << "ERROR: Linux is only currently being modelled for Linux, please specify --soaap-os=linux";
+        exit(-1);
+      }
       break;
     }
     default: {
@@ -344,14 +374,14 @@ void Soaap::checkPropagationOfClassifiedData(Module& M) {
 }
 
 void Soaap::checkFileDescriptors(Module& M) {
-  CapabilityAnalysis analysis(CmdLineOpts::ContextInsens);
+  CapabilityAnalysis analysis(CmdLineOpts::ContextInsens, operatingSystem);
   analysis.doAnalysis(M, sandboxes);
 }
 
 void Soaap::checkSysCalls(Module& M) {
-  SysCallsAnalysis sysCallsAnalysis(sandboxPlatform);
+  SysCallsAnalysis sysCallsAnalysis(sandboxPlatform, operatingSystem);
   sysCallsAnalysis.doAnalysis(M, sandboxes);
-  CapabilitySysCallsAnalysis capsAnalysis(CmdLineOpts::ContextInsens, sandboxPlatform, sysCallsAnalysis);
+  CapabilitySysCallsAnalysis capsAnalysis(CmdLineOpts::ContextInsens, sandboxPlatform, operatingSystem, sysCallsAnalysis);
   capsAnalysis.doAnalysis(M, sandboxes);
 }
 

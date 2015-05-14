@@ -112,6 +112,17 @@ static cl::opt<bool, true> ClDumpRPCGraph("soaap-dump-rpc-graph",
        cl::desc("Dump RPC Graph"),
        cl::location(CmdLineOpts::DumpRPCGraph));
 
+OperatingSystemName CmdLineOpts::OperatingSystem;
+static cl::opt<OperatingSystemName, true> ClOperatingSystem("soaap-os",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Operating system to model"),
+       cl::values(
+         clEnumValN(OperatingSystemName::FreeBSD, "freebsd", "FreeBSD (default)"),
+         clEnumValN(OperatingSystemName::Linux, "linux", "Linux"),
+       clEnumValEnd),
+       cl::location(CmdLineOpts::OperatingSystem),
+       cl::init(OperatingSystemName::FreeBSD)); // default value is Capsicum
+
 SandboxPlatformName CmdLineOpts::SandboxPlatform;
 static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platform",
        cl::cat(CmdLineOpts::SoaapCategory),
@@ -119,11 +130,10 @@ static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platf
        cl::values(
          clEnumValN(SandboxPlatformName::None, "none", "None"),
          clEnumValN(SandboxPlatformName::Annotated, "annotated", "Annotated"),
-         clEnumValN(SandboxPlatformName::Capsicum, "capsicum", "Capsicum on FreeBSD (default)"),
-         clEnumValN(SandboxPlatformName::ChrootFreeBSD, "chroot-freebsd", "Chroot on FreeBSD"),
-         clEnumValN(SandboxPlatformName::ChrootLinux, "chroot-linux", "Chroot on Linux"),
+         clEnumValN(SandboxPlatformName::Capsicum, "capsicum", "Capsicum (default)"),
+         clEnumValN(SandboxPlatformName::Chroot, "chroot", "Chroot"),
          clEnumValN(SandboxPlatformName::Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),
-         clEnumValN(SandboxPlatformName::SeccompBPF, "seccomp-bpf", "Secure Computing Mode 2 on Linux (Seccomp-BPF)"),
+         clEnumValN(SandboxPlatformName::SeccompBPF, "seccomp-bpf", "Secure Computing Mode BPF (Seccomp-BPF)"),
        clEnumValEnd),
        cl::location(CmdLineOpts::SandboxPlatform),
        cl::init(SandboxPlatformName::Capsicum)); // default value is Capsicum

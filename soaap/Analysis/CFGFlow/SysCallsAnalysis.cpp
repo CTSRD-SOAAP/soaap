@@ -21,7 +21,6 @@
 using namespace soaap;
 
 void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, SandboxVector& sandboxes) {
-  freeBSDSysCallProvider.initSysCalls();
   for (Sandbox* S : sandboxes) {
     CallInstVector sysCallLimitPoints = S->getSysCallLimitPoints();
     for (CallInst* C : sysCallLimitPoints) {
@@ -33,7 +32,7 @@ void SysCallsAnalysis::initialise(QueueSet<BasicBlock*>& worklist, Module& M, Sa
       for (Function* F : allowedSysCalls) {
         string sysCallName = F->getName();
         SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "setting bit for " << sysCallName << "\n")
-        int idx = freeBSDSysCallProvider.getIdx(sysCallName);
+        int idx = operatingSystem->getIdx(sysCallName);
         if (idx == -1) {
           errs() << "WARNING: \"" << sysCallName << "\" does not appear to be a system call\n";
           continue;
@@ -63,7 +62,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
         for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
           string funcName = Callee->getName();
           SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "callee: " << funcName << "\n")
-          if (freeBSDSysCallProvider.isSysCall(funcName)) {
+          if (operatingSystem->isSysCall(funcName)) {
             SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall " << funcName << " found\n")
             bool sysCallAllowed = false;
             if (sandboxPlatform) {
@@ -77,7 +76,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
               // We distinguish an empty vector from C not appearing in state
               // to avoid blowing up the state map
               BitVector& vector = state[C];
-              int idx = freeBSDSysCallProvider.getIdx(funcName);
+              int idx = operatingSystem->getIdx(funcName);
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "syscall idx: " << idx << "\n")
               SDEBUG("soaap.analysis.cfgflow.syscalls", 3, dbgs() << "allowed sys calls vector size and count: " << vector.size() << "," << vector.count() << "\n")
               sysCallAllowed = vector.size() > idx && vector.test(idx);
@@ -110,7 +109,7 @@ bool SysCallsAnalysis::allowedToPerformNamedSystemCallAtSandboxedPoint(Instructi
     return sandboxPlatform->isSysCallPermitted(sysCall);
   }
   else if (state.find(I) != state.end()) {
-    int idx = freeBSDSysCallProvider.getIdx(sysCall);
+    int idx = operatingSystem->getIdx(sysCall);
     BitVector& vector = state[I];
     return vector.size() > idx && vector.test(idx);
   }
@@ -123,7 +122,7 @@ string SysCallsAnalysis::stringifyFact(BitVector& vector) {
   int idx = 0;
   for (int i=0; i<vector.count(); i++) {
     idx = (i == 0) ? vector.find_first() : vector.find_next(idx);
-    ss << ((i > 0) ? "," : "") << freeBSDSysCallProvider.getSysCall(idx);
+    ss << ((i > 0) ? "," : "") << operatingSystem->getSysCall(idx);
   }
   ss << "]";
   return ss.str();

@@ -9,8 +9,11 @@ using namespace llvm;
 using namespace std;
 
 namespace soaap {
+  enum class OperatingSystemName {
+    FreeBSD, Linux
+  };
   enum class SandboxPlatformName {
-    None, Annotated, Capsicum, ChrootFreeBSD, ChrootLinux, Seccomp, SeccompBPF
+    None, Annotated, Capsicum, Chroot, Seccomp, SeccompBPF
   };
   enum class ReportOutputFormat {
     Text, HTML, JSON, XML
@@ -40,6 +43,7 @@ namespace soaap {
       static int DebugVerbosity;
       static int SummariseTraces;
       static bool DumpRPCGraph;
+      static OperatingSystemName OperatingSystem;
       static SandboxPlatformName SandboxPlatform;
       static bool DumpDOTCallGraph;
       static bool PrintCallGraph;

@@ -14,7 +14,7 @@ namespace soaap {
 
   class CapabilityAnalysis : public InfoFlowAnalysis<BitVector> {
     public:
-      CapabilityAnalysis(bool contextInsensitive) : InfoFlowAnalysis<BitVector>(contextInsensitive, true) { }
+      CapabilityAnalysis(bool contextInsensitive, shared_ptr<SysCallProvider>& os) : InfoFlowAnalysis<BitVector>(contextInsensitive, true), operatingSystem(os) { }
 
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
@@ -25,7 +25,7 @@ namespace soaap {
       virtual string stringifyFact(BitVector vector);
 
     private:
-      FreeBSDSysCallProvider freeBSDSysCallProvider;
+      shared_ptr<SysCallProvider> operatingSystem;
       void validateDescriptorAccesses(Module& M, SandboxVector& sandboxes, string syscall, int requiredPerm);
   };
 }

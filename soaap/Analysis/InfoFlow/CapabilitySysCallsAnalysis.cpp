@@ -17,13 +17,12 @@
 using namespace soaap;
 
 void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
-  freeBSDSysCallProvider.initSysCalls();
   
   // Add annotations on file descriptor parameters to sandbox entry point
   for (Sandbox* S : sandboxes) {
     ValueFunctionSetMap caps = S->getCapabilities();
     for (pair<const Value*,FunctionSet> cap : caps) {
-      function<int (Function*)> func = [&](Function* F) -> int { return freeBSDSysCallProvider.getIdx(F->getName()); };
+      function<int (Function*)> func = [&](Function* F) -> int { return operatingSystem->getIdx(F->getName()); };
       state[S][cap.first] = TypeUtils::convertFunctionSetToBitVector(cap.second, func);
       SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << INDENT_2 << "Adding " << *(cap.first) << "\n");
       addToWorklist(cap.first, S, worklist);
@@ -163,13 +162,13 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
         for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
           string funcName = Callee->getName();
           SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "callee: " << funcName << "\n")
-          if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName) && sysCallsAnalysis.allowedToPerformNamedSystemCallAtSandboxedPoint(C, funcName)) {
+          if (operatingSystem->isSysCall(funcName) && operatingSystem->hasFdArg(funcName) && sysCallsAnalysis.allowedToPerformNamedSystemCallAtSandboxedPoint(C, funcName)) {
             // This is an allowed system call. If the sandbox platform does not
             // permit it then SysCallsAnalysis will output an error, so we can
             // ignore that case here.
             SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall " << funcName << " found and takes fd arg\n")
-            int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
-            int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
+            int fdArgIdx = operatingSystem->getFdArgIdx(funcName);
+            int sysCallIdx = operatingSystem->getIdx(funcName);
             Value* fdArg = C->getArgOperand(fdArgIdx);
             
             SDEBUG("soaap.analysis.infoflow.capsyscalls", 3, dbgs() << "syscall idx: " << sysCallIdx << "\n")
@@ -223,7 +222,7 @@ string CapabilitySysCallsAnalysis::stringifyFact(BitVector vector) {
   int idx = 0;
   for (int i=0; i<vector.count(); i++) {
     idx = (i == 0) ? vector.find_first() : vector.find_next(idx);
-    ss << ((i > 0) ? "," : "") << freeBSDSysCallProvider.getSysCall(idx);
+    ss << ((i > 0) ? "," : "") << operatingSystem->getSysCall(idx);
   }
   ss << "]";
   return ss.str();
@@ -232,7 +231,7 @@ string CapabilitySysCallsAnalysis::stringifyFact(BitVector vector) {
 BitVector CapabilitySysCallsAnalysis::convertFunctionSetToBitVector(FunctionSet sysCalls) {
   BitVector vector;
   for (Function* F : sysCalls) {
-    int idx = freeBSDSysCallProvider.getIdx(F->getName());
+    int idx = operatingSystem->getIdx(F->getName());
     if (vector.size() <= idx) {
       vector.resize(idx+1);
     }

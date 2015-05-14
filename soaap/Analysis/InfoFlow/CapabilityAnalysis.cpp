@@ -13,11 +13,10 @@
 using namespace soaap;
 
 void CapabilityAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
-  freeBSDSysCallProvider.initSysCalls();
   for (Sandbox* S : sandboxes) {
     ValueFunctionSetMap caps = S->getCapabilities();
     for (pair<const Value*,FunctionSet> cap : caps) {
-      function<int (Function*)> func = [&](Function* F) -> int { return freeBSDSysCallProvider.getIdx(F->getName()); };
+      function<int (Function*)> func = [&](Function* F) -> int { return operatingSystem->getIdx(F->getName()); };
       state[S][cap.first] = TypeUtils::convertFunctionSetToBitVector(cap.second, func);
       addToWorklist(cap.first, S, worklist);
     }
@@ -47,11 +46,11 @@ void CapabilityAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
           for (Function* Callee : CallGraphUtils::getCallees(C, S, M)) {
             string funcName = Callee->getName();
             SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "callee: " << funcName << "\n")
-            if (freeBSDSysCallProvider.isSysCall(funcName) && freeBSDSysCallProvider.hasFdArg(funcName)) {
+            if (operatingSystem->isSysCall(funcName) && operatingSystem->hasFdArg(funcName)) {
               SDEBUG("soaap.analysis.infoflow.capability", 3, dbgs() << "syscall " << funcName << " found\n")
               // this is a system call
-              int fdArgIdx = freeBSDSysCallProvider.getFdArgIdx(funcName);
-              int sysCallIdx = freeBSDSysCallProvider.getIdx(funcName);
+              int fdArgIdx = operatingSystem->getFdArgIdx(funcName);
+              int sysCallIdx = operatingSystem->getIdx(funcName);
               Value* fdArg = C->getArgOperand(fdArgIdx);
               
               BitVector& vector = state[S][fdArg];
@@ -84,7 +83,7 @@ string CapabilityAnalysis::stringifyFact(BitVector vector) {
   int idx = 0;
   for (int i=0; i<vector.count(); i++) {
     idx = (i == 0) ? vector.find_first() : vector.find_next(idx);
-    ss << ((i > 0) ? "," : "") << freeBSDSysCallProvider.getSysCall(idx);
+    ss << ((i > 0) ? "," : "") << operatingSystem->getSysCall(idx);
   }
   ss << "]";
   return ss.str();

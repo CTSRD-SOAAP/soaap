@@ -2,7 +2,7 @@
 #define SOAAP_ANALYSIS_CFGFLOW_SYSCALLSANALYSIS_H
 
 #include "Analysis/CFGFlow/CFGFlowAnalysis.h"
-#include "OS/FreeBSDSysCallProvider.h"
+#include "OS/SysCallProvider.h"
 #include "OS/Sandbox/SandboxPlatform.h"
 
 #include "llvm/ADT/BitVector.h"
@@ -11,7 +11,7 @@ namespace soaap {
 
   class SysCallsAnalysis : public CFGFlowAnalysis<BitVector> {
     public:
-      SysCallsAnalysis(shared_ptr<SandboxPlatform>& platform) : sandboxPlatform(platform) { }
+      SysCallsAnalysis(shared_ptr<SandboxPlatform>& platform, shared_ptr<SysCallProvider>& os) : sandboxPlatform(platform), operatingSystem(os) { }
       bool allowedToPerformNamedSystemCallAtSandboxedPoint(Instruction* I, string sysCall);
 
     protected:
@@ -21,7 +21,7 @@ namespace soaap {
       virtual string stringifyFact(BitVector& fact);
 
     private:
-      FreeBSDSysCallProvider freeBSDSysCallProvider;
+      shared_ptr<SysCallProvider> operatingSystem;
       shared_ptr<SandboxPlatform> sandboxPlatform;
   };
 

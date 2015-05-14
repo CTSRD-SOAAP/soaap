@@ -16,10 +16,17 @@ namespace soaap {
 
   class CapabilitySysCallsAnalysis : public InfoFlowAnalysis<BitVector> {
     public:
-      CapabilitySysCallsAnalysis(bool contextInsensitive, shared_ptr<SandboxPlatform>& platform, SysCallsAnalysis& analysis) : InfoFlowAnalysis<BitVector>(contextInsensitive, true), sandboxPlatform(platform), sysCallsAnalysis(analysis) { }
+      CapabilitySysCallsAnalysis(bool contextInsensitive,
+                                 shared_ptr<SandboxPlatform>& platform,
+                                 shared_ptr<SysCallProvider>& os,
+                                 SysCallsAnalysis& analysis)
+           : InfoFlowAnalysis<BitVector>(contextInsensitive, true),
+             sandboxPlatform(platform),
+             operatingSystem(os),
+             sysCallsAnalysis(analysis) { }
 
     protected:
-      FreeBSDSysCallProvider freeBSDSysCallProvider;
+      shared_ptr<SysCallProvider> operatingSystem;
       shared_ptr<SandboxPlatform> sandboxPlatform;
       SysCallsAnalysis& sysCallsAnalysis;
       map<int,BitVector> intFdToAllowedSysCalls;
