@@ -55,6 +55,9 @@ __attribute__((noinline)) static void __soaap_past_vulnerability_at_point(const 
   }
 }
 
+#define __soaap_live_vuln_fn(CVE) __soaap_vuln_fn(CVE)
+#define __soaap_live_vuln_pt(CVE) __soaap_vuln_pt(CVE)
+
 // code provenance
 #define __soaap_provenance(X) \
   static char* __attribute__((used)) __soaap_provenance_var = X;
