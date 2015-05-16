@@ -2,7 +2,6 @@
  * RUN: clang %cflags -emit-llvm -S %s -o %t.ll
  * RUN: soaap -o %t.soaap.ll --soaap-report-output-formats=json --soaap-report-file-prefix=%t %t.ll > %t.out
  * RUN: FileCheck %s -input-file %t.json
- * XFAIL: *
  */
 #include "soaap.h"
 
@@ -40,78 +39,138 @@ void baz(int ifd) {
 void bar() {
 }
 
-//CHECK:    "vulnerabilities": [
-//CHECK-NEXT:        {
-//CHECK-NEXT:            "location": {
-//CHECK-NEXT:                "function": "baz",
-//CHECK-NEXT:                "filename": "{{.*}}",
-//CHECK-NEXT:                "line_number": 28
-//CHECK-NEXT:            },
-//CHECK-NEXT:            "vuln_vendor": false,
-//CHECK-NEXT:            "cves": [
-//CHECK-NEXT:                "CVE_1970_XXX"
-//CHECK-NEXT:            ],
-//CHECK-NEXT:            "sandboxed": true,
-//CHECK-NEXT:            "sandbox": "mysandbox",
-//CHECK-NEXT:            "call_stack": [
-//CHECK-NEXT:                {
-//CHECK-NEXT:                    "function": "foo",
-//CHECK-NEXT:                    "filename": "{{.*}}",
-//CHECK-NEXT:                    "line_number": 25
-//CHECK-NEXT:                },
-//CHECK-NEXT:                {
-//CHECK-NEXT:                    "function": "main",
-//CHECK-NEXT:                    "filename": "{{.*}}",
-//CHECK-NEXT:                    "line_number": 19
-//CHECK-NEXT:                }
-//CHECK-NEXT:            ],
-//CHECK-NEXT:            "leaks_limited_right": true,
-//CHECK-NEXT:            "rights": {
-//CHECK-NEXT:                "globals": [
-//CHECK-NEXT:                    {
-//CHECK-NEXT:                        "var_name": "global",
-//CHECK-NEXT:                        "rights": [
-//CHECK-NEXT:                            "Read"
-//CHECK-NEXT:                        ]
-//CHECK-NEXT:                    }
-//CHECK-NEXT:                ],
-//CHECK-NEXT:                "privates": [
-//CHECK-NEXT:                    {
-//CHECK-NEXT:                        "var_name": "buffer",
-//CHECK-NEXT:                        "var_type": "local"
-//CHECK-NEXT:                    }
-//CHECK-NEXT:                ],
-//CHECK-NEXT:                "callgates": [
-//CHECK-NEXT:                    "bar"
-//CHECK-NEXT:                ],
-//CHECK-NEXT:                "capabilities": [
-//CHECK-NEXT:                    {
-//CHECK-NEXT:                        "var_name": "ifd",
-//CHECK-NEXT:                        "syscalls": [
-//CHECK-NEXT:                            "read"
-//CHECK-NEXT:                        ]
-//CHECK-NEXT:                    }
-//CHECK-NEXT:                ]
-//CHECK-NEXT:            }
-//CHECK-NEXT:        },
-//CHECK-NEXT:        {
-//CHECK-NEXT:            "location": {
-//CHECK-NEXT:                "function": "baz",
-//CHECK-NEXT:                "filename": "{{.*}}",
-//CHECK-NEXT:                "line_number": 28
-//CHECK-NEXT:            },
-//CHECK-NEXT:            "vuln_vendor": false,
-//CHECK-NEXT:            "cves": [
-//CHECK-NEXT:                "CVE_1970_XXX"
-//CHECK-NEXT:            ],
-//CHECK-NEXT:            "sandboxed": false,
-//CHECK-NEXT:            "call_stack": [
-//CHECK-NEXT:                {
-//CHECK-NEXT:                    "function": "main",
-//CHECK-NEXT:                    "filename": "{{.*}}",
-//CHECK-NEXT:                    "line_number": 20
-//CHECK-NEXT:                }
-//CHECK-NEXT:            ],
-//CHECK-NEXT:            "leaks_limited_right": false
-//CHECK-NEXT:        }
-//CHECK-NEXT:    ]
+// CHECK:        "soaap": {
+// CHECK-NEXT:     "vulnerability_warning": [
+// CHECK-NEXT:       {
+// CHECK-NEXT:         "function": "baz",
+// CHECK-NEXT:         "sandbox": "mysandbox",
+// CHECK-NEXT:         "location": {
+// CHECK-NEXT:           "file": "[[TESTS:.*]]/json/pastvuln.c",
+// CHECK-NEXT:           "line": 28
+// CHECK-NEXT:         },
+// CHECK-NEXT:         "type": "cve",
+// CHECK-NEXT:         "cve": [
+// CHECK-NEXT:           {
+// CHECK-NEXT:             "id": "CVE_1970_XXX"
+// CHECK-NEXT:           }
+// CHECK-NEXT:         ],
+// CHECK-NEXT:         "restricted_rights": "true",
+// CHECK-NEXT:         "rights_leaked": {
+// CHECK-NEXT:           "global": [
+// CHECK-NEXT:             {
+// CHECK-NEXT:               "global_var": "global",
+// CHECK-NEXT:               "perm": [
+// CHECK-NEXT:                 {
+// CHECK-NEXT:                   "type": "read"
+// CHECK-NEXT:                 }
+// CHECK-NEXT:               ]
+// CHECK-NEXT:             }
+// CHECK-NEXT:           ],
+// CHECK-NEXT:           "cap_right": [
+// CHECK-NEXT:             {
+// CHECK-NEXT:               "fd": "ifd",
+// CHECK-NEXT:               "entry_point": "foo",
+// CHECK-NEXT:               "syscall": [
+// CHECK-NEXT:                 {
+// CHECK-NEXT:                   "name": "read"
+// CHECK-NEXT:                 }
+// CHECK-NEXT:               ]
+// CHECK-NEXT:             }
+// CHECK-NEXT:           ],
+// CHECK-NEXT:           "callgate": [
+// CHECK-NEXT:             {
+// CHECK-NEXT:               "name": "bar"
+// CHECK-NEXT:             }
+// CHECK-NEXT:           ],
+// CHECK-NEXT:           "private": [
+// CHECK-NEXT:             {
+// CHECK-NEXT:               "type": "local_var",
+// CHECK-NEXT:               "name": "buffer"
+// CHECK-NEXT:             }
+// CHECK-NEXT:           ]
+// CHECK-NEXT:         },
+// CHECK-NEXT:         "trace_ref": "!trace0"
+// CHECK-NEXT:       },
+// CHECK-NEXT:       {
+// CHECK-NEXT:         "function": "baz",
+// CHECK-NEXT:         "sandbox": "\"none\"",
+// CHECK-NEXT:         "location": {
+// CHECK-NEXT:           "file": "[[TESTS]]/json/pastvuln.c",
+// CHECK-NEXT:           "line": 28
+// CHECK-NEXT:         },
+// CHECK-NEXT:         "restricted_rights": false,
+// CHECK-NEXT:         "type": "cve",
+// CHECK-NEXT:         "cve": [
+// CHECK-NEXT:           {
+// CHECK-NEXT:             "id": "CVE_1970_XXX"
+// CHECK-NEXT:           }
+// CHECK-NEXT:         ],
+// CHECK-NEXT:         "trace_ref": "!trace1"
+// CHECK-NEXT:       }
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "global_access_warning": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "global_lost_update": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "syscall_warning": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "cap_rights_warning": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "privileged_call": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "sandboxed_func": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "access_origin_warning": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "classified_warning": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "private_access": [
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "private_leak": [
+// CHECK-NEXT:       {
+// CHECK-NEXT:         "type": "extern",
+// CHECK-NEXT:         "function": "baz",
+// CHECK-NEXT:         "callee": "read",
+// CHECK-NEXT:         "sandbox_access": [
+// CHECK-NEXT:           {
+// CHECK-NEXT:             "name": "mysandbox"
+// CHECK-NEXT:           }
+// CHECK-NEXT:         ],
+// CHECK-NEXT:         "location": {
+// CHECK-NEXT:           "line": 36,
+// CHECK-NEXT:           "file": "[[TESTS]]/json/pastvuln.c"
+// CHECK-NEXT:         }
+// CHECK-NEXT:       }
+// CHECK-NEXT:     ],
+// CHECK-NEXT:     "!trace0": {
+// CHECK-NEXT:       "name": "!trace0",
+// CHECK-NEXT:       "trace": [
+// CHECK-NEXT:         {
+// CHECK-NEXT:           "function": "foo",
+// CHECK-NEXT:           "location": {
+// CHECK-NEXT:             "file": "pastvuln.c",
+// CHECK-NEXT:             "line": 25
+// CHECK-NEXT:           }
+// CHECK-NEXT:         },
+// CHECK-NEXT:         {
+// CHECK-NEXT:           "function": "main",
+// CHECK-NEXT:           "location": {
+// CHECK-NEXT:             "file": "pastvuln.c",
+// CHECK-NEXT:             "line": 19
+// CHECK-NEXT:           }
+// CHECK-NEXT:         }
+// CHECK-NEXT:       ]
+// CHECK-NEXT:     },
+// CHECK-NEXT:     "!trace1": {
+// CHECK-NEXT:       "name": "!trace1",
+// CHECK-NEXT:       "trace": [
+// CHECK-NEXT:         {
+// CHECK-NEXT:           "function": "main",
+// CHECK-NEXT:           "location": {
+// CHECK-NEXT:             "file": "pastvuln.c",
+// CHECK-NEXT:             "line": 20
+// CHECK-NEXT:           }
+// CHECK-NEXT:         }
+// CHECK-NEXT:       ]
+// CHECK-NEXT:     }
+// CHECK-NEXT:   }
