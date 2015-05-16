@@ -13,6 +13,10 @@ clang="${LLVM_PREFIX}/bin/clang"
 include_dirs="/usr/include /usr/local/include"
 libcxx=""
 
+if [ "`uname -s`" == "Darwin" ]; then
+	include_dirs="${include_dirs} /Library/Developer/CommandLineTools/usr/include"
+fi
+
 for include in ${include_dirs}
 do
 	cppinc="${include}/c++/v1"

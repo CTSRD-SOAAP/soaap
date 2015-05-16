@@ -20,7 +20,11 @@ else()
 
   find_path(LIBCXX_PREFIX c++/v1/string REQUIRED
     DOC "container for versioned libc++ include directories"
-    PATHS ${CMAKE_SYSTEM_PREFIX_PATH}
+    PATHS
+      ${CMAKE_SYSTEM_PREFIX_PATH}
+      /Library/Developer/CommandLineTools/usr/include
+fi
+
   )
 
   if (LIBCXX_PREFIX)
@@ -42,7 +46,12 @@ find_package_handle_standard_args(LIBCXX DEFAULT_MSG
   LIBCXX_LIBRARY
   LIBCXX_INCLUDE_DIRS
 )
-if(NOT EXISTS "${LIBCXX_INCLUDE_DIR}/cxxabi.h")
+
+find_path(LIBCXX_CXXABI cxxabi.h
+  DOC "C++ ABI declarations"
+  PATHS ${LIBCXX_INCLUDE_DIR} ${CMAKE_SYSTEM_PREFIX_PATH}
+)
+if(NOT LIBCXX_CXXABI)
   # work around systems that have libc++ but only the libcstdc++ <cxxabi.h> header
   message(WARNING "libc++ found but required header cxxabi.h doesn't exist! libc++ does not seem to be installed correctly!")
   set(LIBCXX_FOUND FALSE)
