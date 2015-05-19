@@ -66,15 +66,9 @@ class CompilerWrapper(CommandWrapper):
                     if param == '-o':
                         # work around libtool create object files in ./.libs/foo.o and deletes all other files!
                         # -> we just create the file one level higher and work around it in the linker wrapper again..
-                        if next.startswith('.libs/'):
-                            next = next.replace('.libs/', '')
-                        next = correspondingBitcodeName(next)
-                        ## krb5 build system creates various .so.o files and then does a mv foo.so.o -> foo.so
-                        #if next.endswith('.so.bc.o'):
-                            #next = next[:-2]  # remove the additional .o at the end
-                        self.output = next
-                    self.generateIrCommand.append(param)
-                    self.generateIrCommand.append(next)
+                        #if next.startswith('.libs/'):
+                            #next = next.replace('.libs/', '')
+                        self.output = correspondingBitcodeName(next)
                 else:
                     self.generateIrCommand.append(param)
             else:
@@ -100,19 +94,20 @@ class CompilerWrapper(CommandWrapper):
 
         if len(inputFiles) == 0:
             raise CommandWrapperError('No input files found!', self.realCommand)
-        if not self.output:
-            if len(inputFiles) != 1:
-                raise CommandWrapperError('No -o flag, but multiple input files:' + str(inputFiles), self.realCommand)
-            root, ext = os.path.splitext(inputFiles[0])  # src/foo.c -> ('src/foo', '.c')
-            self.output = correspondingBitcodeName(root + '.o')
-            self.generateIrCommand.append('-o')
-            self.generateIrCommand.append(self.output)
-
         # add the required compiler flags for analysis
         # FIXME: Is -gline-tables-only enough?
         self.generateIrCommand.append('-gline-tables-only')  # soaap needs debug info
         self.generateIrCommand.append('-emit-llvm')
         self.generateIrCommand.append('-fno-inline')  # make sure functions are not inlined
+
+        if not self.output:
+            if len(inputFiles) != 1:
+                raise CommandWrapperError('No -o flag, but multiple input files:' + str(inputFiles), self.realCommand)
+            root, ext = os.path.splitext(inputFiles[0])  # src/foo.c -> ('src/foo', '.c')
+            self.output = correspondingBitcodeName(root + '.o')
+        # make sure the output file is right at the end so we can see easily which file is being compiled
+        self.generateIrCommand.append('-o')
+        self.generateIrCommand.append(self.output)
 
     def runGenerateIrCommand(self):
         if self.generateEmptyOutput:
