@@ -33,6 +33,9 @@ def getWrapper(realCmd):
     wrapper.computeWrapperCommand()
     # we only want the executable name not the full path
     wrapper.generateIrCommand[0] = os.path.basename(wrapper.generateIrCommand[0])
+    if not wrapper.nothingToDo:
+        assert "-libmd" in wrapper.generateIrCommand
+        wrapper.generateIrCommand.remove("-libmd")
     return wrapper
 
 

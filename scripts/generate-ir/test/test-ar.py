@@ -53,13 +53,13 @@ class TestArWrapper(unittest.TestCase):
 # TODO: handle multiple definitions
     def testBasic(self):
         command = getIrCommand("ar cqs foo foo.o".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc".split())
+        self.assertEqual(command, "llvm-link -o foo.bc -libmd foo.o.bc".split())
         command = getIrCommand("ar r foo foo.o".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc".split())
+        self.assertEqual(command, "llvm-link -o foo.bc -libmd foo.o.bc".split())
 
     def testMultipleDef(self):
         command = getIrCommand("ar r foo foo.o foo.o".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc foo.o.bc".split())
+        self.assertEqual(command, "llvm-link -o foo.bc -libmd foo.o.bc foo.o.bc".split())
 
 if __name__ == '__main__':
     unittest.main()

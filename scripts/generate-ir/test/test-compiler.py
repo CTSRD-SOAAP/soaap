@@ -19,6 +19,7 @@
 
 import unittest
 import os
+import tempfile
 import sys
 sys.path.insert(0, os.path.abspath(".."))
 
@@ -40,13 +41,29 @@ def getIrCommand(realCmd):
 
 
 class TestCompilerWrapper(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        # print(cls.tempdir.name)
+        os.chdir(cls.tempdir.name)
+        os.makedirs(os.path.join(cls.tempdir.name, 'src/fenv'))
+        # print(os.getcwd())
+        cls.cstubfile = open(os.path.join(cls.tempdir.name, 'src/fenv/fenv.c'), 'x')
+
+    @classmethod
+    def tearDownClass(cls):
+        os.chdir('/')
+        cls.cstubfile.close()
+        cls.tempdir.cleanup()
+
     def testBasic(self):
         command = getIrCommand(['clang++', '-c', 'foo.c'])
-        self.assertEqual(command, ['clang++', '-c', 'foo.c', '-o', 'foo.o.bc',
-                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+        self.assertEqual(command, ['clang++', '-c', 'foo.c', '-gline-tables-only', '-emit-llvm', '-fno-inline',
+                                   '-o', 'foo.o.bc'])
         command = getIrCommand(['clang++', '-o', '.obj/foo.o', '-c', 'foo.c'])
-        self.assertEqual(command, ['clang++', '-o', '.obj/foo.o.bc', '-c', 'foo.c',
-                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+        self.assertEqual(command, ['clang++', '-c', 'foo.c', '-gline-tables-only', '-emit-llvm', '-fno-inline',
+                                   '-o', '.obj/foo.o.bc'])
 
     def testSpacesRemoved(self):
         wrapper = getWrapper([' clang++', ' -Wall ',  '-c ', ' foo.c '])
@@ -68,13 +85,13 @@ class TestCompilerWrapper(unittest.TestCase):
     def testInlineFlags(self):
         command = getIrCommand(['clang++', '-finline', '-c', 'foo.c'])
         self.assertIn('-fno-inline', command)
-        self.assertNotIn('-finline', command) # finline mustn't be part of the command line
+        self.assertNotIn('-finline', command)  # -finline mustn't be part of the command line
 
     def testMuslLibcASM(self):
         # work around musl libc asm files by compiling the stubs instead
         command = getIrCommand("clang++ -c src/fenv/x86_64/fenv.s")
-        self.assertEqual(command, ['clang++', '-c', 'src/fenv/fenv.c', '-o', 'src/fenv/fenv.o.bc',
-                                   '-gline-tables-only', '-emit-llvm', '-fno-inline'])
+        self.assertEqual(command, ['clang++', '-c', 'src/fenv/fenv.c', '-gline-tables-only', '-emit-llvm',
+                                   '-fno-inline', '-o', 'src/fenv/fenv.o.bc'])
 
     def testRemoveInvalidArgs(self):
         wrapper = getWrapper(['clang++', '-fexcess-precision=standard', '-c', 'foo.c'])
