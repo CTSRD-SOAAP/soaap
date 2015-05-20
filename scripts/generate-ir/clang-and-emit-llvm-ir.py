@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-import subprocess
 import os
-import argparse
-from termcolor import colored, cprint
-from enum import Enum
 
 from linkerwrapper import *
 from compilerwrapper import CompilerWrapper

@@ -75,16 +75,16 @@ class TestLinkerWrapper(unittest.TestCase):
     def testBasic(self):
         # no output flag -> a.out.bc
         command = removeLibs(getIrCommand(['clang', 'foo.o']))
-        self.assertEqual(command, ['llvm-link', '-o', 'a.out.bc', 'foo.o.bc'])
+        self.assertEqual(command, "llvm-link foo.o.bc -o a.out.bc".split())
         # same if we are compiling a shared lib
         command = removeLibs(getIrCommand(['clang', '-shared', 'foo.o']))
-        self.assertEqual(command, ['llvm-link', '-o', 'a.out.bc', 'foo.o.bc'])
+        self.assertEqual(command, "llvm-link foo.o.bc -o a.out.bc".split())
         # output flag exists (including subdir)
         command = removeLibs(getIrCommand(['clang++', 'foo.o', '-o', '.libs/libfoo.so']))
-        self.assertEqual(command, ['llvm-link', '-o', '.libs/libfoo.so.bc',  'foo.o.bc'])
+        self.assertEqual(command, ['llvm-link', 'foo.o.bc', '-o', '.libs/libfoo.so.bc'])
         # test versioned .so file as output
         command = removeLibs(getIrCommand(['clang++', 'foo.o', '-o', '.libs/libfoo.so.1.2.3']))
-        self.assertEqual(command, ['llvm-link', '-o', '.libs/libfoo.so.bc.1.2.3',  'foo.o.bc'])
+        self.assertEqual(command, ['llvm-link', 'foo.o.bc', '-o', '.libs/libfoo.so.bc.1.2.3'])
 
     def testRemoveInvalidArgs(self):
         wrapper = getWrapper(['clang', 'foo.o', '-fexcess-precision=standard'])
@@ -112,22 +112,22 @@ class TestLinkerWrapper(unittest.TestCase):
     def testSharedLibsToLFlag(self):
         # absolute path
         command = getIrCommand("clang -o foo foo.o /usr/lib/libbar.so".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        self.assertEqual(command, "llvm-link foo.o.bc -lbar -lc -o foo.bc".split())
         # absolute path with spaces
         command = getIrCommand(["clang", "-o", "foo", "foo.o", "/dir/with space/libbar.so"])
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        self.assertEqual(command, "llvm-link foo.o.bc -lbar -lc -o foo.bc".split())
         # versioned absolute path (here we keep the suffix)
         command = getIrCommand("clang -o foo foo.o /usr/lib/libbar.so.1.2.3".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar.so.bc.1.2.3 -lc".split())
+        self.assertEqual(command, "llvm-link foo.o.bc -lbar.so.bc.1.2.3 -lc -o foo.bc".split())
         # relative path
         command = getIrCommand("clang -o foo foo.o libs/libbar.so".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        self.assertEqual(command, "llvm-link foo.o.bc -lbar -lc -o foo.bc".split())
         # file name
         command = getIrCommand("clang -o foo foo.o libbar.so".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lc".split())
+        self.assertEqual(command, "llvm-link foo.o.bc -lbar -lc -o foo.bc".split())
         # multiple libraries
         command = getIrCommand("clang -o foo foo.o libbar.so /lib/libm.so".split())
-        self.assertEqual(command, "llvm-link -o foo.bc foo.o.bc -lbar -lm -lc".split())
+        self.assertEqual(command, "llvm-link foo.o.bc -lbar -lm -lc -o foo.bc".split())
         # not prefixed with lib -> for now this results in an error
         # TODO: if any project needs this figure out how to skip the 'lib' being automatically added in llvm-link
         with self.assertRaises(RuntimeError):

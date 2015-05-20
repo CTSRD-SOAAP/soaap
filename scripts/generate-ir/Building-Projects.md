@@ -26,7 +26,8 @@ Then `configure-for-llvm-ir.py && make`
 
 # qtbase
 
-`configure-for-llvm-ir.py --cpp-linker <options> (-nomake tests -nomake examples) && make`
+`configure-for-llvm-ir.py --cpp-linker <options> (-nomake tests -nomake examples)`
+`make` or `make-for-llvm-ir.py '--ar=ar cqs'`
 
 This requires a recent branch containing git commit f041757d7a9e76c8463609d8169339b4b0dae3f6 or
 alternatively manually applying the patch from https://codereview.qt-project.org/#/c/109807/

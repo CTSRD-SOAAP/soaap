@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-import subprocess
 import os
-import argparse
 
 from commandwrapper import CommandWrapperError
 from coreutilswrapper import *

@@ -37,7 +37,7 @@ class LinkerWrapper(CommandWrapper):
         if len(self.linkCandidates) == 0:
             raise CommandWrapperError('NO LINK CANDIDATES FOUND IN CMDLINE: ', self.realCommand)
 
-        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-libmd', '-o', self.output]
+        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-libmd']
 
         inputFiles = findBitcodeFiles(self.linkCandidates)
         if len(inputFiles) == 0:
@@ -53,6 +53,10 @@ class LinkerWrapper(CommandWrapper):
                 self.generateIrCommand.append('-lc++')
             else:
                 raise CommandWrapperError('Unsupported linker command: ' + self.executable, self.realCommand)
+
+        # make sure the output file is right at the end so we can see easily which file is being compiled
+        self.generateIrCommand.append('-o')
+        self.generateIrCommand.append(self.output)
 
     def parseCommandLine(self):
         # iterate over command line and convert all known options and input files
@@ -148,7 +152,7 @@ class ArWrapper(CommandWrapper):
             raise CommandWrapperError('ar wrapper: \'cq\' or \'r\' mode is currently supported: ', self.realCommand)
 
         self.output = correspondingBitcodeName(self.realCommand[2])
-        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-o', self.output, '-libmd']
+        self.generateIrCommand = [soaapLlvmBinary('llvm-link'), '-libmd']
         if 'v' in operation:
             self.generateIrCommand.append('-v')
         for file in findBitcodeFiles(self.realCommand[3:]):
@@ -158,6 +162,9 @@ class ArWrapper(CommandWrapper):
             #    # we add the --override flag to make sure multiple definitions are fine
             #    self.generateIrCommand.append('--override')
             self.generateIrCommand.append(file)
+        # make sure the output file is right at the end so we can see easily which file is being compiled
+        self.generateIrCommand.append('-o')
+        self.generateIrCommand.append(self.output)
 
     def runGenerateIrCommand(self):
         if self.generateEmptyOutput:
@@ -181,8 +188,8 @@ class ArWrapper(CommandWrapper):
                 print('Moved input:', movedInput)
                 # input('About to run: ' + str(self.generateIrCommand))
                 super().runGenerateIrCommand()
-        # otherwise just call the superclass method
         else:
+            # otherwise just call the superclass method
             super().runGenerateIrCommand()
 
 
