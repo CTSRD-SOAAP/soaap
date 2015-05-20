@@ -95,6 +95,8 @@ def findExe(program):
             return program
     else:
         for path in os.environ["PATH"].split(os.pathsep):
+            if path.startswith(IR_WRAPPER_DIR) or os.path.realpath(path).startswith(IR_WRAPPER_DIR):
+                continue
             path = path.strip('"')
             exe_file = os.path.join(path, program)
             if is_exe(exe_file):

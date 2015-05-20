@@ -6,7 +6,6 @@ import sys
 import pprint
 from checksetup import *
 
-scriptDir = os.path.dirname(os.path.realpath(__file__))
 changedEnvVars = {}
 
 
@@ -19,7 +18,7 @@ def changeEnvVar(var, value):
 def setIrWrapperEnvVar(var, command):
     splitted = command.split()
     command = splitted[0]
-    wrapper = os.path.join(scriptDir, command + '-and-emit-llvm-ir.py')
+    wrapper = os.path.join(IR_WRAPPER_DIR, 'bin', command)
     if not os.path.exists(wrapper):
         sys.exit('could not find ' + wrapper)
     # allow parameters to be passed
@@ -78,7 +77,7 @@ if parsedArgs.confirm:
     if len(result) > 0 and result[0] != 'y':
         sys.exit()
 
-os.environ['NO_EMIT_LLVM_IR'] = '1' # very important, otherwise checks might fail!
+os.environ['NO_EMIT_LLVM_IR'] = '1'  # very important, otherwise checks might fail!
 # no need for subprocess.call, just use execve
 os.execvpe(commandline[0], commandline, os.environ)
 sys.exit('Could not execute ' + str(commandline))

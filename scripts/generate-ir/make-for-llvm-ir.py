@@ -8,11 +8,9 @@ import sys
 
 from checksetup import *
 
-scriptDir = os.path.dirname(os.path.realpath(__file__))
 overrides = {}
 
-bindir = os.path.join(scriptDir, "bin")
-
+bindir = os.path.join(IR_WRAPPER_DIR, "bin")
 if not os.path.isdir(bindir):
     sys.exit(bindir + "does not exist")
 
@@ -20,7 +18,7 @@ if not os.path.isdir(bindir):
 def setIrWrapperVar(var, command):
     splitted = command.split()
     command = splitted[0]
-    wrapper = os.path.join(scriptDir, command + '-and-emit-llvm-ir.py')
+    wrapper = os.path.join(bindir, command)
     if not os.path.exists(wrapper):
         sys.exit('could not find ' + wrapper)
     # allow parameters to be passed
@@ -73,7 +71,8 @@ if parsedArgs.link:
     setIrWrapperVar('LINK', parsedArgs.link)
 
 # set PATH so that our ln/mv/cp/rm commands are found
-os.environ["PATH"] = bindir + ":" + os.environ["PATH"]
+if not os.environ["PATH"].startswith(bindir):
+    os.environ["PATH"] = bindir + ":" + os.environ["PATH"]
 
 # now replace the manual overrides:
 for s in (parsedArgs.var or []):

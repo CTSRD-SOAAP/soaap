@@ -15,8 +15,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 import os
+import sys
 # make sure we have enum and termcolor
 from enum import Enum
+
+IR_WRAPPER_DIR = os.path.dirname(os.path.realpath(__file__))
 
 #  TODO: let cmake set this at configure time
 SOAAP_LLVM_BINDIR = os.getenv('SOAAP_LLVM_BINDIR', os.path.expanduser('~') + '/devel/soaap/llvm/build/bin/')

@@ -4,11 +4,9 @@ import sys
 import os
 from checksetup import *
 
-scriptDir = os.path.dirname(os.path.realpath(__file__))
-
 
 def irWrapper(var, command):
-    wrapper = os.path.join(scriptDir, command + '-and-emit-llvm-ir.py')
+    wrapper = os.path.join(IR_WRAPPER_DIR, 'bin', command)
     if not os.path.exists(wrapper):
         sys.exit('could not find ' + wrapper)
     return '-DCMAKE_' + var + '=' + wrapper

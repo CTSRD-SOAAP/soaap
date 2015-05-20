@@ -24,7 +24,7 @@ import tempfile
 import shlex
 sys.path.insert(0, os.path.abspath(".."))
 
-from coreutilswrapper import *
+from unixcommandswrapper import *
 
 
 def getIrCommand(realCmd):
