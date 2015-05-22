@@ -69,6 +69,9 @@ class CompilerWrapper(CommandWrapper):
                         #if next.startswith('.libs/'):
                             #next = next.replace('.libs/', '')
                         self.output = correspondingBitcodeName(next)
+                    else:
+                        self.generateIrCommand.append(param)
+                        self.generateIrCommand.append(next)
                 else:
                     self.generateIrCommand.append(param)
             else:

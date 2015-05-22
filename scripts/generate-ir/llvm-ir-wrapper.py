@@ -10,10 +10,14 @@ from unixcommandswrapper import *
 # TODO: do we need to wrap objcopy?
 
 executable = os.path.basename(sys.argv[0])
+if executable in ('gcc', 'cc'):
+    executable = 'clang'
+if executable == ('g++', 'c++'):
+    executable = 'clang++'
 sys.argv[0] = executable
 
 wrapper = None
-if executable in ('clang', 'clang++', 'cc', 'c++'):
+if executable in ('clang', 'clang++'):
     if '-c' in sys.argv or '-S' in sys.argv:
         wrapper = CompilerWrapper(sys.argv)
     else:
