@@ -92,7 +92,7 @@ class LinkerWrapper(CommandWrapper):
                     skipNextParam = True
                 # ignore all other -XXX flags
                 continue
-            elif param.endswith('.so') or '.so.' in param:
+            elif param.endswith('.so') or '.so.' in param or param.endswith('.a') or '.a.' in param:
                 # if os.path.isfile(param):
                 #     self.linkCandidates.append(param)
                 #     continue
@@ -107,11 +107,7 @@ class LinkerWrapper(CommandWrapper):
                 else:
                     # strip the lib part
                     filename = filename[3:]
-                # if it ends with .so strip that, but if there is a suffix (version) keep it and get the bitcode name
-                if filename.endswith('.so'):
-                    filename = filename[:filename.find('.so')]
-                else:
-                    filename = correspondingBitcodeName(filename)
+                filename = correspondingBitcodeName(filename)
                 lflag = '-l' + filename
                 # print(param, filename, lflag, sep=', ')
                 self.sharedLibs.append(lflag)
