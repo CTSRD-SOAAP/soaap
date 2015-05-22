@@ -16,6 +16,9 @@ if not os.path.isdir(bindir):
 
 
 def setIrWrapperVar(var, command):
+    # only set those that were explicitly changed
+    if not command:
+        return
     splitted = command.split()
     command = splitted[0]
     wrapper = os.path.join(bindir, command)
@@ -35,13 +38,13 @@ def setOverride(var, value):
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 # parser.add_argument('options', nargs='*', help='Arguments to pass to configure')
 parser.add_argument('-f', required=False, default='./Makefile', help='Makefile override')
-parser.add_argument('--ld', required=False, default='clang', type=str,
+parser.add_argument('--ld', required=False, default='', type=str,
                     help='LD wrapper script name (and parameters)')
 parser.add_argument('--link', required=False, default='', type=str,
                     help='LINK wrapper script name (and parameters)')
-parser.add_argument('--ar', required=False, default='ar', type=str,
+parser.add_argument('--ar', required=False, default='', type=str,
                     help='AR wrapper script name (and parameters)')
-parser.add_argument('--ranlib', required=False, default='ranlib', type=str,
+parser.add_argument('--ranlib', required=False, default='', type=str,
                     help='RANLIB wrapper script name (and parameters)')
 parser.add_argument('--var', required=False, action='append', metavar=('VAR=VALUE'),
                     help='override env var [VAR] with [VALUE]. Can be repeated multiple times')
@@ -59,7 +62,7 @@ setIrWrapperVar('LTCC', 'clang')
 setIrWrapperVar('CXX', 'clang++')
 setIrWrapperVar('AR', parsedArgs.ar)
 setIrWrapperVar('RANLIB', parsedArgs.ranlib)
-# TODO: this one might cause problems...
+
 if parsedArgs.cpp_linker:
     if parsedArgs.ld == 'clang':
         parsedArgs.ld = 'clang++'
@@ -67,8 +70,7 @@ if parsedArgs.cpp_linker:
         parsedArgs.link = 'clang++'
 
 setIrWrapperVar('LD', parsedArgs.ld)
-if parsedArgs.link:
-    setIrWrapperVar('LINK', parsedArgs.link)
+setIrWrapperVar('LINK', parsedArgs.link)
 
 # set PATH so that our ln/mv/cp/rm commands are found
 if not os.environ["PATH"].startswith(bindir):
