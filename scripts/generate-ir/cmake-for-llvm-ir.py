@@ -30,7 +30,7 @@ if not hasGenerator:
     # CMAKE_MAKE_PROGRAM
 commandline.extend(sys.argv[1:])  # append all the user passed flags
 
-print(commandline)
+print("About to run:", quoteCommand(commandline))
 os.environ['NO_EMIT_LLVM_IR'] = '1'
 # no need for subprocess.call, just use execvpe
 os.execvpe(commandline[0], commandline, os.environ)

@@ -16,6 +16,7 @@
 #
 import os
 import sys
+import shlex
 # make sure we have enum and termcolor
 from enum import Enum
 
@@ -25,3 +26,8 @@ IR_WRAPPER_DIR = os.path.dirname(os.path.realpath(__file__))
 SOAAP_LLVM_BINDIR = os.getenv('SOAAP_LLVM_BINDIR', os.path.expanduser('~') + '/devel/soaap/llvm/build/bin/')
 if not os.path.isdir(SOAAP_LLVM_BINDIR):
     sys.exit('could not find SOAAP_LLVM_BINDIR, please make sure the env var is set correctly')
+
+
+def quoteCommand(command: list):
+    newList = [shlex.quote(s) for s in command]
+    return " ".join(newList)

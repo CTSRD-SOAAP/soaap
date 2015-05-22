@@ -114,11 +114,6 @@ def correspondingBitcodeName(fname):
     return str(fname) + '.bc'
 
 
-def quoteCommand(command: list):
-    newList = [shlex.quote(s) for s in command]
-    return " ".join(newList)
-
-
 def isLibrary(fname: str):
     if fname.endswith('.so') or fname.endswith('.a'):
         return True
