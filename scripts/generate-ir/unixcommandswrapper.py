@@ -36,6 +36,7 @@ class CoreUtilsWrapper(CommandWrapper):
                 if "f" in i:
                     hasForceFlag = True
                 self.generateIrCommand.append(i)
+                continue
             elif isLibrary(i) or i.endswith('.o'):
                 # we have a .so or .a or .o that is being moved -> move the bitcode lib as well
                 i = correspondingBitcodeName(i)
@@ -46,10 +47,8 @@ class CoreUtilsWrapper(CommandWrapper):
                     # `mv objs/crc32.o crc32.lo`
                     i = correspondingBitcodeName(i)
                 elif not os.path.isdir(i):
-                    # we already have libs and this paramter directory (like when moving multiple files)
-                    # This means that this paramter is probably a destination so we need to append .bc
-                    i = correspondingBitcodeName(i)
-                else:
+                    # we already have libs and this parameter is neither a directory (like when moving multiple files)
+                    # nor a file which is typically a bitcode lib -> error out for now
                     raise CommandWrapperError("Could not determine correct wrapper command", sys.argv)
             self.generateIrCommand.append(i)
 
