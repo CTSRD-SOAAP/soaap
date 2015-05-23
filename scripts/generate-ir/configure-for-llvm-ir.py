@@ -77,7 +77,7 @@ if parsedArgs.confirm:
     if len(result) > 0 and result[0] != 'y':
         sys.exit()
 
-os.environ['NO_EMIT_LLVM_IR'] = '1'  # very important, otherwise checks might fail!
+os.environ[ENVVAR_NO_EMIT_IR] = '1'  # very important, otherwise checks might fail!
 # no need for subprocess.call, just use execve
 os.execvpe(commandline[0], commandline, os.environ)
 sys.exit('Could not execute ' + str(commandline))

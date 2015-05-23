@@ -150,7 +150,7 @@ class CommandWrapper:
         self.executable = str(self.realCommand[0])
         self.mode = Mode.unknown
         self.output = ''
-        if os.getenv('LLVM_IR_WRAPPER_DELEGATE_TO_SYSTEM_COMPILER'):
+        if os.getenv(ENVVAR_DELEGATE_TO_SYSTEM_COMPILER):
             # clang or clang++ from $PATH
             self.realCommand[0] = findExe(self.executable)
         else:
@@ -159,7 +159,8 @@ class CommandWrapper:
         assert self.realCommand[0]
 
     def run(self):
-        if os.getenv('NO_EMIT_LLVM_IR') or '--version' in self.realCommand or '--help' in self.realCommand:
+        if os.getenv(ENVVAR_NO_EMIT_IR) or '--version' in self.realCommand or '--help' in self.realCommand:
+            # ! don't use execvp here, it might result in an endless loop
             os.execv(self.realCommand[0], self.realCommand)
             raise CommandWrapperError('execve failed!', self.realCommand)
 

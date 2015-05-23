@@ -21,11 +21,16 @@ import shlex
 from enum import Enum
 
 IR_WRAPPER_DIR = os.path.dirname(os.path.realpath(__file__))
+ENVVAR_NO_EMIT_IR = "LLVM_IR_WRAPPER_NO_EMIT_LLVM_IR"
+ENVVAR_DELEGATE_TO_SYSTEM_COMPILER = "LLVM_IR_WRAPPER_DELEGATE_TO_SYSTEM_COMPILER"
+ENVVAR_SKIP_ASM_FILES = "LLVM_IR_WRAPPER_SKIP_ASSEMBLY_FILES"
+ENVVAR_SKIP_MISSING_LINKER_INPUT = "LLVM_IR_WRAPPER_SKIP_MISSING_LINKER_INPUT"
+ENVVAR_SOAAP_LLVM_BINDIR = "SOAAP_LLVM_BINDIR"
 
 #  TODO: let cmake set this at configure time
-SOAAP_LLVM_BINDIR = os.getenv('SOAAP_LLVM_BINDIR', os.path.expanduser('~') + '/devel/soaap/llvm/build/bin/')
+SOAAP_LLVM_BINDIR = os.getenv(ENVVAR_SOAAP_LLVM_BINDIR, os.path.expanduser('~') + '/devel/soaap/llvm/build/bin/')
 if not os.path.isdir(SOAAP_LLVM_BINDIR):
-    sys.exit('could not find SOAAP_LLVM_BINDIR, please make sure the env var is set correctly')
+    sys.exit('could not find $' + ENVVAR_SOAAP_LLVM_BINDIR + ', please make sure the env var is set correctly')
 
 
 def quoteCommand(command: list):

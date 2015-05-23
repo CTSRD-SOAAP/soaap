@@ -85,7 +85,7 @@ class CompilerWrapper(CommandWrapper):
                         if os.path.isfile(param):
                             print(infoMsg('Workaround for musl libc: ' + origParam + ' -> ' + param))
                             valid = True
-                    if os.getenv('SKIP_ASSEMBLY_FILES'):
+                    if os.getenv(ENVVAR_SKIP_ASM_FILES):
                         self.generateEmptyOutput = True
                         valid = True
 

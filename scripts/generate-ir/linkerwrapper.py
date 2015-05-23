@@ -244,7 +244,7 @@ def findBitcodeFiles(files):
     if len(found) == 0:
         print(warningMsg('No bitcode files found from input ' + quoteCommand(files)))
     if len(missingFiles) > 0:
-        if os.getenv('SKIP_MISSING_LINKER_INPUT'):
+        if os.getenv(ENVVAR_SKIP_MISSING_LINKER_INPUT):
             print(warningMsg('LLVM IR NOT FOUND for: ' + quoteCommand(missingFiles)))
         else:
             raise RuntimeError('Missing input files for:', missingFiles, os.getcwd())

@@ -23,15 +23,10 @@ commandline = [
 hasGenerator = any(elem.startswith('-G') for elem in sys.argv)
 if not hasGenerator:
     commandline.append('-GNinja')
-    # commandline.append('-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja')
-    # WTF is happening here:
-    # CMake Error: Error required internal CMake variable not set, cmake may be not be built correctly.
-    # Missing variable is:
-    # CMAKE_MAKE_PROGRAM
 commandline.extend(sys.argv[1:])  # append all the user passed flags
 
 print("About to run:", quoteCommand(commandline))
-os.environ['NO_EMIT_LLVM_IR'] = '1'
+os.environ[ENVVAR_NO_EMIT_IR] = '1'
 # no need for subprocess.call, just use execvpe
 os.execvpe(commandline[0], commandline, os.environ)
 sys.exit('Could not execute ' + str(commandline))
