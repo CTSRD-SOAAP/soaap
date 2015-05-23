@@ -47,6 +47,12 @@ class CompilerWrapper(CommandWrapper):
                 if param.startswith('-g'):
                     # strip all -g parameters, we only want '-gline-tables-only'
                     continue
+                elif param == '-Werror' or param.startswith("-Werror="):
+                    # This can cause errors since we are using a newer compiler that might have new warnings
+                    # Fixes e.g. krb5 build due to the following error:
+                    # cc_kcm.c:397:13: error: variable 'reply_len' is used uninitialized whenever 'if' condition is false [-Werror,-Wsometimes-uninitialized]
+                    self.realCommand.remove(param)
+                    continue
                 elif param == '-finline':
                     continue  # finline should never be part of the wrapper command since we add -fno-inline
                 elif param in ('-fexcess-precision=standard', '-frounding-math'):
