@@ -30,14 +30,27 @@ class CoreUtilsWrapper(CommandWrapper):
         haveLibs = False
         hasForceFlag = False
         self.generateIrCommand.append(self.realCommand[0])
+        target = None
         for i in self.realCommand[1:]:
-            if isLibrary(i):
-                # we have a .so or .a that is being moved -> move the bitcode lib as well
-                self.generateIrCommand.append(correspondingBitcodeName(i))
+            if i.startswith("-"):
+                if "f" in i:
+                    hasForceFlag = True
+                self.generateIrCommand.append(i)
+            elif isLibrary(i) or i.endswith('.o'):
+                # we have a .so or .a or .o that is being moved -> move the bitcode lib as well
+                i = correspondingBitcodeName(i)
                 haveLibs = True
-                continue
-            if i.startswith("-") and "f" in i:
-                hasForceFlag = True
+            elif haveLibs:
+                if i.endswith('.lo'):
+                    # This happens e.g. with zlib build system:
+                    # `mv objs/crc32.o crc32.lo`
+                    i = correspondingBitcodeName(i)
+                elif not os.path.isdir(i):
+                    # we already have libs and this paramter directory (like when moving multiple files)
+                    # This means that this paramter is probably a destination so we need to append .bc
+                    i = correspondingBitcodeName(i)
+                else:
+                    raise CommandWrapperError("Could not determine correct wrapper command", sys.argv)
             self.generateIrCommand.append(i)
 
         if not hasForceFlag and self.needForce:

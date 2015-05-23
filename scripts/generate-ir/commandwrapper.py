@@ -317,11 +317,11 @@ def clangParamsWithArgument():
         '-Xlinker',  # <arg>           Pass <arg> on to the linker
         '-Xpreprocessor',  # <arg>     Pass <arg> on to the preprocessor
         #
-        # Some linker options (only --version script was used so far)
+        # Some linker options that need an extra parameter (only --version-script was used so far)
         # TODO: add them all
         #
         '-Wl,--version-script',  # Read version information script
-        '-Wl,--version-exports-section', # SYMBOL as the version
+        '-Wl,--version-exports-section',  # SYMBOL as the version
         #
         # other options that were not in --help
         #

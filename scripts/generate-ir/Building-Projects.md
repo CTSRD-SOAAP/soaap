@@ -4,7 +4,9 @@
 
 # zlib
 
-Apply patch:
+`configure-for-llvm-ir.py && make-for-llvm-ir.py`
+
+Instead of the wrapper script you can also apply this patch and use normal `make` instead (i.e. `configure-for-llvm-ir.py && make`)
 
 ```
 diff --git a/Makefile.in b/Makefile.in
@@ -21,8 +23,6 @@ index c61aa30..c9d2771 100644
         $(LDSHARED) $(SFLAGS) -o $@ $(PIC_OBJS) $(LDSHAREDLIBC) $(LDFLAGS)
 
 ```
-
-Then `configure-for-llvm-ir.py && make`
 
 # qtbase
 
@@ -42,7 +42,7 @@ We need a symlink for libss.a.bc since otherwise it isn't found when linking
 
 `git clone https://github.com/krb5/krb5.git`
 `cd krb5/src/lib && ln -s ../util/ss/libss.a.bc . && cd ..`
-`configure-for-llvm-ir.py --without-libedit && make`
+`configure-for-llvm-ir.py --without-libedit && make-for-llvm-ir.py`
 
 # openssl
 `configure-for-llvm-ir.py -f ./config no-asm zlib shared && make`
