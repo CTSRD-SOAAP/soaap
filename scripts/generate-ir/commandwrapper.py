@@ -105,7 +105,7 @@ def findExe(program):
     return None
 
 
-def correspondingBitcodeName(fname):
+def correspondingBitcodeName(fname: str):
     # if the output file is something like libfoo.so.1.2.3 we want libfoo.so.bc.1.2.3 to be emitted
     if '.so.' in fname:
         return fname.replace('.so.', '.so.bc.')
@@ -119,6 +119,7 @@ def isLibrary(fname: str):
         return True
     if '.so.' in fname or '.a.' in fname:
         return True
+    return False
 
 
 class Mode(Enum):

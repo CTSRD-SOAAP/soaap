@@ -37,6 +37,8 @@ elif executable == 'ln':
     wrapper = LnWrapper(sys.argv)
 elif executable == 'cp':
     wrapper = CpWrapper(sys.argv)
+elif executable == 'install':
+    wrapper = InstallWrapper(sys.argv)
 else:
     raise RuntimeError('Could not parse command line to determine what\'s happening: ', sys.argv)
 

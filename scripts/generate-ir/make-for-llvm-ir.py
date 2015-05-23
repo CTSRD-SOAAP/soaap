@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from checksetup import *
+from commandwrapper import findExe
 
 overrides = {}
 
@@ -49,12 +50,13 @@ parser.add_argument('--ranlib', required=False, default='', type=str,
 parser.add_argument('--var', required=False, action='append', metavar=('VAR=VALUE'),
                     help='override env var [VAR] with [VALUE]. Can be repeated multiple times')
 parser.add_argument('--cpp-linker', action='store_true', help='Use C++ compiler for linking')
+parser.add_argument('--install-bitcode', action='store_true', help='Install the bitcode files as well')
 parser.add_argument('--confirm', action='store_true', help='Confirm before running configure')
 parsedArgs, unknownArgs = parser.parse_known_args()
 makefile = parsedArgs.f
 print('Makefile is:', makefile)
 print(parsedArgs)
-commandline = ['make', '-f', makefile]
+commandline = [findExe('gmake'), '-f', makefile]
 
 # no need to add an override option for CC and CXX, this can be done via --env
 setIrWrapperVar('CC', 'clang')
@@ -76,6 +78,7 @@ setIrWrapperVar('LINK', parsedArgs.link)
 if not os.environ["PATH"].startswith(bindir):
     os.environ["PATH"] = bindir + ":" + os.environ["PATH"]
 
+
 # now replace the manual overrides:
 for s in (parsedArgs.var or []):
     (var, value) = s.split('=')
@@ -85,6 +88,10 @@ for k, v in overrides.items():
     commandline.append(k + '=' + v)
 
 commandline.extend(unknownArgs)  # append all the user passed flags
+if parsedArgs.install_bitcode:
+    os.environ[ENVVAR_INSTALL_BITCODE] = "1"
+    commandline.append("install")
+
 print('About to run', commandline)
 
 if parsedArgs.confirm:

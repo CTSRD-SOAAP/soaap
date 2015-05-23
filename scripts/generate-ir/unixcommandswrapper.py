@@ -64,3 +64,16 @@ class CpWrapper(CoreUtilsWrapper):
     def __init__(self, originalCommandLine):
         super().__init__(originalCommandLine)
         # TODO: do we need -f here as well?
+
+
+class InstallWrapper(CoreUtilsWrapper):
+    def __init__(self, originalCommandLine):
+        super().__init__(originalCommandLine)
+
+    def computeWrapperCommand(self):
+        # only do the installing of bitcode when explicitly requested
+        if os.getenv(ENVVAR_INSTALL_BITCODE):
+            super().computeWrapperCommand()
+        else:
+            self.nothingToDo = True
+            self.generateIrCommand = []

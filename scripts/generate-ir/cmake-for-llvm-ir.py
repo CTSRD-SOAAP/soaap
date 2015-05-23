@@ -3,6 +3,7 @@
 import sys
 import os
 from checksetup import *
+from commandwrapper import findExe
 
 
 def irWrapper(var, command):
@@ -13,7 +14,7 @@ def irWrapper(var, command):
 
 
 commandline = [
-    'cmake',
+    findExe('cmake'),
     irWrapper('C_COMPILER', 'clang'),
     irWrapper('CXX_COMPILER', 'clang++'),
     irWrapper('LINKER', 'ld'),

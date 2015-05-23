@@ -144,11 +144,12 @@ class ArWrapper(CommandWrapper):
             # replacement, like q, but replaces existing members, hopefully this will work!
             # TODO: use llvm-ar instead? how will that work?
             self.replacement = True
-        elif 'x' in operation or 't' in operation or 's' in operation:
+        elif 'x' in operation or 't' in operation or operation == 's':
             # These modes don't need to be wrapped:
-            # s   Add an index to the archive, or update it if it already exists
             # t   Display a table listing the contents of archive
             # x   Extract members (named member) from the archive.
+            # s   Add an index to the archive, or update it if it already exists
+            # Note: s can also be a modifier so only skip it if s is the only flag
             self.nothingToDo = True
             return
         elif not ('q' in operation and 'c' in operation):

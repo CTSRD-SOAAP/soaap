@@ -57,6 +57,16 @@ and then run `make` again. Or alternatively you can do `git clean -dfx` to start
 
 `configure-for-llvm-ir.py && make`
 
+# libcxx
+
+`mkdir build && cd build && cmake-for-llvm-ir.py .. && ninja`
+
+Or optionally build libcxxabi first:
+`cd $PATH_TO_LIBCXXABI && mkdir build && cd build && cmake-for-llvm-ir.py .. && ninja`
+`cd $PATH_TO_LIBCXX && mkdir build && cd build`
+`cmake-for-llvm-ir.py -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS=$PATH_TO_LIBCXXABI/include/ .. && ninja`
+
+
 
 # linux-pam
 
