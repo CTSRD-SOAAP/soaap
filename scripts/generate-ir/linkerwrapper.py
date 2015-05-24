@@ -33,6 +33,8 @@ class LinkerWrapper(CommandWrapper):
             assert self.executable.startswith('clang')
 
         self.parseCommandLine()
+        if self.nothingToDo:
+            return  # no need to look for the bitcode files if lib was explicitly skipped
 
         if len(self.linkCandidates) == 0:
             raise CommandWrapperError('NO LINK CANDIDATES FOUND IN CMDLINE: ', self.realCommand)
@@ -80,6 +82,13 @@ class LinkerWrapper(CommandWrapper):
                     self.mode = Mode.shared_lib
                 elif param == '-ffreestanding':
                     self.noDefaultLibs = True
+                elif param.startswith('-D' + ENVVAR_NO_EMIT_IR) or param.startswith('-L' + ENVVAR_NO_EMIT_IR):
+                    # allow selectively skipping targets by setting this #define or linker search path
+                    # e.g. using target_compile_definitions(foo PRIVATE LLVM_IR_WRAPPER_NO_EMIT_LLVM_IR=1)
+                    # but since CMake strips -D args from the linker command line you can also use
+                    # target_link_libraries(foo PRIVATE -LLLVM_IR_WRAPPER_NO_EMIT_LLVM_IR)
+                    self.nothingToDo = True
+                    return
                 # The only other flag we support is the -l flag, all others are ignored
                 # Tell llvm-link to add llvm.sharedlibs metadata
                 # TODO: is this the best solution?
@@ -90,13 +99,6 @@ class LinkerWrapper(CommandWrapper):
                     self.sharedLibs.append('-lpthread')
                 elif param in clangParamsWithArgument():
                     skipNextParam = True
-                elif param.startswith('-D' + ENVVAR_NO_EMIT_IR) or param.startswith('-L' + ENVVAR_NO_EMIT_IR):
-                    # allow selectively skipping targets by setting this #define or linker search path
-                    # e.g. using target_compile_definitions(foo PRIVATE LLVM_IR_WRAPPER_NO_EMIT_LLVM_IR=1)
-                    # but since CMake strips -D args from the linker command line you can also use
-                    # target_link_libraries(foo PRIVATE -LLLVM_IR_WRAPPER_NO_EMIT_LLVM_IR)
-                    self.nothingToDo = True
-                    return
                 # ignore all other -XXX flags
                 continue
             elif param.endswith('.so') or '.so.' in param or param.endswith('.a') or '.a.' in param:
@@ -255,5 +257,6 @@ def findBitcodeFiles(files):
         if os.getenv(ENVVAR_SKIP_MISSING_LINKER_INPUT):
             print(warningMsg('LLVM IR NOT FOUND for: ' + quoteCommand(missingFiles)))
         else:
-            raise RuntimeError('Missing input files for:', missingFiles, os.getcwd())
+            raise CommandWrapperError('Missing input files for: ' + str(missingFiles) +
+                                      " in " + os.getcwd(), sys.argv)
     return found
