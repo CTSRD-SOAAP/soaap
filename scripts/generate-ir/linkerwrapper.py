@@ -90,6 +90,13 @@ class LinkerWrapper(CommandWrapper):
                     self.sharedLibs.append('-lpthread')
                 elif param in clangParamsWithArgument():
                     skipNextParam = True
+                elif param.startswith('-D' + ENVVAR_NO_EMIT_IR) or param.startswith('-L' + ENVVAR_NO_EMIT_IR):
+                    # allow selectively skipping targets by setting this #define or linker search path
+                    # e.g. using target_compile_definitions(foo PRIVATE LLVM_IR_WRAPPER_NO_EMIT_LLVM_IR=1)
+                    # but since CMake strips -D args from the linker command line you can also use
+                    # target_link_libraries(foo PRIVATE -LLLVM_IR_WRAPPER_NO_EMIT_LLVM_IR)
+                    self.nothingToDo = True
+                    return
                 # ignore all other -XXX flags
                 continue
             elif param.endswith('.so') or '.so.' in param or param.endswith('.a') or '.a.' in param:

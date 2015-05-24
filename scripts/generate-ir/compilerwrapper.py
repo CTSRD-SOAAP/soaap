@@ -77,12 +77,19 @@ class CompilerWrapper(CommandWrapper):
                     if param == '-o':
                         # work around libtool create object files in ./.libs/foo.o and deletes all other files!
                         # -> we just create the file one level higher and work around it in the linker wrapper again..
-                        #if next.startswith('.libs/'):
-                            #next = next.replace('.libs/', '')
+                        # if next.startswith('.libs/'):
+                        #     next = next.replace('.libs/', '')
                         self.output = correspondingBitcodeName(next)
                     else:
                         self.generateIrCommand.append(param)
                         self.generateIrCommand.append(next)
+                elif param.startswith('-D' + ENVVAR_NO_EMIT_IR) or param.startswith('-L' + ENVVAR_NO_EMIT_IR):
+                    # allow selectively skipping targets by setting this #define or linker search path
+                    # e.g. using target_compile_definitions(foo PRIVATE LLVM_IR_WRAPPER_NO_EMIT_LLVM_IR=1)
+                    # or using target_link_libraries(foo PRIVATE -LLLVM_IR_WRAPPER_NO_EMIT_LLVM_IR=1)
+                    self.nothingToDo = True
+                    self.realCommand.remove(param)
+                    return
                 else:
                     self.generateIrCommand.append(param)
             else:
