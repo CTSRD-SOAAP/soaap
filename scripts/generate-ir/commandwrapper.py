@@ -134,7 +134,7 @@ class Mode(Enum):
 
 class CommandWrapperError(RuntimeError):
     def __init__(self, msg, args):
-        super().__init__(msg, quoteCommand(args))
+        super().__init__(msg, "Caused by:", quoteCommand(args))
 
 
 class CommandWrapper:
@@ -151,7 +151,11 @@ class CommandWrapper:
         self.executable = str(self.realCommand[0])
         self.mode = Mode.unknown
         self.output = ''
-        if os.getenv(ENVVAR_DELEGATE_TO_SYSTEM_COMPILER):
+        #
+        # FIXME: currently the soaap compiler seems to be broken
+        # It seems like it always calls the base class virtual method...
+        #
+        if True or os.getenv(ENVVAR_DELEGATE_TO_SYSTEM_COMPILER):
             # clang or clang++ from $PATH
             self.realCommand[0] = findExe(self.executable)
         else:
