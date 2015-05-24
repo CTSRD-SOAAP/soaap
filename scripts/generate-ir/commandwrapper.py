@@ -186,11 +186,13 @@ class CommandWrapper:
         try:
             self.runCommand('LLVM IR:', self.generateIrCommand)
         except:
-            print(errorMsg("WRAPPER COMMAND FOR " + quoteCommand(self.realCommand) + " FAILED"))
-            raise
+            sys.exit(errorMsg("WRAPPER COMMAND FOR " + quoteCommand(self.realCommand) + " FAILED"))
 
     def runRealCommand(self):
-        self.runCommand('Original:', self.realCommand)
+        try:
+            self.runCommand('Original:', self.realCommand)
+        except:
+            sys.exit(errorMsg("REAL COMMAND FAILED: " + quoteCommand(self.realCommand)))
 
     def runCommand(self, msg, command):
         if self.nothingToDo:
