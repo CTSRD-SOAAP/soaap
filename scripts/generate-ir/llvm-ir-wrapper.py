@@ -7,6 +7,8 @@ from linkerwrapper import *
 from compilerwrapper import CompilerWrapper
 from unixcommandswrapper import *
 
+# TODO: rewrite this in C++, the python startup time of ~100-300ms per command really kills ./configure and make
+
 # TODO: do we need to wrap objcopy?
 
 executable = os.path.basename(sys.argv[0])
@@ -18,7 +20,8 @@ sys.argv[0] = executable
 
 wrapper = None
 if executable in ('clang', 'clang++'):
-    if '-c' in sys.argv or '-S' in sys.argv:
+    # -c -> object file, -S -> generate ASM, -E -> run preprocessor only
+    if any(x in sys.argv for x in ("-c", "-S", "-E")):
         wrapper = CompilerWrapper(sys.argv)
     else:
         wrapper = LinkerWrapper(sys.argv)

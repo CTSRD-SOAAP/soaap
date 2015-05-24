@@ -28,6 +28,11 @@ class CompilerWrapper(CommandWrapper):
         self.mode = Mode.object_file
 
     def computeWrapperCommand(self):
+        if '-E' in self.realCommand:
+            # only run the preprocessor
+            self.nothingToDo = True
+            return
+
         assert '-c' in self.realCommand or '-S' in self.realCommand
 
         self.mode = Mode.object_file
