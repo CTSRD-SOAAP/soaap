@@ -7,9 +7,9 @@
  * RUN: FileCheck %s -input-file %t.123.ll
  *
  * CHECK: !llvm.libs = !{![[MOD1:[0-9]+]], ![[MOD2:[0-9]+]]}
- * CHECK: ![[CU1:[0-9]+]] = !DICompileUnit
- * CHECK: ![[CU2:[0-9]+]] = !DICompileUnit
- * CHECK: ![[CU3:[0-9]+]] = !DICompileUnit
+ * CHECK: ![[CU1:[0-9]+]] = distinct !DICompileUnit
+ * CHECK: ![[CU2:[0-9]+]] = distinct !DICompileUnit
+ * CHECK: ![[CU3:[0-9]+]] = distinct !DICompileUnit
  * CHECK: ![[MOD1]] = !{!"{{.*}}", ![[CUS1:[0-9]+]]}
  * CHECK: ![[CUS1]] = !{![[CU1]], ![[CU2]]}
  * CHECK: ![[MOD2]] = !{!"{{.*}}", ![[CUS2:[0-9]+]]}
