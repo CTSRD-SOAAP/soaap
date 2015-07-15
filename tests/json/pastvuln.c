@@ -93,7 +93,7 @@ void bar() {
 // CHECK-NEXT:       },
 // CHECK-NEXT:       {
 // CHECK-NEXT:         "function": "baz",
-// CHECK-NEXT:         "sandbox": null,
+// CHECK-NEXT:         "sandbox": "null",
 // CHECK-NEXT:         "location": {
 // CHECK-NEXT:           "file": "[[TESTS]]/json/pastvuln.c",
 // CHECK-NEXT:           "line": 28
