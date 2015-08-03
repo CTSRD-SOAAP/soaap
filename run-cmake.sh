@@ -20,13 +20,15 @@ fi
 for include in ${include_dirs}
 do
 	cppinc="${include}/c++/v1"
-	if [ -d "${cppinc}" ]; then libcxx=${cppinc}; fi
+	if [ -d "${cppinc}" ]; then libcxx=${cppinc}; break; fi
 done
 
 if [ "${libcxx}" = "" ]; then
 	echo "No libc++ in ${include_dirs}"
 	exit 1
 fi
+
+LIBCXX_BUILD_DIR=`echo ${libcxx} | sed 's/\/include.*$//g'`
 
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} || exit 1
@@ -41,4 +43,5 @@ PATH=${PATH}:${LLVM_PREFIX}/bin \
 	-D LLVM_DIR="${LLVM_PREFIX}/share/llvm/cmake" \
 	-D CMAKE_C_COMPILER="${clang}" \
 	-D CMAKE_CXX_COMPILER="${clang}++" \
+  -D LIBCXX_BUILD_DIR="${LIBCXX_BUILD_DIR}" \
 	../..
