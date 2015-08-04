@@ -2,6 +2,7 @@
 
 : ${BUILD_TYPE:="Release"}
 : ${BUILD_DIR:="Build/${BUILD_TYPE}"}
+: ${BUILD_SHARED_LIBS:="ON"}
 
 if [ ! -d "${LLVM_PREFIX}" ]; then
 	echo "LLVM_PREFIX not specified"
@@ -28,8 +29,6 @@ if [ "${libcxx}" = "" ]; then
 	exit 1
 fi
 
-LIBCXX_BUILD_DIR=`echo ${libcxx} | sed 's/\/include.*$//g'`
-
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR} || exit 1
 echo '*' > ${BUILD_DIR}/.gitignore
@@ -39,9 +38,8 @@ PATH=${PATH}:${LLVM_PREFIX}/bin \
 	cmake \
 	-G Ninja \
 	-D CMAKE_BUILD_TYPE=${BUILD_TYPE} \
-	-D BUILD_SHARED_LIBS=ON \
+	-D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
 	-D LLVM_DIR="${LLVM_PREFIX}/share/llvm/cmake" \
 	-D CMAKE_C_COMPILER="${clang}" \
 	-D CMAKE_CXX_COMPILER="${clang}++" \
-  -D LIBCXX_BUILD_DIR="${LIBCXX_BUILD_DIR}" \
 	../..
