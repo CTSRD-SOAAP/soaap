@@ -23,6 +23,7 @@ namespace soaap {
       virtual bool performMeet(bool from, bool& to);
       virtual bool performUnion(bool from, bool& to);
       virtual bool bottomValue() { return false; }
+      virtual bool checkEqual(bool f1, bool f2) { return f1 == f2; }
       virtual string stringifyFact(bool fact);
       virtual void findAllFollowingInstructions(Instruction* I, Value* V);
   };

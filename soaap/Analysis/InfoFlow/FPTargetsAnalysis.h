@@ -23,6 +23,7 @@ namespace soaap {
       virtual bool performMeet(BitVector from, BitVector& to);
       virtual bool performUnion(BitVector from, BitVector& to);
       virtual BitVector bottomValue() { return BitVector(); }
+      virtual bool checkEqual(BitVector f1, BitVector f2) { return f1 == f2; }
       virtual string stringifyFact(BitVector fact);
       virtual void stateChangedForFunctionPointer(CallInst* CI, const Value* FP, Context* C, BitVector& newState);
       virtual FunctionSet convertBitVectorToFunctionSet(BitVector vector);

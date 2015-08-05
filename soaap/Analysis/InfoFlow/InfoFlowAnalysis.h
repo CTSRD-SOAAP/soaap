@@ -58,6 +58,7 @@ namespace soaap {
       // performMeet: toVal = fromVal /\ toVal. return true <-> toVal != fromVal /\ toVal
       virtual bool performMeet(FactType fromVal, FactType& toVal) = 0;
       virtual bool performUnion(FactType fromVal, FactType& toVal) = 0;
+      virtual bool checkEqual(FactType f1, FactType f2) = 0;
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M, bool additive = false);
       virtual bool propagateToValue(FactType fact, const Value* to, Context* C, Module& M);
       virtual void propagateToCallees(CallInst* CI, const Value* V, Context* C, bool propagateAllArgs, ValueContextPairList& worklist, SandboxVector& sandboxes, Module& M);
@@ -432,7 +433,7 @@ namespace soaap {
   bool InfoFlowAnalysis<FactType>::propagateToValue(FactType fact, const Value* to, Context* C, Module& M) {
     FactType oldFact = state[C][to];
     state[C][to] = fact;
-    return oldFact != fact;
+    return !checkEqual(oldFact, fact);
   }
 
   template <typename FactType>

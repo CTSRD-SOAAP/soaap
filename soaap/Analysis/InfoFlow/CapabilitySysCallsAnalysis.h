@@ -36,6 +36,7 @@ namespace soaap {
       virtual bool performMeet(BitVector fromVal, BitVector& toVal);
       virtual bool performUnion(BitVector fromVal, BitVector& toVal);
       virtual BitVector bottomValue() { return BitVector(); }
+      virtual bool checkEqual(BitVector f1, BitVector f2) { return f1 == f2; }
       virtual string stringifyFact(BitVector fact);
       virtual BitVector convertFunctionSetToBitVector(FunctionSet sysCalls);
 

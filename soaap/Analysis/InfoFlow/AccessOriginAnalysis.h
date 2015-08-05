@@ -20,6 +20,7 @@ namespace soaap {
       virtual bool performMeet(int from, int& to);
       virtual bool performUnion(int from, int& to);
       virtual int bottomValue() { return 0; }
+      virtual bool checkEqual(int f1, int f2) { return f1 == f2; }
       virtual string stringifyFact(int fact);
 
     private:
