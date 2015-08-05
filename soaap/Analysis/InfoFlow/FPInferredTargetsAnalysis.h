@@ -15,6 +15,10 @@ namespace soaap {
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual void findAllFunctionPointersInValue(Value* V, ValueContextPairList& worklist, ValueSet& visited);
+
+    private:
+      void addInferredFunction(Function *, ContextVector, Value *,
+                               ValueContextPairList& worklist);
   };
 }
 
