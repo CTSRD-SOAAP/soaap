@@ -42,4 +42,4 @@ add_custom_target(soaap-test
 	DEPENDS lit.site.cfg
 	COMMENT "Running test suite")
 
-add_dependencies(soaap-test SOAAP)
+add_dependencies(soaap-test bin/soaap)
