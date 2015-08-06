@@ -93,18 +93,10 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
       }
       else if (SelectInst* S = dyn_cast<SelectInst>(&*I)) {
         if (Function* F = dyn_cast<Function>(S->getTrueValue()->stripPointerCasts())) {
-          fpTargetsUniv.insert(F);
-          for (Context* C : contexts) {
-            setBitVector(state[C][S], F);
-            addToWorklist(S, C, worklist);
-          }
+          addInferredFunction(F, contexts, S, worklist);
         }
         if (Function* F = dyn_cast<Function>(S->getFalseValue()->stripPointerCasts())) {
-          fpTargetsUniv.insert(F);
-          for (Context* C : contexts) {
-            setBitVector(state[C][S], F);
-            addToWorklist(S, C, worklist);
-          }
+          addInferredFunction(F, contexts, S, worklist);
         }
       }
       else if (CallInst* C = dyn_cast<CallInst>(&*I)) { // passing functions as params
@@ -112,14 +104,8 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
           int argIdx = 0;
           for (Function::arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI != AE; AI++, argIdx++) {
             Value* Arg = C->getArgOperand(argIdx)->stripPointerCasts();
-            Value* Param = &*AI;
             if (Function* T = dyn_cast<Function>(Arg)) {
-              fpTargetsUniv.insert(T);
-              SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << "Adding param " << Param->getName() << " to worklist\n");
-              for (Context* Ctx : contexts) {
-                setBitVector(state[Ctx][Param], T);
-                addToWorklist(Param, Ctx, worklist);
-              }
+              addInferredFunction(T, contexts, AI, worklist);
             }
           }
         }
@@ -175,4 +161,16 @@ void FPInferredTargetsAnalysis::findAllFunctionPointersInValue(Value* V, ValueCo
 }
 
 void FPInferredTargetsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
+}
+
+void FPInferredTargetsAnalysis::addInferredFunction(
+    Function *F, ContextVector contexts, Value *V,
+    ValueContextPairList& worklist) {
+
+  fpTargetsUniv.insert(F);
+
+  for (Context* Ctx : contexts) {
+    setBitVector(state[Ctx][V], F);
+    addToWorklist(V, Ctx, worklist);
+  }
 }
