@@ -6,7 +6,7 @@
 #include "Common/Debug.h"
 #include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
-#include "Util/InstUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/PrivInstIterator.h"
@@ -43,7 +43,7 @@ void AccessOriginAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandbo
               XO::emit(" *** Untrusted function pointer call in "
                        "\"{:function/%s}\"\n",
                        F->getName().str().c_str());
-              InstUtils::emitInstLocation(C);
+              PrettyPrinters::ppInstruction(C);
               if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(F, NULL, M);
               }

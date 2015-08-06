@@ -7,7 +7,7 @@
 #include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
-#include "Util/InstUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
@@ -90,7 +90,7 @@ void SysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes)
                        " *** based on the current sandboxing restrictions.\n",
                        S->getName().c_str(),
                        funcName.c_str());
-              InstUtils::emitInstLocation(C);
+              PrettyPrinters::ppInstruction(C);
               // output trace
               if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);

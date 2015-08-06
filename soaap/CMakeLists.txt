@@ -38,7 +38,6 @@ add_llvm_library(SOAAP
   Util/SandboxUtils.cpp
   Util/ClassifiedUtils.cpp
   Util/TypeUtils.cpp
-  Util/InstUtils.cpp
 )
 
 if (TARGET libxo)

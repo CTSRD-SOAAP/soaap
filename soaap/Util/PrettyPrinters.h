@@ -16,9 +16,8 @@ namespace soaap {
       static void ppPrivilegedPathToFunction(Function* F, Module& M);
       static void ppTaintSource(CallInst* C);
       static void ppTrace(InstTrace& trace);
-    
-    private:
-      static void ppInstruction(Instruction* I);
+      static void ppInstructionForTrace(Instruction* I);
+      static void ppInstruction(Instruction* I, bool displayText = true);
   };
 }
 

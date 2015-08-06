@@ -8,7 +8,7 @@
 
 #include "Analysis/InfoFlow/CapabilitySysCallsAnalysis.h"
 #include "Common/XO.h"
-#include "Util/InstUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "Util/LLVMAnalyses.h"
 #include "Util/PrettyPrinters.h"
 #include "Util/TypeUtils.h"
@@ -202,7 +202,7 @@ void CapabilitySysCallsAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& 
                          "given fd arg.\n",
                 S->getName().c_str(),
                 funcName.c_str());
-                InstUtils::emitInstLocation(C);
+                PrettyPrinters::ppInstruction(C);
                 if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::OutputTraces)) {
                   CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
                 }

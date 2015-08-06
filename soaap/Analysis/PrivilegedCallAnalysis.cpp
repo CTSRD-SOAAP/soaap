@@ -4,7 +4,7 @@
 #include "Common/XO.h"
 #include "Common/CmdLineOpts.h"
 #include "Util/CallGraphUtils.h"
-#include "Util/InstUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/Support/Debug.h"
@@ -51,7 +51,7 @@ void PrivilegedCallAnalysis::doAnalysis(Module& M, SandboxVector& sandboxes) {
                        "__soaap_callgates annotation.\n\n",
                        S->getName().c_str(),
                        privilegedFunc->getName().str().c_str());
-              InstUtils::emitInstLocation(C);
+              PrettyPrinters::ppInstruction(C);
               if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(C->getCalledFunction(), S, M);
               }

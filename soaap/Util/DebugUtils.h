@@ -23,6 +23,8 @@ namespace soaap {
     public:
       static string getEnclosingLibrary(Instruction* I);
       static string getEnclosingLibrary(Function* F);
+      static pair<string,int> findGlobalDeclaration(GlobalVariable* G);
+      static tuple<string,int,string> getInstLocation(Instruction* I);
 
     protected:
       static bool cachingDone;

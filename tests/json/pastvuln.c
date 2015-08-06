@@ -136,6 +136,15 @@ void bar() {
 // CHECK-NEXT:             "name": "mysandbox"
 // CHECK-NEXT:           }
 // CHECK-NEXT:         ],
+// CHECK-NEXT:         "sources": [
+// CHECK-NEXT:           {
+// CHECK-NEXT:             "name": "buffer",
+// CHECK-NEXT:             "location": {
+// CHECK-NEXT:               "line": 30,
+// CHECK-NEXT:               "file": "[[TESTS]]/json/pastvuln.c"
+// CHECK-NEXT:             }
+// CHECK-NEXT:           }
+// CHECK-NEXT:         ],
 // CHECK-NEXT:         "location": {
 // CHECK-NEXT:           "line": 36,
 // CHECK-NEXT:           "file": "[[TESTS]]/json/pastvuln.c"

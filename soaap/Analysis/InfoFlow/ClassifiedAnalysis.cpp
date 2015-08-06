@@ -2,7 +2,7 @@
 #include "Common/XO.h"
 #include "Util/ClassifiedUtils.h"
 #include "Util/DebugUtils.h"
-#include "Util/InstUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "soaap.h"
@@ -109,7 +109,7 @@ void ClassifiedAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxe
                 XO::emit("{e:name/%s}", clearance.c_str());
               }
               clearanceList.close();
-              InstUtils::emitInstLocation(&I);
+              PrettyPrinters::ppInstruction(&I);
               if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(F, S, M);
               }

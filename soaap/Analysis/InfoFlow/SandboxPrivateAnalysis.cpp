@@ -2,7 +2,7 @@
 #include "Common/XO.h"
 #include "Util/ContextUtils.h"
 #include "Util/DebugUtils.h"
-#include "Util/InstUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "Util/SandboxUtils.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfo.h"
@@ -22,9 +22,11 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
         if (annotateCall->getIntrinsicID() == Intrinsic::var_annotation) {
           // llvm.var.annotation
           Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
+          varToAnnotateCall[annotatedVar] = annotateCall;
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
           for (Context* C : Cs) {
-            state[C][annotatedVar] |= (1 << bitIdx);
+            state[C][annotatedVar].insert(annotatedVar);
+            valueToPrivSandboxes[annotatedVar] |= (1 << bitIdx);
             addToWorklist(annotatedVar, C, worklist);
           }
         }
@@ -33,13 +35,15 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M);
           for (Context* C : Cs) {
             addToWorklist(annotateCall, C, worklist);
-            state[C][annotateCall] |= (1 << bitIdx);
+            state[C][annotateCall].insert(annotateCall);
           }
+          valueToPrivSandboxes[annotateCall] |= (1 << bitIdx);
         }
       }
       else if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
-        state[ContextUtils::NO_CONTEXT][G] |= (1 << bitIdx);
+        state[ContextUtils::NO_CONTEXT][G].insert(G);
         addToWorklist(G, ContextUtils::NO_CONTEXT, worklist);
+        valueToPrivSandboxes[G] |= (1 << bitIdx);
       }
     }
   }
@@ -58,22 +62,24 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
           LoadInst* load2 = dyn_cast<LoadInst>(&I);
           if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
             Value* v = load->getPointerOperand()->stripPointerCasts();
+            int privSandboxIdxs = convertStateToBitIdxs(state[ContextUtils::PRIV_CONTEXT][v]);
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value:\n");
             SDEBUG("soaap.analysis.infoflow.private", 3, v->dump());
-            SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << state[ContextUtils::PRIV_CONTEXT][v] << ", " << SandboxUtils::stringifySandboxNames(state[ContextUtils::PRIV_CONTEXT][v]) << "\n");
-            if (state[ContextUtils::PRIV_CONTEXT][v] != 0) {
+            SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << SandboxUtils::stringifySandboxNames(privSandboxIdxs) << "\n");
+            if (privSandboxIdxs != 0) {
               XO::Instance privateAccessInstance(privateAccessList);
               XO::emit(" *** Privileged method \"{:function/%s}\" read data "
                        "value belonging to sandboxes: {d:sandboxes_private/%s}\n",
                        F->getName().str().c_str(),
-                       SandboxUtils::stringifySandboxNames(state[ContextUtils::PRIV_CONTEXT][v]).c_str());
+                       SandboxUtils::stringifySandboxNames(privSandboxIdxs).c_str());
               XO::List sandboxPrivateList("sandbox_private");
-              for (Sandbox* S : SandboxUtils::convertNamesToVector(state[ContextUtils::PRIV_CONTEXT][v], sandboxes)) {
+              for (Sandbox* S : SandboxUtils::convertNamesToVector(privSandboxIdxs, sandboxes)) {
                 XO::Instance sandboxPrivateInstance(sandboxPrivateList);
                 XO::emit("{e:name/%s}", S->getName().c_str());
               }
               sandboxPrivateList.close();
-              InstUtils::emitInstLocation(&I);
+              outputSources(ContextUtils::PRIV_CONTEXT, v);
+              PrettyPrinters::ppInstruction(&I);
               if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(F, NULL, M);
               }
@@ -98,18 +104,19 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             LoadInst* load2 = dyn_cast<LoadInst>(&I);
             if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
               Value* v = load->getPointerOperand()->stripPointerCasts();
+              int privSandboxIdxs = convertStateToBitIdxs(state[S][v]);
               SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value: "; v->dump(););
-              SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value names: " << state[S][v] << ", " << SandboxUtils::stringifySandboxNames(state[S][v]) << "\n");
-              if (!(state[S][v] == 0 || (state[S][v] & name) == state[S][v])) {
+              SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Private to sandboxes: " << SandboxUtils::stringifySandboxNames(privSandboxIdxs) << "\n");
+              if (!(privSandboxIdxs == 0 || (privSandboxIdxs & name) == privSandboxIdxs)) {
                 XO::Instance privateAccessInstance(privateAccessList);
                 XO::emit(" *** Sandboxed method \"{:function/%s}\" read data "
                          "value belonging to sandboxes: {d:sandboxes_private/%s} "
                          "but it executes in sandboxes: {d:sandboxes_access/%s}\n",
                          F->getName().str().c_str(),
-                         SandboxUtils::stringifySandboxNames(state[S][v]).c_str(),
+                         SandboxUtils::stringifySandboxNames(privSandboxIdxs).c_str(),
                          SandboxUtils::stringifySandboxNames(name).c_str());
                 XO::List sandboxPrivateList("sandbox_private");
-                for (Sandbox* S : SandboxUtils::convertNamesToVector(state[S][v], sandboxes)) {
+                for (Sandbox* S : SandboxUtils::convertNamesToVector(privSandboxIdxs, sandboxes)) {
                   XO::Instance sandboxPrivateInstance(sandboxPrivateList);
                   XO::emit("{e:name/%s}", S->getName().c_str());
                 }
@@ -120,7 +127,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   XO::emit("{e:name/%s}", S->getName().c_str());
                 }
                 sandboxPrivateList.close();
-                InstUtils::emitInstLocation(&I);
+                outputSources(S, v);
+                PrettyPrinters::ppInstruction(&I);
                 if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                   CallGraphUtils::emitCallTrace(F, S, M);
                 }
@@ -163,7 +171,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               if (GlobalVariable* gv = dyn_cast<GlobalVariable>(lhs)) {
                 Value* rhs = store->getValueOperand();
                 // if the rhs is private to the current sandbox, then flag an error
-                if (state[S][rhs] & name) {
+                if (convertStateToBitIdxs(state[S][rhs]) & name) {
                   XO::Instance privateLeakInstance(privateLeakList);
                   XO::emit("{e:type/%s}", "global_var");
                   XO::emit(" *** Sandboxed method \"{:function/%s}\" executing "
@@ -179,7 +187,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::emit("{e:name/%s}", S->getName().c_str());
                   }
                   sandboxAccessList.close();
-                  InstUtils::emitInstLocation(&I);
+                  outputSources(S, rhs);
+                  PrettyPrinters::ppInstruction(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                     CallGraphUtils::emitCallTrace(F, S, M);
                   }
@@ -193,7 +202,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 if (Callee->isIntrinsic()) continue;
                 if (Callee->getName() == "setenv") {
                   Value* arg = call->getArgOperand(1);
-                  if (state[S][arg] & name) {
+                  if (convertStateToBitIdxs(state[S][arg]) & name) {
                     XO::Instance privateLeakInstance(privateLeakList);
                     XO::emit("{e:type/%s}", "env_var");
                     XO::emit(" *** Sandboxed method \"{:function}\" executing "
@@ -213,7 +222,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::emit("{e:name/%s}", S->getName().c_str());
                     }
                     sandboxAccessList.close();
-                    InstUtils::emitInstLocation(&I);
+                    outputSources(S, arg);
+                    PrettyPrinters::ppInstruction(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
                     }
@@ -225,7 +235,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "Extern callee: " << Callee->getName() << "\n");
                   for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                     Value* arg = dyn_cast<Value>(AI->get());
-                    if (state[S][arg] & name) {
+                    if (convertStateToBitIdxs(state[S][arg]) & name) {
                       XO::Instance privateLeakInstance(privateLeakList);
                       XO::emit("{e:type/%s}", "extern");
                       XO::emit(" *** Sandboxed method \"{:function}\" executing "
@@ -240,7 +250,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                         XO::emit("{e:name/%s}", S->getName().c_str());
                       }
                       sandboxAccessList.close();
-                      InstUtils::emitInstLocation(&I);
+                      outputSources(S, arg);
+                      PrettyPrinters::ppInstruction(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
                       }
@@ -252,7 +263,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   // cross-domain call to callgate
                   for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {
                     Value* arg = dyn_cast<Value>(AI->get());
-                    if (state[S][arg] & name) {
+                    if (convertStateToBitIdxs(state[S][arg]) & name) {
                       XO::Instance privateLeakInstance(privateLeakList);
                       XO::emit("{e:type/%s}", "callgate");
                       XO::emit(" *** Sandboxed method \"{:function}\" executing "
@@ -261,7 +272,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                                F->getName().str().c_str(),
                                SandboxUtils::stringifySandboxNames(name).c_str(),
                                Callee->getName().str().c_str());
-                      InstUtils::emitInstLocation(&I);
+                      outputSources(S, arg);
+                      PrettyPrinters::ppInstruction(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
                       }
@@ -273,11 +285,11 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 else if (SandboxUtils::isSandboxEntryPoint(M, Callee)) { // possible cross-sandbox call
                   Sandbox* S2 = SandboxUtils::getSandboxForEntryPoint(Callee, sandboxes);
                   if (S != S2) {
-                    bool privateArg = false;
+                    Value* privateArg = nullptr;
                     for (int i=0; i<call->getNumArgOperands(); i++) {
                       Value* arg = call->getArgOperand(i);
-                      if (state[S][arg] & name) {
-                        privateArg = true;
+                      if (convertStateToBitIdxs(state[S][arg]) & name) {
+                        privateArg = arg;
                         break;
                       }
                     }
@@ -298,7 +310,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                         XO::emit("{e:name/%s}", S->getName().c_str());
                       }
                       sandboxAccessList.close();
-                      InstUtils::emitInstLocation(&I);
+                      outputSources(S, privateArg);
+                      PrettyPrinters::ppInstruction(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
                       }
@@ -312,7 +325,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               // we are returning from the sandbox entrypoint function
               if (S->isEntryPoint(F)) {
                 if (Value* retVal = ret->getReturnValue()) {
-                  if (state[S][retVal] & name) {
+                  if (convertStateToBitIdxs(state[S][retVal]) & name) {
                     XO::Instance privateLeakInstance(privateLeakList);
                     XO::emit("{e:type/%s}", "return_from_entrypoint");
                     XO::emit(" *** Sandbox \"{:sandbox/%s}\" "
@@ -320,7 +333,8 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              "from entrypoint \"{:entrypoint/%s}\"\n",
                              S->getName().c_str(),
                              F->getName().str().c_str());
-                    InstUtils::emitInstLocation(&I);
+                    outputSources(S, retVal);
+                    PrettyPrinters::ppInstruction(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
                     }
@@ -338,21 +352,66 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
 
 bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
   if (!declassifierAnalysis.isDeclassified(from)) {
-    return InfoFlowAnalysis<int>::propagateToValue(from, to, cFrom, cTo, M);
+    return InfoFlowAnalysis<ValueSet>::propagateToValue(from, to, cFrom, cTo, M);
   }
   return false;
 }
 
-bool SandboxPrivateAnalysis::performMeet(int from, int& to) {
+bool SandboxPrivateAnalysis::performMeet(ValueSet from, ValueSet& to) {
   return performUnion(from, to);
 }
 
-bool SandboxPrivateAnalysis::performUnion(int from, int& to) {
-  int oldTo = to;
-  to = from | to;
-  return to != oldTo;
+bool SandboxPrivateAnalysis::performUnion(ValueSet from, ValueSet& to) {
+  int oldToSize = to.size();
+  to.insert(from.begin(), from.end());
+  return to.size() != oldToSize;
 }
 
-string SandboxPrivateAnalysis::stringifyFact(int fact) {
-  return SandboxUtils::stringifySandboxNames(fact);
+string SandboxPrivateAnalysis::stringifyFact(ValueSet fact) {
+  int privSandboxIdxs = 0;
+  for (Value* v : fact) {
+    privSandboxIdxs |= valueToPrivSandboxes[v];
+  }
+  return SandboxUtils::stringifySandboxNames(privSandboxIdxs);
+}
+
+bool SandboxPrivateAnalysis::checkEqual(ValueSet f1, ValueSet f2) {
+  if (f1.size() == f2.size()) {
+    //TODO: this is currently very inefficient, but SmallSet has a limited interface
+    f1.insert(f2.begin(), f2.end());
+    return f1.size() == f2.size();
+  }
+  return false;
+}
+
+int SandboxPrivateAnalysis::convertStateToBitIdxs(ValueSet& vs) {
+  int privSandboxIdxs = 0;
+  for (Value* v : vs) {
+    privSandboxIdxs |= valueToPrivSandboxes[v];
+  }
+  return privSandboxIdxs;
+}
+
+void SandboxPrivateAnalysis::outputSources(Context* C, Value* V) {
+  XO::List sourcesList("sources");
+  for (Value* V2 : state[C][V]) {
+    XO::Instance sourcesInstance(sourcesList);
+    XO::emit("{e:name/%s}", V2->getName().str().c_str());
+    Instruction* I = nullptr;
+    if (isa<IntrinsicInst>(V2)) {
+      I = cast<IntrinsicInst>(V2);
+    } else if (varToAnnotateCall.find(V2) != varToAnnotateCall.end()) {
+      I = varToAnnotateCall[V2];
+    }
+    if (I) {
+      PrettyPrinters::ppInstruction(I, false);
+    }
+    else {
+      // global variable
+      GlobalVariable* G = cast<GlobalVariable>(V2);
+      pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(G);
+      XO::Container globalLoc("location");
+      XO::emit("{e:file/%s}{e:line/%d}",declareLoc.first.c_str(), declareLoc.second);
+    }
+  }
 }

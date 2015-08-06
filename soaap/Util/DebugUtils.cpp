@@ -65,3 +65,30 @@ string DebugUtils::getEnclosingLibrary(Function* F) {
     return funcToLib[F];
   }
 }
+
+pair<string,int> DebugUtils::findGlobalDeclaration(GlobalVariable* G) {
+  Module* M = G->getParent();
+  if (NamedMDNode *NMD = M->getNamedMetadata("llvm.dbg.cu")) {
+    for (int i=0; i<NMD->getNumOperands(); i++) {
+      DICompileUnit* CU = cast<DICompileUnit>(NMD->getOperand(i));
+      DIGlobalVariableArray globals = CU->getGlobalVariables();
+      for (int j=0; j<globals.size(); j++) {
+        DIGlobalVariable* GV = globals[j];
+        if (GV->getVariable() == G) {
+          return make_pair<string,int>(GV->getFilename().str(), GV->getLine());
+        }
+      }
+    }
+  }
+  return make_pair<string,int>("",-1); 
+}
+
+tuple<string,int,string> DebugUtils::getInstLocation(Instruction* I) {
+  if (DILocation* loc = dyn_cast_or_null<DILocation>(I->getMetadata("dbg"))) {
+    Function* enclosingFunc = I->getParent()->getParent();
+    string library = getEnclosingLibrary(enclosingFunc);
+    return make_tuple(loc->getFilename(), loc->getLine(), library);
+  }
+  return make_tuple("",-1,"");
+}
+

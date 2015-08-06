@@ -7,8 +7,8 @@
 #include "Common/XO.h"
 #include "Util/CallGraphUtils.h"
 #include "Util/DebugUtils.h"
-#include "Util/InstUtils.h"
 #include "Util/SandboxUtils.h"
+#include "Util/PrettyPrinters.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -64,7 +64,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 if (!(varToPerms[gv] & VAR_READ_MASK)) {
                   if (CmdLineOpts::Pedantic || find(alreadyReportedReads.begin(), alreadyReportedReads.end(), gv) == alreadyReportedReads.end()) {
                     SDEBUG("soaap.analysis.globals", 3, dbgs() << "  Found unannotated read to global \"" << gv->getName() << "\"\n");
-                    pair<string,int> declareLoc = findGlobalDeclaration(M, gv);
+                    pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(gv);
                     string declareLocStr = "";
                     if (declareLoc.second != -1) {
                       stringstream ss;
@@ -88,7 +88,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::emit("{e:line/%d}{e:file/%s}",
                                declareLoc.second, declareLoc.first.c_str());
                     }
-                    InstUtils::emitInstLocation(&I);
+                    PrettyPrinters::ppInstruction(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
                     }
@@ -109,7 +109,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 // variable can be written to
                 if (!(varToPerms[gv] & VAR_WRITE_MASK)) {
                   if (CmdLineOpts::Pedantic || find(alreadyReportedWrites.begin(), alreadyReportedWrites.end(), gv) == alreadyReportedWrites.end()) {
-                    pair<string,int> declareLoc = findGlobalDeclaration(M, gv);
+                    pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(gv);
                     string declareLocStr = "";
                     if (declareLoc.second != -1) {
                       stringstream ss;
@@ -133,7 +133,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::emit("{e:line/%d}{e:file%s}",
                                declareLoc.second, declareLoc.first.c_str());
                     }
-                    InstUtils::emitInstLocation(&I);
+                    PrettyPrinters::ppInstruction(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
                     }
@@ -176,7 +176,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 SDEBUG("soaap.analysis.globals", 3, dbgs() << "   Checking write to annotated variable " << gv->getName() << "\n");
                 SDEBUG("soaap.analysis.globals", 3, dbgs() << "   readerSandboxNames: " << SandboxUtils::stringifySandboxNames(readerSandboxNames) << ", reaching creations: " << SandboxUtils::stringifySandboxNames(state[store]) << ", possInconsSandboxes: " << SandboxUtils::stringifySandboxNames(possInconsSandboxes) << "\n");
                 if (find(alreadyReported.begin(), alreadyReported.end(), gv) == alreadyReported.end()) {
-                  pair<string,int> declareLoc = findGlobalDeclaration(M, gv);
+                  pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(gv);
                   string declareLocStr = "";
                   if (declareLoc.second != -1) {
                     stringstream ss;
@@ -204,7 +204,7 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::emit("{e:line/%d}{e:file/%s}",
                              declareLoc.second, declareLoc.first.c_str());
                   }
-                  InstUtils::emitInstLocation(&I);
+                  PrettyPrinters::ppInstruction(&I);
                   alreadyReported.push_back(gv);
                   XO::emit("\n");
                 }
@@ -216,20 +216,4 @@ void GlobalVariableAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
     }
   }
   globalLostUpdateList.close();
-}
-
-pair<string,int> GlobalVariableAnalysis::findGlobalDeclaration(Module& M, GlobalVariable* G) {
-  if (NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.cu")) {
-    for (int i=0; i<NMD->getNumOperands(); i++) {
-      DICompileUnit* CU = cast<DICompileUnit>(NMD->getOperand(i));
-      DIGlobalVariableArray globals = CU->getGlobalVariables();
-      for (int j=0; j<globals.size(); j++) {
-        DIGlobalVariable* GV = globals[j];
-        if (GV->getVariable() == G) {
-          return make_pair<string,int>(GV->getFilename().str(), GV->getLine());
-        }
-      }
-    }
-  }
-  return make_pair<string,int>("",-1); 
 }
