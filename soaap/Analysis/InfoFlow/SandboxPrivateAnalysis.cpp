@@ -8,7 +8,16 @@
 #include "llvm/IR/DebugInfo.h"
 #include "soaap.h"
 
+#include <random>
+
 using namespace soaap;
+
+/// Returns true if we should report a particular private access.
+///
+/// Uses the -soaap-privaccess-proportion command-line argument to make
+/// a (potentially) stochastic decision.
+static bool keepAccess();
+
 
 void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
 
@@ -56,6 +65,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
 }
 
 void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sandboxes) {
+
   XO::List privateAccessList("private_access");
   // validate that sandbox-private data is never accessed in other contexts
   for (Function* F : privilegedMethods) {
@@ -71,7 +81,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value:\n");
             SDEBUG("soaap.analysis.infoflow.private", 3, v->dump());
             SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "      Value names: " << SandboxUtils::stringifySandboxNames(privSandboxIdxs) << "\n");
-            if (privSandboxIdxs != 0) {
+            if (privSandboxIdxs != 0 and keepAccess()) {
               XO::Instance privateAccessInstance(privateAccessList);
               XO::emit(" *** Privileged method \"{:function/%s}\" read data "
                        "value belonging to sandboxes: {d:sandboxes_private/%s}\n",
@@ -112,7 +122,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
               int privSandboxIdxs = convertStateToBitIdxs(state[S][v]);
               SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Value: "; v->dump(););
               SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << INDENT_3 << "Private to sandboxes: " << SandboxUtils::stringifySandboxNames(privSandboxIdxs) << "\n");
-              if (!(privSandboxIdxs == 0 || (privSandboxIdxs & name) == privSandboxIdxs)) {
+              if (((privSandboxIdxs & ~name) != 0) && keepAccess()) {
                 XO::Instance privateAccessInstance(privateAccessList);
                 XO::emit(" *** Sandboxed method \"{:function/%s}\" read data "
                          "value belonging to sandboxes: {d:sandboxes_private/%s} "
@@ -519,4 +529,19 @@ void SandboxPrivateAnalysis::calculateShortestCallPathsFromFunc(Function* F, Con
   }
 
   SDEBUG("soaap.util.callgraph", 4, dbgs() << "completed calculating shortest paths from main cache\n");
+}
+
+
+static bool keepAccess() {
+  static const double Probability = CmdLineOpts::PrivAccessProportion;
+  static std::bernoulli_distribution dist(Probability);
+  static std::default_random_engine generator;
+
+  if (Probability == 0.0)
+    return false;
+
+  if (Probability == 1.0)
+    return true;
+
+  return dist(generator);
 }

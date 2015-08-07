@@ -55,6 +55,7 @@ namespace soaap {
       static SoaapMode Mode;
       static list<SoaapAnalysis> OutputTraces;
       static list<SoaapAnalysis> SoaapAnalyses;
+      static double PrivAccessProportion;
       static list<string> NoWarnLibs;
       static list<string> WarnLibs;
   

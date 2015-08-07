@@ -244,6 +244,13 @@ static cl::list<string, list<string> > ClWarnLibs("soaap-warn-libs",
        cl::CommaSeparated,
        cl::location(CmdLineOpts::WarnLibs));
 
+double CmdLineOpts::PrivAccessProportion;
+static cl::opt<double, true> ClPrivAccessProp("soaap-privaccess-proportion",
+      cl::cat(CmdLineOpts::SoaapCategory),
+      cl::desc("Proportion of private accesses to report (probabilistic)"),
+      cl::location(CmdLineOpts::PrivAccessProportion),
+      cl::init(1.0));
+
 list<string> CmdLineOpts::NoWarnLibs;
 static cl::list<string, list<string> > ClNoWarnLibs("soaap-nowarn-libs",
        cl::cat(CmdLineOpts::SoaapCategory),
