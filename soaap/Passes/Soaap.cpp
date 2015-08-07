@@ -236,15 +236,13 @@ void Soaap::processCmdLineArgs(Module& M) {
     CmdLineOpts::ReportOutputFormats.push_back(ReportOutputFormat::Text);
   }
 
-  const int XoFlags = XOF_FLUSH
-    | (CmdLineOpts::PrettyPrint ? XOF_PRETTY : 0)
-    ;
+  const int XoFlags = (CmdLineOpts::PrettyPrint ? XOF_PRETTY : 0);
 
   for (ReportOutputFormat r : CmdLineOpts::ReportOutputFormats) {
     switch (r) {
       case ReportOutputFormat::Text: {
         SDEBUG("soaap", 3, dbgs() << "Text selected\n");
-        XO::create(XO_STYLE_TEXT, XoFlags);
+        XO::create(XO_STYLE_TEXT, XoFlags | XOF_FLUSH);
         break;
       }
       case ReportOutputFormat::HTML: {
