@@ -91,6 +91,8 @@ void PrettyPrinters::ppInstruction(Instruction* I, bool displayText) {
       }
       XO::emit("{e:library/%s}", library.c_str());
     }
-    XO::emit("\n");
+    if (displayText) {
+      XO::emit("\n");
+    }
   }
 }
