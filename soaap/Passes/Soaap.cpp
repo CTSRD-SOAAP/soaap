@@ -235,18 +235,23 @@ void Soaap::processCmdLineArgs(Module& M) {
   if (CmdLineOpts::ReportOutputFormats.empty()) { 
     CmdLineOpts::ReportOutputFormats.push_back(ReportOutputFormat::Text);
   }
+
+  const int XoFlags = XOF_FLUSH
+    | (CmdLineOpts::PrettyPrint ? XOF_PRETTY : 0)
+    ;
+
   for (ReportOutputFormat r : CmdLineOpts::ReportOutputFormats) {
     switch (r) {
       case ReportOutputFormat::Text: {
         SDEBUG("soaap", 3, dbgs() << "Text selected\n");
-        XO::create(XO_STYLE_TEXT, XOF_FLUSH);
+        XO::create(XO_STYLE_TEXT, XoFlags);
         break;
       }
       case ReportOutputFormat::HTML: {
         SDEBUG("soaap", 3, dbgs() << "HTML selected\n");
         string filename = CmdLineOpts::ReportFilePrefix + ".html";
         if (FILE* fp = fopen(filename.c_str(), "w")) {
-          XO::create_to_file(fp, XO_STYLE_HTML, XOF_PRETTY | XOF_FLUSH);
+          XO::create_to_file(fp, XO_STYLE_HTML, XoFlags);
         }
         else {
           errs() << "Error creating JSON report file: " << strerror(errno) << "\n";
@@ -258,7 +263,7 @@ void Soaap::processCmdLineArgs(Module& M) {
         string filename = CmdLineOpts::ReportFilePrefix + ".json";
         SDEBUG("soaap", 3, dbgs() << "Opening file \"" << filename << "\"\n");
         if (FILE* fp = fopen(filename.c_str(), "w")) {
-          XO::create_to_file(fp, XO_STYLE_JSON, XOF_PRETTY | XOF_FLUSH);
+          XO::create_to_file(fp, XO_STYLE_JSON, XoFlags);
         }
         else {
           errs() << "Error creating JSON report file: " << strerror(errno) << "\n";
@@ -270,7 +275,7 @@ void Soaap::processCmdLineArgs(Module& M) {
         string filename = CmdLineOpts::ReportFilePrefix + ".xml";
         SDEBUG("soaap", 3, dbgs() << "Opening file \"" << filename << "\"\n");
         if (FILE* fp = fopen(filename.c_str(), "w")) {
-          XO::create_to_file(fp, XO_STYLE_XML, XOF_PRETTY | XOF_FLUSH);
+          XO::create_to_file(fp, XO_STYLE_XML, XoFlags);
         }
         else {
           errs() << "Error creating XML report file: " << strerror(errno) << "\n";

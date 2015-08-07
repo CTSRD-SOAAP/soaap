@@ -178,6 +178,13 @@ static cl::opt<string, true> ClReportFilePrefix("soaap-report-file-prefix",
        cl::location(CmdLineOpts::ReportFilePrefix),
        cl::init("soaap-output"));
 
+bool CmdLineOpts::PrettyPrint;
+static cl::opt<bool, true> ClPrettyPrint("soaap-pretty-print",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Pretty-print output"),
+       cl::location(CmdLineOpts::PrettyPrint),
+       cl::init(true));
+
 SoaapMode CmdLineOpts::Mode;
 static cl::opt<SoaapMode, true> ClMode("soaap-mode",
        cl::cat(CmdLineOpts::SoaapCategory),

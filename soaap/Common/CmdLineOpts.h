@@ -50,6 +50,7 @@ namespace soaap {
       static bool PrintCallGraph;
       static list<ReportOutputFormat> ReportOutputFormats;
       static string ReportFilePrefix;
+      static bool PrettyPrint;
       static cl::OptionCategory SoaapCategory;
       static SoaapMode Mode;
       static list<SoaapAnalysis> OutputTraces;
