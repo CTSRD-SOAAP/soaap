@@ -611,6 +611,10 @@ void CallGraphUtils::emitCallTrace(Function* Target, Sandbox* S, Module& M) {
   InstTrace callStack = S
     ? findSandboxedPathToFunction(Target, S, M)
     : findPrivilegedPathToFunction(Target, M);
+  emitCallTrace(callStack);
+}
+
+void CallGraphUtils::emitCallTrace(InstTrace callStack) {
   if (callStack.empty()) {
     return;
   }

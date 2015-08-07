@@ -372,7 +372,7 @@ void Soaap::findSandboxes(Module& M) {
 }
 
 void Soaap::checkPropagationOfSandboxPrivateData(Module& M) {
-  SandboxPrivateAnalysis analysis(CmdLineOpts::ContextInsens, privilegedMethods);
+  SandboxPrivateAnalysis analysis(CmdLineOpts::ContextInsens, privilegedMethods, sandboxes);
   analysis.doAnalysis(M, sandboxes);
 }
 

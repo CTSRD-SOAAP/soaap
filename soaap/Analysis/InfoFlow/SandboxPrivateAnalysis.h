@@ -11,7 +11,7 @@ namespace soaap {
 
   class SandboxPrivateAnalysis : public InfoFlowAnalysis<int> {
     public:
-      SandboxPrivateAnalysis(bool contextInsensitive, FunctionSet& privMethods) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privMethods) { }
+      SandboxPrivateAnalysis(bool contextInsensitive, FunctionSet& privMethods, SandboxVector& sboxes) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privMethods), sandboxes(sboxes) { }
     
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
@@ -25,13 +25,19 @@ namespace soaap {
 
     private:
       FunctionSet privilegedMethods;
+      SandboxVector sandboxes;
       DeclassifierAnalysis declassifierAnalysis;
       map<int, Value*> bitIdxToSource;
       map<int, int> bitIdxToPrivSandboxIdxs;
       map<Value*, IntrinsicInst*> varToAnnotateCall;
+      map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths;
 
       int convertStateToBitIdxs(int& vs);
-      void outputSources(Context* C, Value* V);
+      void outputSources(Context* C, Value* V, Function* F);
+      //InstTrace findPrivilegedPathToFunction(Function* Target, int taint);
+      //InstTrace findSandboxedPathToFunction(Function* Target, Sandbox* S, int taint);
+      void calculateShortestCallPathsFromFunc(Function* F, Context* C, int taint);
+      bool doesCallPropagateTaint(CallInst* C, int taint, Context* Ctx);
   };
 }
 #endif 

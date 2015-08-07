@@ -83,7 +83,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                 XO::emit("{e:name/%s}", S->getName().c_str());
               }
               sandboxPrivateList.close();
-              outputSources(ContextUtils::PRIV_CONTEXT, v);
+              outputSources(ContextUtils::PRIV_CONTEXT, v, F);
               PrettyPrinters::ppInstruction(&I);
               if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                 CallGraphUtils::emitCallTrace(F, NULL, M);
@@ -132,7 +132,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                   XO::emit("{e:name/%s}", S->getName().c_str());
                 }
                 sandboxPrivateList.close();
-                outputSources(S, v);
+                outputSources(S, v, F);
                 PrettyPrinters::ppInstruction(&I);
                 if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                   CallGraphUtils::emitCallTrace(F, S, M);
@@ -192,7 +192,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::emit("{e:name/%s}", S->getName().c_str());
                   }
                   sandboxAccessList.close();
-                  outputSources(S, rhs);
+                  outputSources(S, rhs, F);
                   PrettyPrinters::ppInstruction(&I);
                   if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                     CallGraphUtils::emitCallTrace(F, S, M);
@@ -227,7 +227,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                       XO::emit("{e:name/%s}", S->getName().c_str());
                     }
                     sandboxAccessList.close();
-                    outputSources(S, arg);
+                    outputSources(S, arg, F);
                     PrettyPrinters::ppInstruction(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
@@ -255,7 +255,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                         XO::emit("{e:name/%s}", S->getName().c_str());
                       }
                       sandboxAccessList.close();
-                      outputSources(S, arg);
+                      outputSources(S, arg, F);
                       PrettyPrinters::ppInstruction(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
@@ -277,7 +277,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                                F->getName().str().c_str(),
                                SandboxUtils::stringifySandboxNames(name).c_str(),
                                Callee->getName().str().c_str());
-                      outputSources(S, arg);
+                      outputSources(S, arg, F);
                       PrettyPrinters::ppInstruction(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
@@ -315,7 +315,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                         XO::emit("{e:name/%s}", S->getName().c_str());
                       }
                       sandboxAccessList.close();
-                      outputSources(S, privateArg);
+                      outputSources(S, privateArg, F);
                       PrettyPrinters::ppInstruction(&I);
                       if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                         CallGraphUtils::emitCallTrace(F, S, M);
@@ -338,7 +338,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                              "from entrypoint \"{:entrypoint/%s}\"\n",
                              S->getName().c_str(),
                              F->getName().str().c_str());
-                    outputSources(S, retVal);
+                    outputSources(S, retVal, F);
                     PrettyPrinters::ppInstruction(&I);
                     if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::OutputTraces)) {
                       CallGraphUtils::emitCallTrace(F, S, M);
@@ -398,12 +398,13 @@ int SandboxPrivateAnalysis::convertStateToBitIdxs(int& vs) {
   return privSandboxIdxs;
 }
 
-void SandboxPrivateAnalysis::outputSources(Context* C, Value* V) {
+void SandboxPrivateAnalysis::outputSources(Context* C, Value* V, Function* F) {
   XO::List sourcesList("sources");
   int currIdx = 0;
   for (currIdx=0; currIdx<=31; currIdx++) {
     if ((state[C][V] & (1 << currIdx)) != 0) {
       Value* V2 = bitIdxToSource[currIdx];
+      Function* sourceFunc = nullptr;
       XO::Instance sourcesInstance(sourcesList);
       XO::emit("{e:name/%s}", V2->getName().str().c_str());
       Instruction* I = nullptr;
@@ -413,7 +414,12 @@ void SandboxPrivateAnalysis::outputSources(Context* C, Value* V) {
         I = varToAnnotateCall[V2];
       }
       if (I) {
+        sourceFunc = I->getParent()->getParent();
         PrettyPrinters::ppInstruction(I, false);
+        // output trace from source to access
+        calculateShortestCallPathsFromFunc(sourceFunc, C, (1 << currIdx));
+        InstTrace& callStack = funcToShortestCallPaths[sourceFunc][F];
+        CallGraphUtils::emitCallTrace(callStack);
       }
       else {
         // global variable
@@ -424,4 +430,91 @@ void SandboxPrivateAnalysis::outputSources(Context* C, Value* V) {
       }
     }
   }
+}
+
+bool SandboxPrivateAnalysis::doesCallPropagateTaint(CallInst* C, int taint, Context* Ctx) {
+  for (int argIdx=0; argIdx<C->getNumArgOperands(); argIdx++) {
+    Value* arg = C->getArgOperand(argIdx);
+    if (state[Ctx][arg] & taint) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void SandboxPrivateAnalysis::calculateShortestCallPathsFromFunc(Function* F, Context* Ctx, int taint) {
+  // we use Dijkstra's algorithm
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "calculating shortest paths from " << F->getName() << " cache");
+
+  // Find privileged path to instruction I, via a function that calls a sandboxed callee
+  QueueSet<pair<Function*,Context*> > worklist;
+  unordered_map<Function*,int> distanceFromMain;
+  unordered_map<Function*,Function*> pred;
+  unordered_map<Function*,CallInst*> call;
+
+  worklist.enqueue(make_pair(F, Ctx));
+  distanceFromMain[F] = 0;
+  pred[F] = NULL;
+  call[F] = NULL;
+
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "setting all distances from main to INT_MAX\n")
+  Module* M = F->getParent();
+  for (Module::iterator F2 = M->begin(), E = M->end(); F2 != E; ++F2) {
+    if (&*F2 != F) {
+      distanceFromMain[&*F2] = INT_MAX;
+    }
+  }
+
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "computing dijkstra's algorithm\n")
+  while (!worklist.empty()) {
+    pair<Function*,Context*> p = worklist.dequeue();
+    Function* F2 = p.first;
+    Context* Ctx2 = p.second;
+    
+    SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_2 << "Current func: " << F2->getName() << "\n")
+    // only proceed if:
+    // a) in the privileged case, N is not a sandbox entrypoint
+    // b) in the non-privileged case, if N is a sandbox entrypoint it must be S's
+    // (i.e. in both case we are not entering a different protection domain)
+    for (CallGraphEdge E : CallGraphUtils::getCallGraphEdges(F2, Ctx2, *M)) {
+      CallInst* C = E.first;
+      if (doesCallPropagateTaint(C, taint, Ctx2)) {
+        Function* SuccFunc = E.second;
+        Context* SuccCtx = Ctx2;
+        if (SandboxUtils::isSandboxEntryPoint(*M, SuccFunc)) {
+          SuccCtx = SandboxUtils::getSandboxForEntryPoint(SuccFunc, sandboxes);
+        }
+        else if (Sandbox* S = dyn_cast<Sandbox>(Ctx2)) {
+          if (S->isCallgate(SuccFunc)) {
+            SuccCtx = ContextUtils::PRIV_CONTEXT;
+          }
+        }
+        // skip non-main root node
+        SDEBUG("soaap.util.callgraph", 4, dbgs() << INDENT_3 << "Succ func: " << SuccFunc->getName() << "\n")
+        if (distanceFromMain[SuccFunc] > distanceFromMain[F2]+1) {
+          distanceFromMain[SuccFunc] = distanceFromMain[F2]+1;
+          pred[SuccFunc] = F2;
+          call[SuccFunc] = C;
+          worklist.enqueue(make_pair(SuccFunc, SuccCtx));
+        }
+      }
+    }
+  }
+
+  // cache shortest paths for each function
+  SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
+  for (Module::iterator F2 = M->begin(), E = M->end(); F2 != E; ++F2) {
+    if (distanceFromMain[F2] < INT_MAX) { // N is reachable from main
+      InstTrace path;
+      Function* CurrF = &*F2;
+      while (CurrF != F) {
+        path.push_back(call[CurrF]);
+        CurrF = pred[CurrF];
+      }
+      funcToShortestCallPaths[F][&*F2] = path;
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << F2->getName() << ": " << path.size() << "\n")
+    }
+  }
+
+  SDEBUG("soaap.util.callgraph", 4, dbgs() << "completed calculating shortest paths from main cache\n");
 }

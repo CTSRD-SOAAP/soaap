@@ -69,6 +69,7 @@ namespace soaap {
        * If @p S is null then a privileged call graph will be emitted instead.
        */
       static void emitCallTrace(Function* Target, Sandbox* S, Module& M);
+      static void emitCallTrace(InstTrace trace);
       static void emitTraceReferences();
       static int insertIntoTraceDAG(InstTrace& trace);
     private:
