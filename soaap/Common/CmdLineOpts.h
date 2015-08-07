@@ -38,6 +38,7 @@ namespace soaap {
       static bool ListAllFuncs;
       static bool SkipGlobalVariableAnalysis;
       static bool Pedantic;
+      static bool EmitLeakedRights;
       static string DebugModule;
       static string DebugFunction;
       static int DebugVerbosity;

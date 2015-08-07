@@ -82,6 +82,13 @@ static cl::opt<bool, true> ClPedantic("soaap-pedantic",
        cl::desc("Output all warnings"),
        cl::location(CmdLineOpts::Pedantic));
 
+bool CmdLineOpts::EmitLeakedRights;
+static cl::opt<bool, true> ClEmitLeakedRights("soaap-emit-leaked-rights",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Emit description of which rights leak from a sandbox"),
+       cl::location(CmdLineOpts::EmitLeakedRights),
+       cl::init(true));
+
 string CmdLineOpts::DebugModule;
 static cl::opt<string, true> ClDebugModule("soaap-debug-module",
        cl::cat(CmdLineOpts::SoaapCategory),
