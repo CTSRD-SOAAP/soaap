@@ -9,27 +9,28 @@ using namespace llvm;
 
 namespace soaap {
 
-  class SandboxPrivateAnalysis : public InfoFlowAnalysis<ValueSet> {
+  class SandboxPrivateAnalysis : public InfoFlowAnalysis<int> {
     public:
-      SandboxPrivateAnalysis(bool contextInsensitive, FunctionSet& privMethods) : InfoFlowAnalysis<ValueSet>(contextInsensitive), privilegedMethods(privMethods) { }
+      SandboxPrivateAnalysis(bool contextInsensitive, FunctionSet& privMethods) : InfoFlowAnalysis<int>(contextInsensitive), privilegedMethods(privMethods) { }
     
     protected:
       virtual void initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes);
       virtual void postDataFlowAnalysis(Module& M, SandboxVector& sandboxes);
       virtual bool propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M);
-      virtual bool performMeet(ValueSet from, ValueSet& to);
-      virtual bool performUnion(ValueSet from, ValueSet& to);
-      virtual ValueSet bottomValue() { return ValueSet(); }
-      virtual bool checkEqual(ValueSet f1, ValueSet f2);
-      virtual string stringifyFact(ValueSet fact);
+      virtual bool performMeet(int from, int& to);
+      virtual bool performUnion(int from, int& to);
+      virtual int bottomValue() { return int(); }
+      virtual bool checkEqual(int f1, int f2);
+      virtual string stringifyFact(int fact);
 
     private:
       FunctionSet privilegedMethods;
       DeclassifierAnalysis declassifierAnalysis;
-      map<Value*, int> valueToPrivSandboxes;
+      map<int, Value*> bitIdxToSource;
+      map<int, int> bitIdxToPrivSandboxIdxs;
       map<Value*, IntrinsicInst*> varToAnnotateCall;
 
-      int convertStateToBitIdxs(ValueSet& vs);
+      int convertStateToBitIdxs(int& vs);
       void outputSources(Context* C, Value* V);
   };
 }

@@ -13,6 +13,8 @@ using namespace soaap;
 void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& M, SandboxVector& sandboxes) {
 
   declassifierAnalysis.doAnalysis(M, sandboxes);
+
+  int nextFreeIdx = 0;
  
   for (Sandbox* S : sandboxes) {
     int bitIdx = S->getNameIdx();
@@ -23,27 +25,30 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
           // llvm.var.annotation
           Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
           varToAnnotateCall[annotatedVar] = annotateCall;
+          bitIdxToSource[++nextFreeIdx] = annotatedVar;
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
           for (Context* C : Cs) {
-            state[C][annotatedVar].insert(annotatedVar);
-            valueToPrivSandboxes[annotatedVar] |= (1 << bitIdx);
+            state[C][annotatedVar] |= (1 << nextFreeIdx);
+            bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
             addToWorklist(annotatedVar, C, worklist);
           }
         }
         else if (annotateCall->getIntrinsicID() == Intrinsic::ptr_annotation) {
           // llvm.ptr.annotation.p0i8
+          bitIdxToSource[++nextFreeIdx] = annotateCall;
+          bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M);
           for (Context* C : Cs) {
             addToWorklist(annotateCall, C, worklist);
-            state[C][annotateCall].insert(annotateCall);
+            state[C][annotateCall] |= (1 << nextFreeIdx);
           }
-          valueToPrivSandboxes[annotateCall] |= (1 << bitIdx);
         }
       }
       else if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
-        state[ContextUtils::NO_CONTEXT][G].insert(G);
+        bitIdxToSource[++nextFreeIdx] = G;
+        bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
+        state[ContextUtils::NO_CONTEXT][G] |= (1 << nextFreeIdx);
         addToWorklist(G, ContextUtils::NO_CONTEXT, worklist);
-        valueToPrivSandboxes[G] |= (1 << bitIdx);
       }
     }
   }
@@ -352,66 +357,71 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
 
 bool SandboxPrivateAnalysis::propagateToValue(const Value* from, const Value* to, Context* cFrom, Context* cTo, Module& M) {
   if (!declassifierAnalysis.isDeclassified(from)) {
-    return InfoFlowAnalysis<ValueSet>::propagateToValue(from, to, cFrom, cTo, M);
+    return InfoFlowAnalysis<int>::propagateToValue(from, to, cFrom, cTo, M);
   }
   return false;
 }
 
-bool SandboxPrivateAnalysis::performMeet(ValueSet from, ValueSet& to) {
+bool SandboxPrivateAnalysis::performMeet(int from, int& to) {
   return performUnion(from, to);
 }
 
-bool SandboxPrivateAnalysis::performUnion(ValueSet from, ValueSet& to) {
-  int oldToSize = to.size();
-  to.insert(from.begin(), from.end());
-  return to.size() != oldToSize;
+bool SandboxPrivateAnalysis::performUnion(int from, int& to) {
+  int oldTo = to;
+  to = from | to;
+  return to != oldTo;
 }
 
-string SandboxPrivateAnalysis::stringifyFact(ValueSet fact) {
+string SandboxPrivateAnalysis::stringifyFact(int fact) {
   int privSandboxIdxs = 0;
-  for (Value* v : fact) {
-    privSandboxIdxs |= valueToPrivSandboxes[v];
+  int currIdx = 0;
+  for (currIdx=0; currIdx<=31; currIdx++) {
+    if (fact & (1 << currIdx)) {
+      privSandboxIdxs |= bitIdxToPrivSandboxIdxs[currIdx];
+    }
   }
   return SandboxUtils::stringifySandboxNames(privSandboxIdxs);
 }
 
-bool SandboxPrivateAnalysis::checkEqual(ValueSet f1, ValueSet f2) {
-  if (f1.size() == f2.size()) {
-    //TODO: this is currently very inefficient, but SmallSet has a limited interface
-    f1.insert(f2.begin(), f2.end());
-    return f1.size() == f2.size();
-  }
-  return false;
+bool SandboxPrivateAnalysis::checkEqual(int f1, int f2) {
+  return f1 == f2;
 }
 
-int SandboxPrivateAnalysis::convertStateToBitIdxs(ValueSet& vs) {
+int SandboxPrivateAnalysis::convertStateToBitIdxs(int& vs) {
   int privSandboxIdxs = 0;
-  for (Value* v : vs) {
-    privSandboxIdxs |= valueToPrivSandboxes[v];
+  int currIdx = 0;
+  for (currIdx=0; currIdx<=31; currIdx++) {
+    if (vs & (1 << currIdx)) {
+      privSandboxIdxs |= bitIdxToPrivSandboxIdxs[currIdx];
+    }
   }
   return privSandboxIdxs;
 }
 
 void SandboxPrivateAnalysis::outputSources(Context* C, Value* V) {
   XO::List sourcesList("sources");
-  for (Value* V2 : state[C][V]) {
-    XO::Instance sourcesInstance(sourcesList);
-    XO::emit("{e:name/%s}", V2->getName().str().c_str());
-    Instruction* I = nullptr;
-    if (isa<IntrinsicInst>(V2)) {
-      I = cast<IntrinsicInst>(V2);
-    } else if (varToAnnotateCall.find(V2) != varToAnnotateCall.end()) {
-      I = varToAnnotateCall[V2];
-    }
-    if (I) {
-      PrettyPrinters::ppInstruction(I, false);
-    }
-    else {
-      // global variable
-      GlobalVariable* G = cast<GlobalVariable>(V2);
-      pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(G);
-      XO::Container globalLoc("location");
-      XO::emit("{e:file/%s}{e:line/%d}",declareLoc.first.c_str(), declareLoc.second);
+  int currIdx = 0;
+  for (currIdx=0; currIdx<=31; currIdx++) {
+    if (state[C][V] & (1 << currIdx)) {
+      Value* V2 = bitIdxToSource[currIdx];
+      XO::Instance sourcesInstance(sourcesList);
+      XO::emit("{e:name/%s}", V2->getName().str().c_str());
+      Instruction* I = nullptr;
+      if (isa<IntrinsicInst>(V2)) {
+        I = cast<IntrinsicInst>(V2);
+      } else if (varToAnnotateCall.find(V2) != varToAnnotateCall.end()) {
+        I = varToAnnotateCall[V2];
+      }
+      if (I) {
+        PrettyPrinters::ppInstruction(I, false);
+      }
+      else {
+        // global variable
+        GlobalVariable* G = cast<GlobalVariable>(V2);
+        pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(G);
+        XO::Container globalLoc("location");
+        XO::emit("{e:file/%s}{e:line/%d}",declareLoc.first.c_str(), declareLoc.second);
+      }
     }
   }
 }
