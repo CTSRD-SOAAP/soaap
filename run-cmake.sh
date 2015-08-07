@@ -29,7 +29,10 @@ if [ "${libcxx}" = "" ]; then
 	exit 1
 fi
 
-rm -rf ${BUILD_DIR}
+if [ "${NOCLEAN}" != "" ]; then
+	rm -rf ${BUILD_DIR}
+fi
+
 mkdir -p ${BUILD_DIR} || exit 1
 echo '*' > ${BUILD_DIR}/.gitignore
 cd ${BUILD_DIR} || exit 1
