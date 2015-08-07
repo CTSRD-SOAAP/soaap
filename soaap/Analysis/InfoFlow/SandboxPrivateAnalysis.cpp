@@ -417,7 +417,9 @@ void SandboxPrivateAnalysis::outputSources(Context* C, Value* V, Function* F) {
         sourceFunc = I->getParent()->getParent();
         PrettyPrinters::ppInstruction(I, false);
         // output trace from source to access
-        calculateShortestCallPathsFromFunc(sourceFunc, C, (1 << currIdx));
+        if (funcToShortestCallPaths.find(sourceFunc) == funcToShortestCallPaths.end()) {
+          calculateShortestCallPathsFromFunc(sourceFunc, C, (1 << currIdx));
+        }
         InstTrace& callStack = funcToShortestCallPaths[sourceFunc][F];
         CallGraphUtils::emitCallTrace(callStack);
       }
