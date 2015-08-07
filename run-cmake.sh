@@ -29,7 +29,7 @@ if [ "${libcxx}" = "" ]; then
 	exit 1
 fi
 
-if [ "${NOCLEAN}" != "" ]; then
+if [ "${NOCLEAN}" == "" ]; then
 	rm -rf ${BUILD_DIR}
 fi
 
