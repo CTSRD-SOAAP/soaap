@@ -14,7 +14,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
 
   declassifierAnalysis.doAnalysis(M, sandboxes);
 
-  int nextFreeIdx = 0;
+  int nextFreeIdx = -1;
  
   for (Sandbox* S : sandboxes) {
     int bitIdx = S->getNameIdx();
@@ -402,7 +402,7 @@ void SandboxPrivateAnalysis::outputSources(Context* C, Value* V) {
   XO::List sourcesList("sources");
   int currIdx = 0;
   for (currIdx=0; currIdx<=31; currIdx++) {
-    if (state[C][V] & (1 << currIdx)) {
+    if ((state[C][V] & (1 << currIdx)) != 0) {
       Value* V2 = bitIdxToSource[currIdx];
       XO::Instance sourcesInstance(sourcesList);
       XO::emit("{e:name/%s}", V2->getName().str().c_str());
