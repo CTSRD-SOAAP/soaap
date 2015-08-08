@@ -73,7 +73,7 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
   }
 
   if (nextFreeIdx >= 32) {
-    errs() << "WARNING: we have exceeded 32 sandbox-private sources\n";
+    errs() << "WARNING: we have exceeded 32 sandbox-private sources, number of sources is " << nextFreeIdx << "\n";
   }
 
 }
