@@ -138,7 +138,6 @@ void bar() {
 // CHECK-NEXT:         ],
 // CHECK-NEXT:         "sources": [
 // CHECK-NEXT:           {
-// CHECK-NEXT:             "name": "buffer",
 // CHECK-NEXT:             "location": {
 // CHECK-NEXT:               "line": 30,
 // CHECK-NEXT:               "file": "[[TESTS]]/json/pastvuln.c"

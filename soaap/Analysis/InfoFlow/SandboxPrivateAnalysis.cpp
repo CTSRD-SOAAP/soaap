@@ -33,12 +33,12 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
         if (annotateCall->getIntrinsicID() == Intrinsic::var_annotation) {
           // llvm.var.annotation
           Value* annotatedVar = dyn_cast<Value>(annotateCall->getOperand(0)->stripPointerCasts());
-          varToAnnotateCall[annotatedVar] = annotateCall;
-          bitIdxToSource[++nextFreeIdx] = annotatedVar;
+          //varToAnnotateCall[annotatedVar] = annotateCall;
+          bitIdxToSource[++nextFreeIdx] = annotateCall;
+          bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
           ContextVector Cs = ContextUtils::getContextsForMethod(annotateCall->getParent()->getParent(), contextInsensitive, sandboxes, M); 
           for (Context* C : Cs) {
             state[C][annotatedVar] |= (1 << nextFreeIdx);
-            bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
             addToWorklist(annotatedVar, C, worklist);
           }
         }
@@ -54,12 +54,26 @@ void SandboxPrivateAnalysis::initialise(ValueContextPairList& worklist, Module& 
         }
       }
       else if (GlobalVariable* G = dyn_cast<GlobalVariable>(V)) {
-        bitIdxToSource[++nextFreeIdx] = G;
-        bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
-        state[ContextUtils::NO_CONTEXT][G] |= (1 << nextFreeIdx);
-        addToWorklist(G, ContextUtils::NO_CONTEXT, worklist);
+        // find all loads of G and add them as sources
+        for (User* U : G->users()) {
+          if (LoadInst* L = dyn_cast<LoadInst>(U)) {
+            bitIdxToSource[++nextFreeIdx] = L;
+            bitIdxToPrivSandboxIdxs[nextFreeIdx] |= (1 << bitIdx);
+            ContextVector Cs = ContextUtils::getContextsForMethod(L->getParent()->getParent(), contextInsensitive, sandboxes, M); 
+            for (Context* C : Cs) {
+              state[C][G] |= (1 << nextFreeIdx);
+              state[C][L] |= (1 << nextFreeIdx);
+              addToWorklist(L, C, worklist);
+            }
+          }
+          // TODO: What about StoreInst?
+        }
       }
     }
+  }
+
+  if (nextFreeIdx >= 32) {
+    errs() << "WARNING: we have exceeded 32 sandbox-private sources\n";
   }
 
 }
@@ -413,33 +427,16 @@ void SandboxPrivateAnalysis::outputSources(Context* C, Value* V, Function* F) {
   int currIdx = 0;
   for (currIdx=0; currIdx<=31; currIdx++) {
     if ((state[C][V] & (1 << currIdx)) != 0) {
-      Value* V2 = bitIdxToSource[currIdx];
-      Function* sourceFunc = nullptr;
       XO::Instance sourcesInstance(sourcesList);
-      XO::emit("{e:name/%s}", V2->getName().str().c_str());
-      Instruction* I = nullptr;
-      if (isa<IntrinsicInst>(V2)) {
-        I = cast<IntrinsicInst>(V2);
-      } else if (varToAnnotateCall.find(V2) != varToAnnotateCall.end()) {
-        I = varToAnnotateCall[V2];
+      Instruction* I = bitIdxToSource[currIdx];
+      Function* sourceFunc = I->getParent()->getParent();
+      PrettyPrinters::ppInstruction(I, false);
+      // output trace from source to access
+      if (funcToShortestCallPaths.find(sourceFunc) == funcToShortestCallPaths.end()) {
+        calculateShortestCallPathsFromFunc(sourceFunc, C, (1 << currIdx));
       }
-      if (I) {
-        sourceFunc = I->getParent()->getParent();
-        PrettyPrinters::ppInstruction(I, false);
-        // output trace from source to access
-        if (funcToShortestCallPaths.find(sourceFunc) == funcToShortestCallPaths.end()) {
-          calculateShortestCallPathsFromFunc(sourceFunc, C, (1 << currIdx));
-        }
-        InstTrace& callStack = funcToShortestCallPaths[sourceFunc][F];
-        CallGraphUtils::emitCallTrace(callStack);
-      }
-      else {
-        // global variable
-        GlobalVariable* G = cast<GlobalVariable>(V2);
-        pair<string,int> declareLoc = DebugUtils::findGlobalDeclaration(G);
-        XO::Container globalLoc("location");
-        XO::emit("{e:file/%s}{e:line/%d}",declareLoc.first.c_str(), declareLoc.second);
-      }
+      InstTrace& callStack = funcToShortestCallPaths[sourceFunc][F];
+      CallGraphUtils::emitCallTrace(callStack);
     }
   }
 }

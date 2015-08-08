@@ -27,7 +27,7 @@ namespace soaap {
       FunctionSet privilegedMethods;
       SandboxVector sandboxes;
       DeclassifierAnalysis declassifierAnalysis;
-      map<int, Value*> bitIdxToSource;
+      map<int, Instruction*> bitIdxToSource;
       map<int, int> bitIdxToPrivSandboxIdxs;
       map<Value*, IntrinsicInst*> varToAnnotateCall;
       map<Function*, map<Function*,InstTrace> > funcToShortestCallPaths;
