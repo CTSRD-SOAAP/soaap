@@ -447,7 +447,7 @@ void SandboxPrivateAnalysis::outputSources(Context* C, Value* V, Function* F) {
 bool SandboxPrivateAnalysis::doesCallPropagateTaint(CallInst* C, int taint, Context* Ctx) {
   for (int argIdx=0; argIdx<C->getNumArgOperands(); argIdx++) {
     Value* arg = C->getArgOperand(argIdx);
-    if (state[Ctx][arg] & taint) {
+    if ((state[Ctx][arg] & taint) != 0) {
       return true;
     }
   }
