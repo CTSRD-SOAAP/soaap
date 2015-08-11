@@ -50,6 +50,7 @@ namespace soaap {
 
     protected:
       map<Context*, DataflowFacts> state;
+      map<StructType*, ArgumentSet> classToThisParams;
       bool contextInsensitive;
       bool mustAnalysis;
       map<Function*,map<Context*,CallInstSet> > inContextCallers;
@@ -100,6 +101,25 @@ namespace soaap {
         }
       }
     }
+
+    // calculate class -> this param mappings by iterating through all methods
+    SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_1 << "Calculating class->this mappings\n");
+    for (Function& F : M.functions()) {
+      if (F.isDeclaration()) { continue; }
+      else {
+        if (F.arg_size() > 0) {
+          Argument* A = &*(F.arg_begin());
+          SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_1 << "First arg: " << *A << "\n");
+          if (A->getName() == "this") {
+            StructType* ST = cast<StructType>(cast<PointerType>(A->getType())->getElementType());
+            SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_1 << "Struct type: " << ST->getName() << "\n");
+            classToThisParams[ST].insert(A);
+          }
+        }
+      }
+    }
+    
+
 
     // perform propagation until fixed point is reached
     while (!worklist.empty()) {
@@ -293,6 +313,29 @@ namespace soaap {
         if (propagateToValue(V, Agg, C, C, M, true)) { 
           SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_3 << "propagating to aggregate\n");
           addToWorklist(Agg, C, worklist);
+        }
+        // are we propagating to a "this" pointer?
+        if (AllocaInst* AI = dyn_cast<AllocaInst>(Agg)) {
+          SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_3 << "alloca inst\n");
+          if (PointerType* PT = dyn_cast<PointerType>(AI->getAllocatedType())) {
+            if (StructType* ST = dyn_cast<StructType>(PT->getElementType())) {
+              if (ST->getName().startswith("class.")) {
+                SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_3 << "class type: " << ST->getName() << "\n");
+                // this is an object allocation, treat as "this" pointer
+                // propagate to all other "this" pointers of this type
+                for (Argument* A : classToThisParams[ST]) {
+                  Function* F = A->getParent();
+                  ContextVector Cs = ContextUtils::getContextsForMethod(F, contextInsensitive, sandboxes, M);
+                  for (Context* C2 : Cs) {
+                    if (propagateToValue(V, A, C, C2, M, true)) { 
+                      SDEBUG("soaap.analysis.infoflow", 3, dbgs() << INDENT_3 << "propagating to this arg in " << F->getName() << "\n");
+                      addToWorklist(A, C2, worklist);
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
       else {

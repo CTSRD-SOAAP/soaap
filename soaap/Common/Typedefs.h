@@ -37,6 +37,7 @@ namespace soaap {
   typedef list<Instruction*> InstVector;
   typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
   typedef SmallSet<Value*,16> ValueSet;
+  typedef SmallSet<Argument*,16> ArgumentSet;
   typedef pair<CallInst*,Function*> CallGraphEdge;
 }
 
