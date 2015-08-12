@@ -72,6 +72,8 @@ namespace soaap {
       static void emitCallTrace(InstTrace trace);
       static void emitTraceReferences();
       static int insertIntoTraceDAG(InstTrace& trace);
+      static bool isUnresolvedFunc(Function* F);
+      static void warnUnresolvedFuncs(Module& M);
     private:
       static map<const CallInst*, map<Context*, FunctionSet> > callToCallees;
       static map<const Function*, map<Context*, FunctionSet> > funcToCallees;

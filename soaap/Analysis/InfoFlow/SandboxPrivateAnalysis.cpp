@@ -259,7 +259,7 @@ void SandboxPrivateAnalysis::postDataFlowAnalysis(Module& M, SandboxVector& sand
                     XO::emit("\n");
                   }
                 }
-                else if (Callee->getBasicBlockList().empty()) {
+                else if (CallGraphUtils::isUnresolvedFunc(Callee)) {
                   // extern function
                   SDEBUG("soaap.analysis.infoflow.private", 3, dbgs() << "Extern callee: " << Callee->getName() << "\n");
                   for (User::op_iterator AI=call->op_begin(), AE=call->op_end(); AI!=AE; AI++) {

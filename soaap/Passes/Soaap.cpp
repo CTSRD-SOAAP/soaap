@@ -70,6 +70,8 @@ bool Soaap::runOnModule(Module& M) {
   outs() << "* Building basic callgraph\n";
   CallGraphUtils::buildBasicCallGraph(M, sandboxes);
   
+  CallGraphUtils::warnUnresolvedFuncs(M);
+  
   outs() << "* Calculating privileged methods\n";
   calculatePrivilegedMethods(M);
 
@@ -78,7 +80,7 @@ bool Soaap::runOnModule(Module& M) {
 
   outs() << "* Adding annotated/inferred call edges to callgraph (if available)\n";
   CallGraphUtils::loadAnnotatedInferredCallGraphEdges(M, sandboxes);
-  
+ 
   // reobtain privileged methods
   privilegedMethods = SandboxUtils::getPrivilegedMethods(M);
 

@@ -731,3 +731,24 @@ FPTargetsAnalysis& CallGraphUtils::getFPAnnotatedTargetsAnalysis() {
               = new FPAnnotatedTargetsAnalysis(CmdLineOpts::ContextInsens);
   return *fpAnnotatedTargetsAnalysis;
 }
+
+bool CallGraphUtils::isUnresolvedFunc(Function* F) {
+  return F->getBasicBlockList().empty();
+}
+
+void CallGraphUtils::warnUnresolvedFuncs(Module& M) {
+  bool first = true;
+  for (Function& F : M.functions()) {
+    if (F.isIntrinsic()) { continue; }
+    if (isUnresolvedFunc(&F)) {
+      if (first) {
+        XO::emit("\n");
+        first = false;
+      }
+      XO::emit("WARNING: Function \"{d:function}\" is unresolved. Its behaviour will not be analysed.\n", F.getName().str().c_str());
+    }
+  }
+  if (!first) {
+    XO::emit("\n");
+  }
+}
