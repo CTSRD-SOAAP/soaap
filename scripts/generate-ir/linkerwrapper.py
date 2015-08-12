@@ -34,6 +34,7 @@
 from commandwrapper import *
 import tempfile
 import shutil
+import os
 
 
 class LinkerWrapper(CommandWrapper):
@@ -51,6 +52,15 @@ class LinkerWrapper(CommandWrapper):
         if self.nothingToDo:
             return  # no need to look for the bitcode files if lib was explicitly skipped
 
+        # exe if there is not extension
+        creatingExecutable = os.path.splitext(self.originalOutput)[0] == self.originalOutput
+        if creatingExecutable:
+            # FIXME: implement this as well (probably not that important)
+            print(warningMsg("NOT IMPLEMENTED: directly creating an executable!!"))
+            self.nothingToDo = True
+            return
+
+        # when directly compiling executables there might not be any files to link in (e.g. "clang -o foo foo.cpp")
         if len(self.linkCandidates) == 0:
             raise CommandWrapperError('NO LINK CANDIDATES FOUND IN CMDLINE: ', self.realCommand)
 
@@ -90,7 +100,8 @@ class LinkerWrapper(CommandWrapper):
                     if index + 1 >= len(self.realCommand):
                         raise CommandWrapperError('-o flag without parameter!', self.realCommand)
                     skipNextParam = True
-                    self.output = correspondingBitcodeName(self.realCommand[index + 1])
+                    self.originalOutput = self.realCommand[index + 1]
+                    self.output = correspondingBitcodeName(self.originalOutput)
                     if '.so.bc' in self.output:
                         self.mode = Mode.shared_lib
                 elif param == '-shared':
@@ -135,6 +146,9 @@ class LinkerWrapper(CommandWrapper):
                 lflag = '-l' + filename
                 # print(param, filename, lflag, sep=', ')
                 self.sharedLibs.append(lflag)
+            # potential input files: (endswith also accepts a tuple)
+            elif param.endswith(('.c', '.cpp', '.c++', '.cxx', '.moc', '.cc')):
+                self.generateIrCommand.append(param)
             else:
                 self.linkCandidates.append(param)
 
