@@ -47,7 +47,7 @@ from unixcommandswrapper import *
 executable = os.path.basename(sys.argv[0])
 if executable in ('gcc', 'cc'):
     executable = 'clang'
-if executable == ('g++', 'c++'):
+if executable in ('g++', 'c++'):
     executable = 'clang++'
 sys.argv[0] = executable
 
