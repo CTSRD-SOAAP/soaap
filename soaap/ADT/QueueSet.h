@@ -4,8 +4,6 @@
 #include <set>
 #include <list>
 
-using namespace std;
-
 namespace soaap {
 
   template<typename T>
@@ -18,8 +16,8 @@ namespace soaap {
       void clear();
 
     protected:
-      set<T> set;
-      list<T> list;
+      std::set<T> set;
+      std::list<T> list;
   };
 
   template<typename T>
