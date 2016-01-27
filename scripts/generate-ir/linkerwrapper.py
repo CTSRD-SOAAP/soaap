@@ -91,6 +91,7 @@ class LinkerWrapper(CommandWrapper):
         self.linkCandidates = []
         self.sharedLibs = []
         self.noDefaultLibs = False
+        nextArgIsLinkCandidate = False
         for index, param in enumerate(self.realCommand):
             if skipNextParam:
                 skipNextParam = False
@@ -108,6 +109,10 @@ class LinkerWrapper(CommandWrapper):
                     self.mode = Mode.shared_lib
                 elif param == '-ffreestanding':
                     self.noDefaultLibs = True
+                elif param == '-Wl,--whole-archive':
+                    # print("\n\n\nWHOLE ARCHIVE NEXT\n\n\n")
+                    nextArgIsLinkCandidate = True
+                    continue  # treat next parameter as an input file
                 elif param.startswith('-D' + ENVVAR_NO_EMIT_IR) or param.startswith('-L' + ENVVAR_NO_EMIT_IR):
                     # allow selectively skipping targets by setting this #define or linker search path
                     # e.g. using target_compile_definitions(foo PRIVATE LLVM_IR_WRAPPER_NO_EMIT_LLVM_IR=1)
@@ -127,11 +132,13 @@ class LinkerWrapper(CommandWrapper):
                     skipNextParam = True
                 # ignore all other -XXX flags
                 continue
+            elif nextArgIsLinkCandidate:
+                self.linkCandidates.append(param)
+                nextArgIsLinkCandidate = False
             elif param.endswith('.so') or '.so.' in param or param.endswith('.a') or '.a.' in param:
                 # if os.path.isfile(param):
                 #     self.linkCandidates.append(param)
                 #     continue
-
                 # strip the directory part if it is a path
                 filename = os.path.basename(param)
                 # remove the leading lib
