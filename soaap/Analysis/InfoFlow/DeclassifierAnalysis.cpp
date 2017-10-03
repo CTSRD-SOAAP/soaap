@@ -48,7 +48,7 @@ void DeclassifierAnalysis::initialise(ValueContextPairList& worklist, Module& M,
 
   // initialise with pointers to annotated fields and uses of annotated global variables
   string declassifyFuncBaseName = "__soaap_declassify";
-  for (Function& F : M.getFunctionList()) {
+  for (Function& F : M.functions()) {
     if (F.getName().startswith(declassifyFuncBaseName)) {
       SDEBUG("soaap.analysis.infoflow.declassify", 3, dbgs() << "   Found " << F.getName() << " function\n");
       for (User* U : F.users()) {
@@ -101,7 +101,7 @@ void DeclassifierAnalysis::findAllFollowingInstructions(Instruction* I, Value* V
   // recurse on successor BBs
   for (succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; SI++) {
     BasicBlock* SBB = *SI;
-    findAllFollowingInstructions(SBB->begin(), V);
+    findAllFollowingInstructions(&*SBB->begin(), V);
   }
 }
 

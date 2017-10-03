@@ -47,5 +47,5 @@ endif()
 target_link_libraries(SOAAP xo)
 
 # link LLVM libraries
-llvm_map_components_to_libnames(llvm_libs core ipa transformutils)
+llvm_map_components_to_libnames(llvm_libs core transformutils)
 target_link_libraries(SOAAP ${llvm_libs})

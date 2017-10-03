@@ -501,10 +501,9 @@ void SandboxPrivateAnalysis::calculateShortestCallPathsFromFunc(Function* F, Con
 
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "setting all distances from main to INT_MAX\n")
   Module* M = F->getParent();
-  for (Module::iterator F2 = M->begin(), E = M->end(); F2 != E; ++F2) {
-    if (&*F2 != F) {
-      distanceFromMain[&*F2] = INT_MAX;
-    }
+  for (Function& F2 : M->functions()) {
+    if (&F2 != F)
+      distanceFromMain[&F2] = INT_MAX;
   }
 
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "computing dijkstra's algorithm\n")
@@ -545,16 +544,16 @@ void SandboxPrivateAnalysis::calculateShortestCallPathsFromFunc(Function* F, Con
 
   // cache shortest paths for each function
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
-  for (Module::iterator F2 = M->begin(), E = M->end(); F2 != E; ++F2) {
-    if (distanceFromMain[F2] < INT_MAX) { // N is reachable from main
+  for (Function& F2 : M->functions()) {
+    if (distanceFromMain[&F2] < INT_MAX) { // N is reachable from main
       InstTrace path;
-      Function* CurrF = &*F2;
+      Function* CurrF = &F2;
       while (CurrF != F) {
         path.push_back(call[CurrF]);
         CurrF = pred[CurrF];
       }
-      funcToShortestCallPaths[F][&*F2] = path;
-      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << F2->getName() << ": " << path.size() << "\n")
+      funcToShortestCallPaths[F][&F2] = path;
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << F2.getName() << ": " << path.size() << "\n")
     }
   }
 

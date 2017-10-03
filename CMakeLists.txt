@@ -4,6 +4,9 @@ if (NOT CMAKE_VERSION VERSION_LESS 2.8.12)
   if (POLICY CMP0022)
     cmake_policy(SET CMP0022 NEW)
   endif()
+  if (POLICY CMP0057)
+    cmake_policy(SET CMP0057 NEW)
+  endif()
 endif()
 
 # Allow user to optionally override LLVM build tree locations.
@@ -98,17 +101,17 @@ link_directories(${LIBXO_PREFIX}/lib)
 include_directories(${LIBXO_INCLUDE_DIRS})
 
 # Default to libc++ if installed
-find_package(LibCXX)
-set_package_properties(LibCXX PROPERTIES TYPE OPTIONAL URL "http://libcxx.llvm.org/"
-                              PURPOSE "Use LLVM libc++ instead of GNU libstdc++")
-if (LIBCXX_FOUND)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-  include_directories(${LIBCXX_INCLUDE_DIRS})
-  foreach(lib ${LIBCXX_LIBRARIES})
-    GET_FILENAME_COMPONENT(LIBCXX_LIBRARY_DIR ${lib} DIRECTORY)
-    link_directories(${LIBCXX_LIBRARY_DIR})
-  endforeach(lib)
-endif()
+#find_package(LibCXX)
+#set_package_properties(LibCXX PROPERTIES TYPE OPTIONAL URL "http://libcxx.llvm.org/"
+#                              PURPOSE "Use LLVM libc++ instead of GNU libstdc++")
+#if (LIBCXX_FOUND)
+#  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+#  include_directories(${LIBCXX_INCLUDE_DIRS})
+#  foreach(lib ${LIBCXX_LIBRARIES})
+#    GET_FILENAME_COMPONENT(LIBCXX_LIBRARY_DIR ${lib} DIRECTORY)
+#    link_directories(${LIBCXX_LIBRARY_DIR})
+#  endforeach(lib)
+#endif()
 
 # these need to be set for set_output_directory() in add_llvm_loadable_module()
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)
@@ -122,6 +125,9 @@ include_directories(${LLVM_MAIN_SRC_DIR}/runtime/libprofile)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/soaap)
 link_directories(${LLVM_LIBRARY_DIR}) # required so that RPATH is correct
+
+set(SOAAP_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(SOAAP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
 add_subdirectory(include)
 add_subdirectory(soaap)

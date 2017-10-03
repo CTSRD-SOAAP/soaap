@@ -63,24 +63,24 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
     long loadInsts = 0;
     long storeInsts = 0;
     long intrinsInsts = 0;
-    for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-      if (F->hasAddressTaken()) numAddFuncs++;
+    for (Function& F : M.functions()) {
+      if (F.hasAddressTaken()) numAddFuncs++;
       bool hasFPcall = false;
-      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; I++) {
+      for (Instruction& I : instructions(&F)) {
         numInsts++;
-        if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(&*I)) {
+        if (IntrinsicInst* II = dyn_cast<IntrinsicInst>(&I)) {
           intrinsInsts++;
         }
-        else if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+        else if (CallInst* C = dyn_cast<CallInst>(&I)) {
           if (CallGraphUtils::isIndirectCall(C)) {
             hasFPcall = true;
             numFPcalls++;
           }
         }
-        else if (LoadInst* L = dyn_cast<LoadInst>(&*I)) {
+        else if (LoadInst* L = dyn_cast<LoadInst>(&I)) {
           loadInsts++;
         }
-        else if (StoreInst* S = dyn_cast<StoreInst>(&*I)) {
+        else if (StoreInst* S = dyn_cast<StoreInst>(&I)) {
           storeInsts++;
         }
       }
@@ -99,12 +99,12 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
     dbgs() << INDENT_1 << "intrinsics: " << intrinsInsts << "\n";
   }
   
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
-    SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F->getName() << "\n");
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      ContextVector contexts = ContextUtils::getContextsForInstruction(&*I, contextInsensitive, sandboxes, M);
-      if (StoreInst* S = dyn_cast<StoreInst>(&*I)) { // assignments
+  for (Function& F : M.functions()) {
+    if (F.isDeclaration()) continue;
+    SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F.getName() << "\n");
+    for (Instruction& I : instructions(&F)) {
+      ContextVector contexts = ContextUtils::getContextsForInstruction(&I, contextInsensitive, sandboxes, M);
+      if (StoreInst* S = dyn_cast<StoreInst>(&I)) { // assignments
         //SDEBUG("soaap.analysis.infoflow.fp.infer", 3, dbgs() << F->getName() << ": " << *S);
         Value* Rval = S->getValueOperand()->stripInBoundsConstantOffsets();
         if (Function* T = dyn_cast<Function>(Rval)) {
@@ -124,7 +124,7 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
           }
         }
       }
-      else if (SelectInst* S = dyn_cast<SelectInst>(&*I)) {
+      else if (SelectInst* S = dyn_cast<SelectInst>(&I)) {
         if (Function* F = dyn_cast<Function>(S->getTrueValue()->stripPointerCasts())) {
           addInferredFunction(F, contexts, S, worklist);
         }
@@ -132,14 +132,15 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
           addInferredFunction(F, contexts, S, worklist);
         }
       }
-      else if (CallInst* C = dyn_cast<CallInst>(&*I)) { // passing functions as params
+      else if (CallInst* C = dyn_cast<CallInst>(&I)) { // passing functions as params
         if (Function* callee = CallGraphUtils::getDirectCallee(C)) {
           int argIdx = 0;
-          for (Function::arg_iterator AI=callee->arg_begin(), AE=callee->arg_end(); AI != AE; AI++, argIdx++) {
+          for (Argument& AI : callee->args()) {
             Value* Arg = C->getArgOperand(argIdx)->stripPointerCasts();
             if (Function* T = dyn_cast<Function>(Arg)) {
-              addInferredFunction(T, contexts, AI, worklist);
+              addInferredFunction(T, contexts, &AI, worklist);
             }
+            argIdx++;
           }
         }
       }
@@ -150,8 +151,8 @@ void FPInferredTargetsAnalysis::initialise(ValueContextPairList& worklist, Modul
   // In some applications, functions are stored within globals aggregates like arrays
   // We search for such arrays conflating any structure contained within
   ValueSet visited;
-  for (Module::global_iterator G = M.global_begin(), E = M.global_end(); G != E; ++G) {
-    findAllFunctionPointersInValue(G, worklist, visited);
+  for (GlobalVariable& G : M.globals()) {
+    findAllFunctionPointersInValue(&G, worklist, visited);
   }
 
   if (debug) {

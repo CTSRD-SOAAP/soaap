@@ -397,7 +397,7 @@ static Instruction* findAllSandboxedInstructionsHelper(Instruction* I, string st
 //       errs() << '\n';
       continue;
     }
-    if (Instruction* endInstr = findAllSandboxedInstructionsHelper(SBB->begin(), startSandboxName, insts, visitedBlocks)) {
+    if (Instruction* endInstr = findAllSandboxedInstructionsHelper(&*SBB->begin(), startSandboxName, insts, visitedBlocks)) {
       foundEnd = endInstr;
     }
     else {

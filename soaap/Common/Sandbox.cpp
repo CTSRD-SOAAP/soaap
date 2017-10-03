@@ -442,7 +442,7 @@ void Sandbox::findCapabilities() {
 
                   // find the annotated parameter
                   Argument* annotatedArg = NULL;
-                  for (Argument& arg : entryPoint->getArgumentList()) {
+                  for (Argument& arg : entryPoint->args()) {
                     if (arg.getName().str() == annotatedVarName) {
                       annotatedArg = &arg;
                     }

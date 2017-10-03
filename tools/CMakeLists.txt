@@ -9,7 +9,6 @@ llvm_map_components_to_libnames(LLVM_LIBS
   BitWriter
   Codegen
   Core
-  IPA
   IPO
   IRReader
   InstCombine

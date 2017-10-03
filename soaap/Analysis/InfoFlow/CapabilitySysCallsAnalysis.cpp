@@ -144,7 +144,7 @@ void CapabilitySysCallsAnalysis::initialise(ValueContextPairList& worklist, Modu
           }
           else {
             // initialise return values to the worklist and add to the worklist
-            int fdKeyIdx = annotatedFunc->getArgumentList().begin()->getName().equals("this") ? 1 : 0;
+            int fdKeyIdx = annotatedFunc->arg_begin()->getName().equals("this") ? 1 : 0;
             ContextVector contexts = ContextUtils::getContextsForMethod(annotatedFunc, contextInsensitive, sandboxes, M);
             for (Context* Ctx : contexts) {
               for (CallInst* C : CallGraphUtils::getCallers(annotatedFunc, Ctx, M)) {

@@ -49,15 +49,15 @@ void FPTargetsAnalysis::initialise(ValueContextPairList& worklist, Module& M, Sa
   // iniitalise funcToIdx and idxToFunc maps (once)
   if (funcToIdx.empty()) {
     int nextIdx = 0;
-    for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-      if (F->hasAddressTaken()) { // limit to only those funcs that could be fp targets
-        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Adding " << F->getName() << " as address taken\n");
-        funcToIdx[F] = nextIdx;
-        idxToFunc[nextIdx] = F;
+    for (Function& F : M.functions()) {
+      if (F.hasAddressTaken()) { // limit to only those funcs that could be fp targets
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Adding " << F.getName() << " as address taken\n");
+        funcToIdx[&F] = nextIdx;
+        idxToFunc[nextIdx] = &F;
         nextIdx++;
       }
       else {
-        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Skipping " << F->getName() << " as address not taken\n");
+        SDEBUG("soaap.analysis.infoflow.fp", 3, dbgs() << "Skipping " << F.getName() << " as address not taken\n");
       }
     }
   }

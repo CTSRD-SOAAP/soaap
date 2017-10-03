@@ -125,7 +125,7 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
               string annotatedVarName = varDbg->getName().str();
               Argument* annotatedArg = NULL;
 
-              for (Argument &arg : enclosingFunc->getArgumentList()) {
+              for (Argument &arg : enclosingFunc->args()) {
                 if (arg.getName().str() == annotatedVarName) {
                   annotatedArg = &arg;
                 }
@@ -170,11 +170,12 @@ void PerformanceEmulationInstrumenter::instrument(Module& M, SandboxVector& sand
        * inconvenient to use it here.
        *
        */
+      unsigned AS = M.getDataLayout().getAllocaAddrSpace();
       StructType* timespecTy = M.getTypeByName("struct.timespec");
       AllocaInst *start_ts = new AllocaInst(dyn_cast<Type>(timespecTy),
-        Twine("soaap_start_ts"), firstInst);
+        AS, Twine("soaap_start_ts"), firstInst);
       AllocaInst *sbox_ts = new AllocaInst(dyn_cast<Type>(timespecTy),
-        Twine("soaap_sbox_ts"), firstInst);
+        AS, Twine("soaap_sbox_ts"), firstInst);
       Value *argStartTs = dyn_cast <Value> (start_ts);
       Value *argSboxTs = dyn_cast <Value> (sbox_ts);
 

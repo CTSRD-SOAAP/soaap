@@ -436,7 +436,7 @@ namespace soaap {
             if (argNum > 0) {
               // Agg is a param 
               string argName = varDbg->getName().str();
-              for (Argument &arg : enclosingFunc->getArgumentList()) {
+              for (Argument &arg : enclosingFunc->args()) {
                 if (arg.getName().str() == argName) {
                   A = &arg;
                   break;
@@ -529,7 +529,6 @@ namespace soaap {
           Context* C2 = ContextUtils::calleeContext(C, contextInsensitive, callee, sandboxes, M);
           SDEBUG("soaap.analysis.infoflow", 4, dbgs() << INDENT_5 << "Propagating to callee " << callee->getName() << "\n"
                     << INDENT_6 << "Callee-context C2: " << ContextUtils::stringifyContext(C2) << "\n");
-          Function::ArgumentListType& params = callee->getArgumentList();
           const Value* V2 = NULL;
           bool isVarArg = argIdx >= callee->arg_size();
           

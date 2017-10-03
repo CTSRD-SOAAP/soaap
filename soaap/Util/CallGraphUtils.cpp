@@ -67,23 +67,23 @@ map<DAGNode*,int> CallGraphUtils::dagNodeToId;
 
 void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
   unsigned long numFPcalls = 0;
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
+  for (Function& F : M.functions()) {
+    if (F.isDeclaration()) continue;
     bool displayedFuncName = false;
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      if (!isa<IntrinsicInst>(&*I)) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+    for (Instruction& I : instructions(&F)) {
+      if (!isa<IntrinsicInst>(&I)) {
+        if (CallInst* C = dyn_cast<CallInst>(&I)) {
           if (isIndirectCall(C)) {
             if (DILocation* loc = dyn_cast_or_null<DILocation>(C->getMetadata("dbg"))) {
               if (!displayedFuncName) {
                 // only display function on first function-pointer call
-                SDEBUG("soaap.util.callgraph", 3, dbgs() << F->getName() << "\n");
-                string funcName = F->getName();
+                SDEBUG("soaap.util.callgraph", 3, dbgs() << F.getName() << "\n");
+                string funcName = F.getName();
                 SDEBUG("soaap.util.callgraph", 3, dbgs() << "got func name\n");
                 int status = -4;
                 char* demangled = abi::__cxa_demangle(funcName.c_str(), 0, 0, &status);
                 SDEBUG("soaap.util.callgraph", 3, dbgs() << "demangled, status=" << status << "\n");
-                string sandboxed = SandboxUtils::isSandboxedFunction(F, sandboxes) ? " (sandboxed) " : "";
+                string sandboxed = SandboxUtils::isSandboxedFunction(&F, sandboxes) ? " (sandboxed) " : "";
                 outs() << INDENT_1 << (status == 0 ? demangled : funcName) << sandboxed << ":\n";
                 displayedFuncName = true;
               }
@@ -101,16 +101,16 @@ void CallGraphUtils::listFPCalls(Module& M, SandboxVector& sandboxes) {
 
 void CallGraphUtils::listFPTargets(Module& M, SandboxVector& sandboxes) {
   unsigned long numFPcalls = 0;
-  for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
-    if (F->isDeclaration()) continue;
-    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-      if (!isa<IntrinsicInst>(&*I)) {
-        if (CallInst* C = dyn_cast<CallInst>(&*I)) {
+  for (Function& F : M.functions()) {
+    if (F.isDeclaration()) continue;
+    for (Instruction& I : instructions(&F)) {
+      if (!isa<IntrinsicInst>(&I)) {
+        if (CallInst* C = dyn_cast<CallInst>(&I)) {
           if (isIndirectCall(C)) {
             //C->getCalledValue()->stripPointerCasts()->dump();
             if (DILocation* loc = dyn_cast_or_null<DILocation>(C->getMetadata("dbg"))) {
               // only display function on first function-pointer call
-              string funcName = F->getName();
+              string funcName = F.getName();
               outs() << INDENT_1 << "Function \"" << funcName << "\"\n";
               outs() << INDENT_2 << "Call at " << loc->getFilename().str() << ":" << loc->getLine() << "\n";
               outs() << INDENT_3 << "Targets:\n";
@@ -501,16 +501,16 @@ void CallGraphUtils::calculateShortestCallPathsFromFunc(Function* F, bool privil
 
   // cache shortest paths for each function
   SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Caching shortest paths\n")
-  for (Module::iterator F2 = M.begin(), E = M.end(); F2 != E; ++F2) {
-    if (distanceFromMain[F2] < INT_MAX) { // N is reachable from main
+  for (Function& F2 : M.functions()) {
+    if (distanceFromMain[&F2] < INT_MAX) { // N is reachable from main
       InstTrace path;
-      Function* CurrF = &*F2;
+      Function* CurrF = &F2;
       while (CurrF != F) {
         path.push_back(call[CurrF]);
         CurrF = pred[CurrF];
       }
-      funcToShortestCallPaths[F][&*F2] = path;
-      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << F2->getName() << ": " << path.size() << "\n")
+      funcToShortestCallPaths[F][&F2] = path;
+      SDEBUG("soaap.util.callgraph", 3, dbgs() << INDENT_1 << "Paths from " << F->getName() << "() to " << F2.getName() << ": " << path.size() << "\n")
     }
   }
 

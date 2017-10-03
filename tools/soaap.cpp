@@ -39,7 +39,8 @@
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Bitcode/BitcodeWriterPass.h"
 #include "llvm/CodeGen/CommandFlags.h"
 #include "llvm/IR/DebugInfo.h"
@@ -88,11 +89,11 @@ static cl::opt<bool>
 Verify("verify", cl::desc("Verify result module"), cl::Hidden);
 
 int main(int argc, char **argv) {
-  sys::PrintStackTraceOnErrorSignal();
+  sys::PrintStackTraceOnErrorSignal(argv[0]);
   llvm::PrettyStackTraceProgram X(argc, argv);
 
   llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
-  LLVMContext &Context = getGlobalContext();
+  LLVMContext Context;
 
   //InitializeAllTargets();
   //InitializeAllTargetMCs();
@@ -105,7 +106,7 @@ int main(int argc, char **argv) {
   initializeVectorization(Registry);
   initializeIPO(Registry);
   initializeAnalysis(Registry);
-  initializeIPA(Registry);
+  //initializeIPA(Registry);
   initializeTransformUtils(Registry);
   initializeInstCombine(Registry);
   initializeInstrumentation(Registry);

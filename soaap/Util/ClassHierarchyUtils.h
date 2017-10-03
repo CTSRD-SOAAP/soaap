@@ -37,7 +37,10 @@
 #include "llvm/IR/Module.h"
 #include "Common/Typedefs.h"
 
+#include <utility>
+
 using namespace llvm;
+using namespace std;
 
 namespace soaap {
   typedef map<GlobalVariable*,GlobalVariableVector> ClassHierarchy;
@@ -53,7 +56,7 @@ namespace soaap {
       static map<GlobalVariable*,GlobalVariable*> typeInfoToVTable;
       static map<GlobalVariable*,GlobalVariable*> vTableToTypeInfo;
       static map<CallInst*,FunctionSet> callToCalleesCache;
-      static map<GlobalVariable*,map<int,int> > vTableToSecondaryVTableMaps;
+      static map<GlobalVariable*,map<int,pair<int,int> > > vTableToSecondaryVTableMaps;
       static map<GlobalVariable*,map<GlobalVariable*,int> > classToBaseOffset;
       static map<GlobalVariable*,map<GlobalVariable*,int> > classToVBaseOffsetOffset;
       static bool cachingDone;

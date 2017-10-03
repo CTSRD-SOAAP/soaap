@@ -158,8 +158,7 @@ static cl::opt<OperatingSystemName, true> ClOperatingSystem("soaap-os",
        cl::desc("Operating system to model"),
        cl::values(
          clEnumValN(OperatingSystemName::FreeBSD, "freebsd", "FreeBSD (default)"),
-         clEnumValN(OperatingSystemName::Linux, "linux", "Linux"),
-       clEnumValEnd),
+         clEnumValN(OperatingSystemName::Linux, "linux", "Linux")),
        cl::location(CmdLineOpts::OperatingSystem),
        cl::init(OperatingSystemName::FreeBSD)); // default value is Capsicum
 
@@ -173,8 +172,7 @@ static cl::opt<SandboxPlatformName, true> ClSandboxPlatform("soaap-sandbox-platf
          clEnumValN(SandboxPlatformName::Capsicum, "capsicum", "Capsicum (default)"),
          clEnumValN(SandboxPlatformName::Chroot, "chroot", "Chroot"),
          clEnumValN(SandboxPlatformName::Seccomp, "seccomp", "Secure Computing Mode (Seccomp)"),
-         clEnumValN(SandboxPlatformName::SeccompBPF, "seccomp-bpf", "Secure Computing Mode BPF (Seccomp-BPF)"),
-       clEnumValEnd),
+         clEnumValN(SandboxPlatformName::SeccompBPF, "seccomp-bpf", "Secure Computing Mode BPF (Seccomp-BPF)")),
        cl::location(CmdLineOpts::SandboxPlatform),
        cl::init(SandboxPlatformName::Capsicum)); // default value is Capsicum
 
@@ -205,8 +203,7 @@ static cl::list<ReportOutputFormat, list<ReportOutputFormat> > ClReportOutputFor
          clEnumValN(ReportOutputFormat::Text, "text", "Text (on stdout)"),
          clEnumValN(ReportOutputFormat::JSON, "json", "JSON"),
          clEnumValN(ReportOutputFormat::XML, "xml", "XML"),
-         clEnumValN(ReportOutputFormat::HTML, "html", "HTML"),
-       clEnumValEnd),
+         clEnumValN(ReportOutputFormat::HTML, "html", "HTML")),
        cl::CommaSeparated,
        cl::location(CmdLineOpts::ReportOutputFormats));
 
@@ -235,8 +232,7 @@ static cl::opt<SoaapMode, true> ClMode("soaap-mode",
          clEnumValN(SoaapMode::Correct, "correct", "Sandbox Correctness"),
          clEnumValN(SoaapMode::InfoFlow, "infoflow", "Information Flow Analysis"),
          clEnumValN(SoaapMode::Custom, "custom", "As per -soaap-analyses option (default)"),
-         clEnumValN(SoaapMode::All, "all", "All"),
-       clEnumValEnd),
+         clEnumValN(SoaapMode::All, "all", "All")),
        cl::location(CmdLineOpts::Mode),
        cl::init(SoaapMode::Custom)); // default value is Custom
 
@@ -253,8 +249,7 @@ static cl::list<SoaapAnalysis, list<SoaapAnalysis> > ClOutputTraces("soaap-outpu
          clEnumValN(SoaapAnalysis::PrivCalls, "privcalls", "Privileged Calls Analysis"),
          clEnumValN(SoaapAnalysis::SandboxedFuncs, "sandboxed", "Sandboxed Functions Analysis"),
          clEnumValN(SoaapAnalysis::InfoFlow, "infoflow", "Information Flow Analyses"),
-         clEnumValN(SoaapAnalysis::All, "all", "All"),
-       clEnumValEnd),
+         clEnumValN(SoaapAnalysis::All, "all", "All")),
        cl::CommaSeparated,
        cl::location(CmdLineOpts::OutputTraces));
 
@@ -271,8 +266,7 @@ static cl::list<SoaapAnalysis, list<SoaapAnalysis> > ClSoaapAnalyses("soaap-anal
          clEnumValN(SoaapAnalysis::PrivCalls, "privcalls", "Privileged Calls Analysis"),
          clEnumValN(SoaapAnalysis::SandboxedFuncs, "sandboxed", "Sandboxed Functions Analysis"),
          clEnumValN(SoaapAnalysis::InfoFlow, "infoflow", "Information Flow Analyses"),
-         clEnumValN(SoaapAnalysis::All, "all", "All (default)"),
-       clEnumValEnd),
+         clEnumValN(SoaapAnalysis::All, "all", "All (default)")),
        cl::CommaSeparated,
        cl::location(CmdLineOpts::SoaapAnalyses));
 

@@ -2,7 +2,12 @@
 
 : ${BUILD_TYPE:="Release"}
 : ${BUILD_DIR:="Build/${BUILD_TYPE}"}
-: ${BUILD_SHARED_LIBS:="ON"}
+
+if [ "${BUILD_TYPE}" == "Debug" ]; then
+  : ${BUILD_SHARED_LIBS:="OFF"}
+else
+  : ${BUILD_SHARED_LIBS:="ON"}
+fi
 
 if [ ! -d "${LLVM_PREFIX}" ]; then
 	echo "LLVM_PREFIX not specified"
