@@ -44,7 +44,7 @@ using namespace soaap;
 list<xo_handle_t*> XO::handles;
 
 // use llvm's output stream for stdout to get consistent buffering behaviour
-int llvm_write(void* opaque, const char* str) {
+ssize_t llvm_write(void* opaque, const char* str) {
   outs() << str;
   return 0;
 }

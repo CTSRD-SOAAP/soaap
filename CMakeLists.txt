@@ -83,7 +83,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fno-rtti -std=c++11")
 
 # libxo
-set(LIBXO_NEED_VERSION "0.3.4")
+set(LIBXO_NEED_VERSION "0.9.0")
 
 include(FindLibXO)
 if ("${LIBXO_VERSION}" STREQUAL ${LIBXO_NEED_VERSION})
