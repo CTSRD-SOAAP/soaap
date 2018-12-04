@@ -21,6 +21,7 @@ libcxx=""
 
 if [ "`uname -s`" == "Darwin" ]; then
 	include_dirs="${include_dirs} /Library/Developer/CommandLineTools/usr/include"
+	include_dirs="${include_dirs} /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"
 fi
 
 for include in ${include_dirs}
