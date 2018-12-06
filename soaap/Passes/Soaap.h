@@ -72,12 +72,14 @@ namespace soaap {
       Soaap() : ModulePass(ID) { }
       virtual void getAnalysisUsage(AnalysisUsage &AU) const;
       virtual bool runOnModule(Module& M);
+      void generateSandboxingModules(std::vector<Module*>* modules);
 
     private:
       SandboxVector sandboxes;
       FunctionSet privilegedMethods;
       shared_ptr<SandboxPlatform> sandboxPlatform;
       shared_ptr<SysCallProvider> operatingSystem;
+      std::vector<Module*>* genModules;
       void processCmdLineArgs(Module& M);
       void checkPrivilegedCalls(Module& M);
       void checkLeakedRights(Module& M);
@@ -91,6 +93,7 @@ namespace soaap {
       void checkGlobalVariables(Module& M);
       void checkSandboxedFuncs(Module& M);
       void instrumentPerfEmul(Module& M);
+      void generateSandboxes(Module& M);
       void buildRPCGraph(Module& M);
   };
 

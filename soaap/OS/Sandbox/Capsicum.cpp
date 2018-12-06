@@ -80,6 +80,8 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("accept", true);
   addPermittedSysCall("accept4", true);
+  capabilityMap["accept"] = CAP_ACCEPT;
+  capabilityMap["accept4"] = CAP_ACCEPT;
 
   ////
   //// Allow AIO operations by file descriptor, subject to capability rights.
@@ -92,6 +94,8 @@ Capsicum::Capsicum() {
   addPermittedSysCall("aio_suspend", true);
   addPermittedSysCall("aio_waitcomplete", true);
   addPermittedSysCall("aio_write", true);
+  capabilityMap["aio_fsync"] = CAP_FSYNC;
+  capabilityMap["aio_read"] = CAP_PREAD;
 
   ////
   //// Allow bindat(2).
@@ -141,6 +145,10 @@ Capsicum::Capsicum() {
   addPermittedSysCall("extattr_get_fd", true);
   addPermittedSysCall("extattr_list_fd", true);
   addPermittedSysCall("extattr_set_fd", true);
+  capabilityMap["extattr_delete_fd"] = CAP_EXTATTR_DELETE;
+  capabilityMap["extattr_get_fd"] = CAP_EXTATTR_GET;
+  capabilityMap["extattr_list_fd"] = CAP_EXTATTR_LIST;
+  capabilityMap["extattr_set_fd"] = CAP_EXTATTR_SET;
 
   ////
   //// Allow changing file flags, mode, and owner by file descriptor, subject to
@@ -149,23 +157,29 @@ Capsicum::Capsicum() {
   addPermittedSysCall("fchflags", true);
   addPermittedSysCall("fchmod", true);
   addPermittedSysCall("fchown", true);
+  capabilityMap["fchflags"] = CAP_FCHFLAGS;
+  capabilityMap["fchmod"] = CAP_FCHMOD;
+  capabilityMap["fchown"] = CAP_FCHOWN;
 
   ////
   //// For now, allow fcntl(2), subject to capability rights, but this probably
   //// needs additional scoping.
   ////
   addPermittedSysCall("fcntl", true);
+  capabilityMap["fcntl"] = CAP_FCNTL;
 
   ////
   //// Allow fexecve(2), subject to capability rights.  We perform some scoping,
   //// such as disallowing privilege escalation.
   ////
   addPermittedSysCall("fexecve", true);
+  capabilityMap["fexecve"] = CAP_FEXECVE;
 
   ////
   //// Allow flock(2), subject to capability rights.
   ////
   addPermittedSysCall("flock", true);
+  capabilityMap["flock"] = CAP_FLOCK;
 
   ////
   //// Allow fork(2), even though it returns pids -- some applications seem to
@@ -177,6 +191,7 @@ Capsicum::Capsicum() {
   //// Allow fpathconf(2), subject to capability rights.
   ////
   addPermittedSysCall("fpathconf", true);
+  capabilityMap["fpathconf"] = CAP_FPATHCONF;
 
   ////
   //// Allow various file descriptor-based I/O operations, subject to capability
@@ -194,6 +209,8 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("fstat", true);
   addPermittedSysCall("fstatfs", true);
+  capabilityMap["fstat"] = CAP_FSTAT;
+  capabilityMap["fstatfs"] = CAP_FSTATFS;
 
   ////
   //// Allow further file descriptor-based I/O operations, subject to capability
@@ -201,11 +218,13 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("fsync", true);
   addPermittedSysCall("ftruncate", true);
+  capabilityMap["fsync"] = CAP_FSYNC;
 
   ////
   //// Allow futimes(2), subject to capability rights.
   ////
   addPermittedSysCall("futimes", true);
+  capabilityMap["futimes"] = CAP_FUTIMES;
 
   ////
   //// Allow querying process audit state, subject to normal access control.
@@ -289,6 +308,8 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("getsockname", true);
   addPermittedSysCall("getsockopt", true);
+  capabilityMap["getsockname"] = CAP_GETSOCKNAME;
+  capabilityMap["getsockopt"] = CAP_GETSOCKOPT;
 
   ////
   //// Allow querying the global clock.
@@ -305,6 +326,7 @@ Capsicum::Capsicum() {
   //// required commands with cap_ioctls_limit(2) syscall.
   ////
   addPermittedSysCall("ioctl");
+  capabilityMap["ioctl"] = CAP_IOCTL;
 
   ////
   //// Allow querying current process credential state.
@@ -356,11 +378,13 @@ Capsicum::Capsicum() {
   //// XXXRW: One might argue this manipulates a global namespace.
   ////
   addPermittedSysCall("listen", true);
+  capabilityMap["listen"] = CAP_LISTEN;
 
   ////
   //// Allow I/O-related file descriptors, subject to capability rights.
   ////
   addPermittedSysCall("lseek", true);
+  capabilityMap["lseek"] = CAP_SEEK;
 
   ////
   //// Allow simple VM operations on the current process.
@@ -377,6 +401,7 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("mmap", true);
   addPermittedSysCall("mprotect", true);
+  capabilityMap["mmap"] = CAP_MMAP_RWX; // TODO specialise more
 
   ////
   //// Allow simple VM operations on the current process.
@@ -421,15 +446,26 @@ Capsicum::Capsicum() {
   addPermittedSysCall("fchownat", true);
   addPermittedSysCall("fstatat", true);
   addPermittedSysCall("futimesat", true);
-  addPermittedSysCall("linkat", true);
+  addPermittedSysCall("linkat", true);  // TODO specialize
   addPermittedSysCall("mkdirat", true);
   addPermittedSysCall("mkfifoat", true);
   addPermittedSysCall("mknodat", true);
-  addPermittedSysCall("openat", true);
+  addPermittedSysCall("openat", true); // TODO specialize
   addPermittedSysCall("readlinkat", true);
-  addPermittedSysCall("renameat", true);
+  addPermittedSysCall("renameat", true); // TODO specialize
   addPermittedSysCall("symlinkat", true);
   addPermittedSysCall("unlinkat", true);
+  capabilityMap["chflagsat"] = CAP_CHFLAGSAT;
+  capabilityMap["fchmodat"] = CAP_FCHMODAT;
+  capabilityMap["fchownat"] = CAP_FCHOWNAT;
+  capabilityMap["fstatat"] = CAP_FSTATAT;
+  capabilityMap["futimesat"] = CAP_FUTIMESAT;
+  capabilityMap["mkdirat"] = CAP_MKDIRAT;
+  capabilityMap["mkfifoat"] = CAP_MKFIFOAT;
+  capabilityMap["mknodat"] = CAP_MKNODAT;
+  capabilityMap["openat"] = CAP_CREATE;
+  capabilityMap["symlinkat"] = CAP_SYMLINKAT;
+  capabilityMap["unlinkat"] = CAP_UNLINKAT;
 
   ////
   //// Allow poll(2), which will be scoped by capability rights.
@@ -457,12 +493,15 @@ Capsicum::Capsicum() {
   //// XXXRW: We don't yet do that scoping.
   ////
   addPermittedSysCall("poll", true);
+  capabilityMap["poll"] = CAP_EVENT;
 
   ////
   //// Allow I/O-related file descriptors, subject to capability rights.
   ////
   addPermittedSysCall("pread", true);
   addPermittedSysCall("preadv", true);
+  capabilityMap["pread"] = CAP_PREAD;
+  capabilityMap["preadv"] = CAP_PREAD;
 
   ////
   //// Allow access to profiling state on the current process.
@@ -479,6 +518,11 @@ Capsicum::Capsicum() {
   addPermittedSysCall("recv", true);
   addPermittedSysCall("recvfrom", true);
   addPermittedSysCall("recvmsg", true);
+  capabilityMap["pwrite"] = CAP_PWRITE;
+  capabilityMap["pwritev"] = CAP_PWRITE;
+  capabilityMap["read"] = CAP_READ;
+  capabilityMap["readv"] = CAP_READ;
+  capabilityMap["recv"] = CAP_RECV;
 
   ////
   //// Allow real-time scheduling primitives to be used.
@@ -518,6 +562,7 @@ Capsicum::Capsicum() {
   addPermittedSysCall("sctp_generic_sendmsg", true);
   addPermittedSysCall("sctp_generic_sendmsg_iov", true);
   addPermittedSysCall("sctp_peeloff", true);
+  capabilityMap["sctp_peeloff"] = CAP_PEELOFF;
 
   ////
   //// Allow pselect(2) and select(2), which will be scoped by capability rights.
@@ -526,6 +571,7 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("pselect", true);
   addPermittedSysCall("select", true);
+  capabilityMap["select"] = CAP_EVENT;
 
   ////
   //// Allow I/O-related file descriptors, subject to capability rights.  Use of
@@ -535,6 +581,10 @@ Capsicum::Capsicum() {
   addPermittedSysCall("sendfile", true);
   addPermittedSysCall("sendmsg", true);
   addPermittedSysCall("sendto", true);
+  capabilityMap["send"] = CAP_SEND;
+  capabilityMap["sendfile"] = CAP_SEND;
+  capabilityMap["sendmsg"] = CAP_SEND;
+  capabilityMap["sendto"] = CAP_SEND;
 
   ////
   //// Allow setting per-process audit state, which is controlled separately by
@@ -595,6 +645,7 @@ Capsicum::Capsicum() {
   //// XXXRW: Might require scoping.
   ////
   addPermittedSysCall("setsockopt", true);
+  capabilityMap["setsockopt"] = CAP_SETSOCKOPT;
 
   ////
   //// Allow setting current process credential state, which is controlled
@@ -611,6 +662,7 @@ Capsicum::Capsicum() {
   //// Allow I/O-related file descriptors, subject to capability rights.
   ////
   addPermittedSysCall("shutdown", true);
+  capabilityMap["shutdown"] = CAP_SHUTDOWN;
 
   ////
   //// Allow signal control on current process.
@@ -697,9 +749,27 @@ Capsicum::Capsicum() {
   ////
   addPermittedSysCall("write", true);
   addPermittedSysCall("writev", true);
+  capabilityMap["write"] = CAP_WRITE;
+  capabilityMap["writev"] = CAP_WRITE;
 
   ////
   //// Allow processes to yield(2).
   ////
   addPermittedSysCall("yield");
+}
+
+std::vector<uint64_t> Capsicum::rightsForFunctions(FunctionSet& FS) {
+  std::vector<uint64_t> rights;
+  for (Function* F : FS) {
+    rights.push_back(capabilityMap[F->getName().str()]);
+  }
+  return rights;
+}
+
+std::vector<uint64_t> Capsicum::rightsForStrings(StringSet& SS) {
+  std::vector<uint64_t> rights;
+  for (std::string s : SS) {
+    rights.push_back(capabilityMap[s]);
+  }
+  return rights;
 }

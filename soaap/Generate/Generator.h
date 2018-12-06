@@ -31,61 +31,20 @@
  * SUCH DAMAGE.
  */
 
-#ifndef SOAAP_COMMON_TYPEDEFS_H
-#define SOAAP_COMMON_TYPEDEFS_H
+#ifndef SOAAP_GENERATE_GENERATOR_H
+#define SOAAP_GENERATE_GENERATOR_H
 
-#include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallSet.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Instructions.h"
+#include "Common/Sandbox.h"
+#include "llvm/IR/Module.h"
 
-#include <list>
-#include <map>
-#include <vector>
-#include <set>
-#include <unordered_map>
-#include <utility>
-
-#include "Analysis/InfoFlow/Context.h"
-
-using namespace std;
 using namespace llvm;
 
 namespace soaap {
-  enum class InputAccess {
-    Copy, In, Out, Inout
+  class Generator {
+    public:
+      virtual void generate(Module& M, SandboxVector& sandboxes,
+          vector<Module*>& modules) = 0;
   };
-  enum class InputType {
-    Integer, FileDescriptor, Pointer, Buffer, ByteBuffer, NullTerminatedBuffer, Handle
-  };
-  typedef SmallVector<Function*,16> FunctionVector;
-  typedef SmallSet<Function*,16> FunctionSet;
-  typedef map<Function*,int> FunctionIntMap;
-  typedef SmallVector<CallInst*,16> CallInstVector;
-  typedef SmallSet<CallInst*,16> CallInstSet;
-  typedef DenseMap<const Value*,int> ValueIntMap;
-  typedef map<const Value*,FunctionSet> ValueFunctionSetMap;
-  typedef SmallVector<string,16> StringVector;
-  typedef set<string> StringSet;
-  typedef SmallVector<Context*,8> ContextVector;
-  typedef vector<BasicBlock*> BasicBlockVector;  // use <vector> as can be large
-  typedef list<Instruction*> InstTrace;
-  typedef list<Instruction*> InstVector;
-  typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
-  typedef SmallVector<StructType*, 16> StructVector;
-  typedef SmallSet<Value*,16> ValueSet;
-  typedef SmallSet<Argument*,16> ArgumentSet;
-  typedef pair<CallInst*,Function*> CallGraphEdge;
-  typedef struct {
-    InputAccess access;
-    InputType type;
-    bool optional;
-    Value* linkedArg;
-  } InputAnnotation;
-  typedef map<Value*, InputAnnotation> InputAnnotationMap;
 }
 
 #endif

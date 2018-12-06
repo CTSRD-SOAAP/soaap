@@ -265,7 +265,14 @@ void CallGraphUtils::buildBasicCallGraph(Module& M, SandboxVector& sandboxes) {
 
   for (Sandbox* S : sandboxes) {
     set<Function*> visited;
-    buildBasicCallGraphHelper(M, sandboxes, S->getEntryPoints(), S, visited);
+    FunctionSet initialFuncs;
+    for (Function* F : S->getEntryPoints()) {
+      initialFuncs.insert(F);
+    }
+    for (Function* F : S->getInternalFunctions()) {
+      initialFuncs.insert(F);
+    }
+    buildBasicCallGraphHelper(M, sandboxes, initialFuncs, S, visited);
   }
 
 }
@@ -753,6 +760,7 @@ void CallGraphUtils::emitTraceReferences() {
   }
 }
 
+// TODO look at this
 FPTargetsAnalysis& CallGraphUtils::getFPInferredTargetsAnalysis() {
   static FPInferredTargetsAnalysis* fpInferredTargetsAnalysis
               = new FPInferredTargetsAnalysis(CmdLineOpts::ContextInsens);

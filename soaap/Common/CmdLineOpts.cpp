@@ -61,6 +61,12 @@ static cl::opt<bool, true> ClEmPerf("soaap-emulate-performance",
        cl::desc("Emulate sandboxing performance"),
        cl::location(CmdLineOpts::EmPerf));
 
+bool CmdLineOpts::GenSandboxes;
+static cl::opt<bool, true> ClGenSandboxes("soaap-generate-sandboxes",
+       cl::cat(CmdLineOpts::SoaapCategory),
+       cl::desc("Generate sandboxes"),
+       cl::location(CmdLineOpts::GenSandboxes));
+
 bool CmdLineOpts::ContextInsens;
 static cl::opt<bool, true> ClContextInsens("soaap-context-insens",
        cl::cat(CmdLineOpts::SoaapCategory),

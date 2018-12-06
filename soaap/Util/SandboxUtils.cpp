@@ -49,6 +49,9 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicInst.h"
 
+#define IN_SOAAP_GENERATOR
+#include "soaap_gen.h"
+
 #include <sstream>
 
 using namespace soaap;
@@ -129,6 +132,8 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
   map<Function*,string> funcToSandboxName;
   map<string,FunctionSet> sandboxNameToEntryPoints;
   StringSet ephemeralSandboxes;
+  map<string, FunctionSet> sandboxNameToInternalFunctions;
+  map<string, ValueSet> sandboxNameToInternalGlobals;
 
   SandboxVector sandboxes;
 
@@ -141,19 +146,24 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
       ConstantStruct* lgaArrayElement = dyn_cast<ConstantStruct>(i->get());
 
       // get the annotation value first
-      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(lgaArrayElement->getOperand(1)->stripPointerCasts());
-      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(annotationStrVar->getInitializer());
+      GlobalVariable* annotationStrVar = dyn_cast<GlobalVariable>(
+          lgaArrayElement->getOperand(1)->stripPointerCasts());
+      ConstantDataArray* annotationStrArray = dyn_cast<ConstantDataArray>(
+          annotationStrVar->getInitializer());
       StringRef annotationStrArrayCString = annotationStrArray->getAsCString();
-      GlobalValue* annotatedVal = dyn_cast<GlobalValue>(lgaArrayElement->getOperand(0)->stripPointerCasts());
+      GlobalValue* annotatedVal = dyn_cast<GlobalValue>(
+          lgaArrayElement->getOperand(0)->stripPointerCasts());
       if (isa<Function>(annotatedVal)) {
         Function* annotatedFunc = dyn_cast<Function>(annotatedVal);
         StringRef sandboxName;
-        if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
+        if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT) || 
+            annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
           sandboxEntryPoints.insert(annotatedFunc);
           outs() << INDENT_1 << "Found sandbox entrypoint " << annotatedFunc->getName() << "\n";
           outs() << INDENT_2 << "Annotation string: " << annotationStrArrayCString << "\n";
           if (annotationStrArrayCString.startswith(SANDBOX_PERSISTENT)) {
-            sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_PERSISTENT)+1);
+            sandboxName = annotationStrArrayCString.substr(
+                strlen(SANDBOX_PERSISTENT)+1);
           }
           else if (annotationStrArrayCString.startswith(SANDBOX_EPHEMERAL)) {
             sandboxName = annotationStrArrayCString.substr(strlen(SANDBOX_EPHEMERAL)+1);
@@ -181,6 +191,19 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
           ClassifiedUtils::assignBitIdxToClassName(className);
           funcToClearances[annotatedFunc] |= (1 << ClassifiedUtils::getBitIdxFromClassName(className));
         }
+        else if (annotationStrArrayCString.startswith(SANDBOX_INTERNAL)) {
+          sandboxName = annotationStrArrayCString.substr(
+              strlen(SANDBOX_INTERNAL) + 1);
+          sandboxNameToInternalFunctions[sandboxName].insert(annotatedFunc);
+        }
+      }
+      else if (GlobalVariable* annotatedGlob = dyn_cast<GlobalVariable>(annotatedVal)) {
+        StringRef sandboxName;
+        if (annotationStrArrayCString.startswith(SANDBOX_INTERNAL)) {
+          sandboxName = annotationStrArrayCString.substr(
+              strlen(SANDBOX_INTERNAL) + 1);
+          sandboxNameToInternalGlobals[sandboxName].insert(annotatedVal);
+        }
       }
     }
   }
@@ -195,6 +218,8 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     int overhead = 0;
     int clearances = 0; 
     bool persistent = find(ephemeralSandboxes.begin(), ephemeralSandboxes.end(), sandboxName) == ephemeralSandboxes.end();
+    FunctionSet internalFuncs = sandboxNameToInternalFunctions[sandboxName];
+    ValueSet internalGlobals = sandboxNameToInternalGlobals[sandboxName];
 
     // set overhead and clearances; any of the entry points could be annotated
     for (Function* entryPoint : entryPoints) {
@@ -207,7 +232,7 @@ SandboxVector SandboxUtils::findSandboxes(Module& M) {
     }
 
 		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Creating new Sandbox instance for " << sandboxName << "\n");
-    sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoints, persistent, M, overhead, clearances));
+    sandboxes.push_back(new Sandbox(sandboxName, idx, entryPoints, persistent, M, overhead, clearances, internalFuncs, internalGlobals));
 		SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Created new Sandbox instance\n");
   }
 

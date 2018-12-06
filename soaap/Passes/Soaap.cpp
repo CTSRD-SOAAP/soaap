@@ -54,6 +54,7 @@
 #include "Analysis/InfoFlow/ClassifiedAnalysis.h"
 #include "Analysis/InfoFlow/SandboxPrivateAnalysis.h"
 #include "Analysis/InfoFlow/RPC/RPCGraph.h"
+#include "Generate/SandboxGenerator.h"
 #include "Instrument/PerformanceEmulationInstrumenter.h"
 #include "OS/FreeBSDSysCallProvider.h"
 #include "OS/LinuxSysCallProvider.h"
@@ -150,7 +151,53 @@ bool Soaap::runOnModule(Module& M) {
   if (CmdLineOpts::EmPerf) {
     outs() << "* Instrumenting sandbox emulation calls\n";
     instrumentPerfEmul(M);
-  }
+  } 
+  else if (CmdLineOpts::GenSandboxes) {
+
+    outs() << "* Building RPC graph\n";
+    buildRPCGraph(M);
+    
+    if (CmdLineOpts::isSelected(SoaapAnalysis::Vuln, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking rights leaked by past vulnerable code\n";
+      checkLeakedRights(M);
+    }
+    
+    if (CmdLineOpts::isSelected(SoaapAnalysis::Globals, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking global variable accesses\n";
+      checkGlobalVariables(M);
+    }
+
+    //outs() << "* Checking file descriptor accesses\n";
+    //checkFileDescriptors(M);
+
+    if (CmdLineOpts::isSelected(SoaapAnalysis::SysCalls, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking system calls\n";
+      checkSysCalls(M);
+    }
+  
+    if (CmdLineOpts::isSelected(SoaapAnalysis::PrivCalls, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking for calls to privileged functions from sandboxes\n";
+      checkPrivilegedCalls(M);
+    }
+
+    if (CmdLineOpts::isSelected(SoaapAnalysis::SandboxedFuncs, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking sandbox-only functions\n";
+      checkSandboxedFuncs(M);
+    }
+
+    if (CmdLineOpts::isSelected(SoaapAnalysis::InfoFlow, CmdLineOpts::SoaapAnalyses)) {
+      outs() << "* Checking propagation of data from sandboxes to privileged components\n";
+      checkOriginOfAccesses(M);
+
+      outs() << "* Checking propagation of classified data\n";
+      checkPropagationOfClassifiedData(M);
+
+      outs() << "* Checking propagation of sandbox-private data\n";
+      checkPropagationOfSandboxPrivateData(M);
+    }
+    outs() << "* Generating sandboxes\n";
+    generateSandboxes(M);
+  } 
   else {
     outs() << "* Building RPC graph\n";
     buildRPCGraph(M);
@@ -202,6 +249,10 @@ bool Soaap::runOnModule(Module& M) {
   XO::finish();
 
   return false;
+}
+
+void Soaap::generateSandboxingModules(vector<Module*>* MV) {
+  genModules = MV;
 }
 
 void Soaap::processCmdLineArgs(Module& M) {
@@ -440,6 +491,11 @@ void Soaap::checkGlobalVariables(Module& M) {
 void Soaap::instrumentPerfEmul(Module& M) {
   PerformanceEmulationInstrumenter instrumenter;
   instrumenter.instrument(M, sandboxes);
+}
+
+void Soaap::generateSandboxes(Module& M) {
+  SandboxGenerator generator;
+  generator.generate(M, sandboxes, *genModules);
 }
 
 void Soaap::buildRPCGraph(Module& M) {

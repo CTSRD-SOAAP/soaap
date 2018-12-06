@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 Khilan Gudka
+ * Copyright (c) 2017 Gabriela Sklencarova
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,22 +31,50 @@
  * SUCH DAMAGE.
  */
 
-#ifndef SOAAP_OS_SANDBOX_CAPSICUM_H
-#define SOAAP_OS_SANDBOX_CAPSICUM_H
+#ifndef SOAAP_GENERATE_SANDBOX_MODULE_GENERATOR_H
+#define SOAAP_GENERATE_SANDBOX_MODULE_GENERATOR_H
 
-#include "Common/Typedefs.h"
-#include "OS/Sandbox/SandboxPlatform.h"
-#include <sys/capsicum.h>
+#include "Common/Sandbox.h"
+#include "Generate/RPC/Serializer.h"
+#include "Util/SboxGenUtils.h"
+
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
+
+using namespace llvm;
 
 namespace soaap {
-  class Capsicum : public SandboxPlatform {
+  class SandboxModuleGenerator {
     public:
-      Capsicum();
-      std::vector<uint64_t> rightsForFunctions(FunctionSet& FS);
-      std::vector<uint64_t> rightsForStrings(StringSet& SS);
+      SandboxModuleGenerator(Module& O, Sandbox& S);
+      Module* get();
     private:
-      std::unordered_map<std::string, uint64_t> capabilityMap;
+      Module& O;
+      Sandbox& S;
+      Module* M;
+      GlobalVariable* mainFd;
+      ValueToValueMapTy VMap;
+      map<string, pair<Value*, Value*>> handleTypesMap;
+      map<string, Function*> getters;
+      map<string, Function*> setters;
+
+      void generate();
+      void generateMainFunction();
+      void generateGetterFunction();
+      void getterSwitchHelper(Module* M, IRBuilder<>& B, Serializer& R,
+          Function* F, string fname, StructType* ST, SwitchInst* switchInst,
+          Value* handlePtr, Value* res, Value* pathAddr, unsigned depth);
+      void setterSwitchHelper(Module* M, IRBuilder<>& B, Serializer& R,
+          Function* F, string fname, StructType* ST, SwitchInst* switchInst,
+          Value* handlePtr, Value* storeVal, Value* res, Value* pathAddr, unsigned depth);
+      void generateSetterFunction();
+      void generateDispatchFunction();
+      void limitDescriptorRights(IRBuilder<>& B, Value* arg, Value* fd,
+          std::string funcName, Function* dispatch);
+      Function* generateStructMethod(StructType* ST, unsigned elemIdx, unsigned argIdx);
+      void generateErrorMessage(LLVMContext& C, IRBuilder<>& B, std::string message);
   };
 }
 
-#endif
+#endif  // SOAAP_GENERATE_SANDBOX_MODULE_GENERATOR_H

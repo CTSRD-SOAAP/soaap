@@ -20,6 +20,9 @@ add_llvm_library(SOAAP
   Analysis/InfoFlow/FPInferredTargetsAnalysis.cpp
   Analysis/InfoFlow/FPTargetsAnalysis.cpp
   Analysis/InfoFlow/RPC/RPCGraph.cpp
+  Generate/RPC/Serializer.cpp
+  Generate/SandboxGenerator.cpp
+  Generate/SandboxModuleGenerator.cpp
   Instrument/PerformanceEmulationInstrumenter.cpp
   OS/FreeBSDSysCallProvider.cpp
   OS/LinuxSysCallProvider.cpp
@@ -36,6 +39,7 @@ add_llvm_library(SOAAP
   Util/LLVMAnalyses.cpp
   Util/PrettyPrinters.cpp
   Util/SandboxUtils.cpp
+  Util/SboxGenUtils.cpp
   Util/ClassifiedUtils.cpp
   Util/TypeUtils.cpp
 )

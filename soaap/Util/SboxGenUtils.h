@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 Khilan Gudka
+ * Copyright (c) 2017 Gabriela Sklencarova
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,61 +31,40 @@
  * SUCH DAMAGE.
  */
 
-#ifndef SOAAP_COMMON_TYPEDEFS_H
-#define SOAAP_COMMON_TYPEDEFS_H
+#ifndef SOAAP_UTILS_SBOXGENUTILS_H
+#define SOAAP_UTILS_SBOXGENUTILS_H
 
-#include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallSet.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Instructions.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
 
-#include <list>
-#include <map>
-#include <vector>
-#include <set>
-#include <unordered_map>
-#include <utility>
+#include "Common/Sandbox.h"
 
-#include "Analysis/InfoFlow/Context.h"
-
-using namespace std;
 using namespace llvm;
 
 namespace soaap {
-  enum class InputAccess {
-    Copy, In, Out, Inout
+  class SboxGenUtils {
+    public:
+      static Function* insertExternFunction(std::string name, Module& M, Type* retTy,
+          std::vector<Type*> argTypes);
+      static Function* insertVarArgFunction(std::string name, Module& M, Type* retTy,
+          std::vector<Type*> argTypes);
+      static void insertParentFunctions(Module& M);
+      static void insertSandboxFunctions(Module& M);
+      static std::map<Value*, Value*> allocateArguments(IRBuilder<>& B, Function* F);
+      static void storeArguments(IRBuilder<>& B, Function* F,
+          std::map<Value*, Value*>& ptrs);
+      static bool isConstructedType(Sandbox& S, Type* T);
+      static bool isConstructedBy(Sandbox& S, Type* T, Function* F);
+      static bool isHandleType(Sandbox& S, Type* T);
+      static bool isHandleReturnedBy(Sandbox& S, Type* T, Function* F);
+      static std::string getConstructedTypeName(Sandbox& S, Type* T);
+      static std::string getHandleTypeName(Sandbox& S, Type* T);
+      static Type* stripPointerType(Type* T);
+    private:
+      static Function* insertFunc(std::string name, Module& M, Type* retTy,
+          std::vector<Type*> argTypes, bool varArg);
   };
-  enum class InputType {
-    Integer, FileDescriptor, Pointer, Buffer, ByteBuffer, NullTerminatedBuffer, Handle
-  };
-  typedef SmallVector<Function*,16> FunctionVector;
-  typedef SmallSet<Function*,16> FunctionSet;
-  typedef map<Function*,int> FunctionIntMap;
-  typedef SmallVector<CallInst*,16> CallInstVector;
-  typedef SmallSet<CallInst*,16> CallInstSet;
-  typedef DenseMap<const Value*,int> ValueIntMap;
-  typedef map<const Value*,FunctionSet> ValueFunctionSetMap;
-  typedef SmallVector<string,16> StringVector;
-  typedef set<string> StringSet;
-  typedef SmallVector<Context*,8> ContextVector;
-  typedef vector<BasicBlock*> BasicBlockVector;  // use <vector> as can be large
-  typedef list<Instruction*> InstTrace;
-  typedef list<Instruction*> InstVector;
-  typedef SmallVector<GlobalVariable*,8> GlobalVariableVector;
-  typedef SmallVector<StructType*, 16> StructVector;
-  typedef SmallSet<Value*,16> ValueSet;
-  typedef SmallSet<Argument*,16> ArgumentSet;
-  typedef pair<CallInst*,Function*> CallGraphEdge;
-  typedef struct {
-    InputAccess access;
-    InputType type;
-    bool optional;
-    Value* linkedArg;
-  } InputAnnotation;
-  typedef map<Value*, InputAnnotation> InputAnnotationMap;
 }
 
 #endif

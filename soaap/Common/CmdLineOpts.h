@@ -60,6 +60,7 @@ namespace soaap {
   class CmdLineOpts {
     public:
       static bool EmPerf;
+      static bool GenSandboxes;
       static list<string> VulnerableVendors;
       static list<string> VulnerableLibs;
       static bool ContextInsens;

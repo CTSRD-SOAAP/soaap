@@ -48,6 +48,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/IRPrintingPasses.h"
+#include "llvm/IR/TypeBuilder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/LinkAllIR.h"
@@ -87,6 +88,10 @@ OutputAssembly("S", cl::desc("Write output as LLVM assembly"));
 
 static cl::opt<bool>
 Verify("verify", cl::desc("Verify result module"), cl::Hidden);
+
+void printTestingMessage() {
+  printf("Testing message was printed.");
+}
 
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal(argv[0]);
@@ -148,7 +153,13 @@ int main(int argc, char **argv) {
   // about to build.
   //
   legacy::PassManager Passes;
-  Passes.add(new soaap::Soaap);
+  soaap::Soaap* soaapPass = new soaap::Soaap;
+
+  LLVMContext &ctx = getGlobalContext();
+  std::vector<Module*> modules;
+  soaapPass->generateSandboxingModules(&modules);
+
+  Passes.add(soaapPass);
 
   // Check that the module is well formed on completion of optimization
   if (!OutputFilename.empty()) {
@@ -170,6 +181,23 @@ int main(int argc, char **argv) {
     Out->keep();
   }
 
-  return 0;
+  outs() << "* Number of generated modules: " << modules.size() << "\n";
+  for (Module* GenMod : modules) {
+    legacy::PassManager PM;
+    std::unique_ptr<tool_output_file> GenOut;
+    std::error_code ErrC;
+    GenOut.reset(new tool_output_file(StringRef(
+            "/TODO/CHANGE/OUT/PATH" + GenMod->getName().str() + ".ll"),
+          ErrC, sys::fs::F_None));
+    if (ErrC) {
+      errs() << ErrC.message() << '\n';
+      return 1;
+    }
+    PM.add(createVerifierPass());
+    PM.add(createPrintModulePass(GenOut->os()));
+    PM.run(*GenMod);
+    GenOut->keep();
+    outs() << "* Successfully generated module " + GenMod->getName().str() << "\n";
+  }
 }
 

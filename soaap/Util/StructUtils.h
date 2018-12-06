@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 Khilan Gudka
+ * Copyright (c) 2017 Gabriela Sklencarova
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,22 +31,20 @@
  * SUCH DAMAGE.
  */
 
-#ifndef SOAAP_OS_SANDBOX_CAPSICUM_H
-#define SOAAP_OS_SANDBOX_CAPSICUM_H
+#ifndef SOAAP_UTILS_STRUCTUTILS_H
+#define SOAAP_UTILS_STRUCTUTILS_H
 
-#include "Common/Typedefs.h"
-#include "OS/Sandbox/SandboxPlatform.h"
-#include <sys/capsicum.h>
+#include "Common/Sandbox.h"
+
+#include "llvm/IR/Module.h"
+
+using namespace llvm;
 
 namespace soaap {
-  class Capsicum : public SandboxPlatform {
+  class StructUtils {
     public:
-      Capsicum();
-      std::vector<uint64_t> rightsForFunctions(FunctionSet& FS);
-      std::vector<uint64_t> rightsForStrings(StringSet& SS);
-    private:
-      std::unordered_map<std::string, uint64_t> capabilityMap;
+      static StructVector findStructs(Module& M);
   };
 }
 
-#endif
+#endif  // SOAAP_UTILS_STRUCTUTILS_H

@@ -40,6 +40,8 @@
 #include "Util/PrettyPrinters.h"
 #include "Util/SandboxUtils.h"
 #include "soaap.h"
+#define IN_SOAAP_GENERATOR
+#include "soaap_gen.h"
 
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
@@ -53,8 +55,9 @@
 
 using namespace soaap;
 
-Sandbox::Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c) 
-  : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoints(entries), persistent(p), module(m), overhead(o), clearances(c) {
+Sandbox::Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c,
+    FunctionSet internalFunctions, ValueSet internalGlobals) 
+  : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoints(entries), persistent(p), module(m), overhead(o), clearances(c), internalFuncs(internalFunctions), internalGlobs(internalGlobals) {
 }
 
 Sandbox::Sandbox(string n, int i, InstVector& r, bool p, Module& m) 
@@ -76,9 +79,16 @@ void Sandbox::init() {
   }
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding creation points\n");
   findCreationPoints();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding annotated inputs\n");
+  findAnnotatedInputs();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding object inputs\n");
+  findObjectInputTypes();
   SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding allowed syscalls\n");
   findAllowedSysCalls();
+  SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_2 << "Finding used globals\n");
+  findUsedGlobalVariables();
   findPrivateData();
+  buildEntryPointsToIdxMap();
 }
 
 void Sandbox::reinit() {
@@ -88,18 +98,46 @@ void Sandbox::reinit() {
   functionsSet.clear();
   tlCallInsts.clear();
   callInsts.clear();
+  // refFunctions.clear();
   creationPoints.clear();
   sysCallLimitPoints.clear();
   sysCallLimitPointToAllowedSysCalls.clear();
   sharedVarToPerms.clear();
   caps.clear();
+  annotatedInputs.clear();
+  objectInputTypes.clear();
   privateData.clear();
+  entryPointToIdxMap.clear();
 
   init();
 }
 
-FunctionSet Sandbox::getEntryPoints() {
+FunctionSet& Sandbox::getEntryPoints() {
   return entryPoints;
+}
+
+FunctionSet Sandbox::getInternalFunctions() {
+  return internalFuncs;
+}
+
+ValueSet Sandbox::getInternalGlobals() {
+  return internalGlobs;
+}
+
+map<Function*, unsigned>& Sandbox::getEntryPointToIdxMap() {
+  return entryPointToIdxMap;
+}
+
+unsigned Sandbox::getIDForEntryPoint(Function* entry) {
+  return entryPointToIdxMap[entry];
+}
+
+InputAnnotationMap Sandbox::getAnnotatedInputs() {
+  return annotatedInputs;
+}
+
+StructVector Sandbox::getObjectInputTypes() {
+  return objectInputTypes;
 }
 
 Function* Sandbox::getEnclosingFunc() {
@@ -133,6 +171,10 @@ FunctionVector Sandbox::getFunctions() {
   return functionsVec;
 }
 
+// FunctionVector Sandbox::getReferencedFunctions() {
+//   return refRunctions;
+// }
+
 CallInstVector Sandbox::getTopLevelCalls() {
   return tlCallInsts;
 }
@@ -145,8 +187,20 @@ GlobalVariableIntMap Sandbox::getGlobalVarPerms() {
   return sharedVarToPerms;
 }
 
+ValueSet Sandbox::getLoadedGlobalVars() {
+  return loadedGlobals;
+}
+
+ValueSet Sandbox::getStoredGlobalVars() {
+  return storedGlobals;
+}
+
 ValueFunctionSetMap Sandbox::getCapabilities() {
   return caps;
+}
+
+map<const Value*, StringSet> Sandbox::getCapStrings() {
+  return capsStrings;
 }
 
 bool Sandbox::isAllowedToReadGlobalVar(GlobalVariable* gv) {
@@ -223,6 +277,9 @@ void Sandbox::findSandboxedFunctions() {
     for (Function* F : entryPoints) {
       initialFuncs.insert(F);
     }
+    for (Function* F : internalFuncs) {
+      initialFuncs.insert(F);
+    }
   }
   findSandboxedFunctionsHelper(initialFuncs);
   SDEBUG("soaap.util.sandbox", 3, dbgs() << "Number of sandboxed functions found: " << functionsVec.size() << ", " << functionsSet.size() << "\n");
@@ -246,11 +303,22 @@ void Sandbox::findSandboxedFunctionsHelper(FunctionSet fringe) {
     for (Function* SuccFunc : CallGraphUtils::getCallees(F, this, module)) {
       SDEBUG("soaap.util.sandbox", 4, dbgs() << "succ: " << SuccFunc->getName() << "\n");
       // check if entry point to another sandbox
+    
       if (SandboxUtils::isSandboxEntryPoint(module, SuccFunc) && !isEntryPoint(SuccFunc)) {
         continue;
       }
       else if (functionsSet.count(SuccFunc) == 0) {
         newFringe.insert(SuccFunc);
+      }
+    }
+
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      if (StoreInst* SI = dyn_cast<StoreInst>(&*I)) {
+        Value* operand = SI->getValueOperand()->stripPointerCasts();
+        if (Function* func = dyn_cast<Function>(operand)) {
+          // outs() << "Found a store function operand: " << func->getName() << "\n";
+          newFringe.insert(func);
+        }
       }
     }
   }
@@ -336,6 +404,33 @@ void Sandbox::findSharedGlobalVariables() {
             sharedVarToPerms[annotatedVar] |= VAR_WRITE_MASK;
           }
           SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated global var " << annotatedVar->getName() << "\n");
+        }
+      }
+    }
+  }
+}
+
+void Sandbox::findUsedGlobalVariables() {
+  for (Function* F : getFunctions()) {
+    for (BasicBlock& BB : F->getBasicBlockList()) {
+      for (Instruction& I : BB.getInstList()) {
+        if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+          Value* operand = load->getPointerOperand()->stripPointerCasts();
+          if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(operand)) {
+            operand = gep->getPointerOperand();
+          }
+          if (GlobalVariable* gv = dyn_cast<GlobalVariable>(operand)) {
+            loadedGlobals.insert(gv);
+          }
+        } else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+          Value* operand = store->getPointerOperand()->stripPointerCasts();
+          if (GetElementPtrInst* gep = dyn_cast<GetElementPtrInst>(operand)) {
+            operand = gep->getPointerOperand();
+          }
+          if (GlobalVariable* gv = dyn_cast<GlobalVariable>(operand)) {
+            /* TODO the analysis is "not concerned with externs */
+            storedGlobals.insert(gv);
+          }
         }
       }
     }
@@ -451,6 +546,7 @@ void Sandbox::findCapabilities() {
                   if (annotatedArg != NULL) {
                     if (annotationStrValStr.startswith(SOAAP_FD)) {
                       FunctionSet sysCalls;
+                      StringSet sysCallsNames;
                       int subStrStartIdx = strlen(SOAAP_FD) + 1; //+1 because of _
                       string sysCallListCsv = annotationStrValStr.substr(subStrStartIdx);
                       SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_1 << " " << annotationStrValStr << " found: " << *annotatedVar << ", sysCallList: " << sysCallListCsv << "\n");
@@ -472,8 +568,10 @@ void Sandbox::findCapabilities() {
                           SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Adding " << sysCallFn->getName() << "\n");
                           sysCalls.insert(sysCallFn);
                         }
+                        sysCallsNames.insert(sysCallName);
                       }
                       caps[annotatedArg] = sysCalls;
+                      capsStrings[annotatedArg] = sysCallsNames;
                     }
                     SDEBUG("soaap.util.sandbox", 3, dbgs() << INDENT_3 << "Found annotated file descriptor " << annotatedArg->getName() << "\n");
                   }
@@ -765,7 +863,155 @@ void Sandbox::findPrivateData() {
       }
     }
   }
+}
 
+void Sandbox::findAnnotatedInputs() {
+  Function* FVA = module.getFunction("llvm.var.annotation");
+  if (!FVA) return;
+  /* TODO handle the annotated region case. */
+  if (entryPoints.empty()) return;
+  for (User* U : FVA->users()) {
+    IntrinsicInst* annotateCall = dyn_cast<IntrinsicInst>(U);
+    if (!annotateCall) continue;
+
+    Function* F = annotateCall->getParent()->getParent();
+    std::string funcName = F->getName().str();
+    if (!entryPoints.count(F)) continue;
+
+    Value* annotatedVar = dyn_cast<Value>(
+        annotateCall->getOperand(0)->stripPointerCasts());
+
+    /* Get the annotation as string. */
+    GlobalVariable* annotationStr = dyn_cast<GlobalVariable>(
+        annotateCall->getOperand(1)->stripPointerCasts());
+    ConstantDataArray* annotationStrArr = dyn_cast<ConstantDataArray>(
+        annotationStr->getInitializer());
+    StringRef annotationCString = annotationStrArr->getAsCString();
+
+    DbgDeclareInst* dbgDecl = FindAllocaDbgDeclare(annotatedVar);
+    if (!dbgDecl) continue;
+
+    DILocalVariable* varDbg = dbgDecl->getVariable();
+    std::string annotatedArgName = varDbg->getName().str();
+    std::string linkedArgName = "";
+    Value* annotatedArg = NULL;
+    Value* linkedArg = NULL;
+
+    InputAnnotation annotationData;
+    SmallVector<StringRef, 3> annotationParts;
+    annotationCString.split(annotationParts, "_");
+
+    // if (annotationParts.size() < 2) {
+    //   // error
+    //   outs() << "\n";
+    //   outs() << " *** Found an unsupported input annotation \"" <<
+    //     annotationCString.str() << "\" for argument \"" << annotatedArgName <<
+    //     "\" in function \"" << funcName << "\n";
+    //   exit(1);
+    // }
+
+    bool invalid = false;
+
+    if (annotationParts[0] == ACCESS_IN) {
+      annotationData.access = InputAccess::In;
+    } else if (annotationParts[0] == ACCESS_INOUT) {
+      annotationData.access = InputAccess::Inout;
+    } else if (annotationParts[0] == ACCESS_OUT) {
+      annotationData.access = InputAccess::Out;
+    } else if (annotationParts[0] == HANDLE) {
+      annotationData.access = InputAccess::Inout;
+      annotationData.type = InputType::Handle;
+    } else {
+      invalid = true;
+    }
+
+    if (annotationParts.size() > 1) {
+      if (annotationParts[1] == TYPE_PTR) {
+        annotationData.type = InputType::Pointer;
+      } else if (annotationParts[1] == TYPE_Z) {
+        annotationData.type = InputType::NullTerminatedBuffer;
+      } else if (annotationParts[1] == TYPE_BUFF) {
+        annotationData.type = InputType::Buffer;
+      } else {
+        invalid = true;
+      }
+    }
+
+    if (annotationParts.size() > 2) {
+      if (annotationData.type == InputType::Buffer) {
+        if (annotationParts[2] == OPT) {
+          annotationData.optional = true;
+          linkedArgName = annotationParts[3];
+        } else {
+          linkedArgName = annotationParts[2];
+        }
+      } else if (annotationParts[2] == OPT) {
+        annotationData.optional = true;
+      }
+    }
+
+    if (annotationParts.size() > 2 && annotationParts[2] == OPT) {
+      annotationData.optional = true;
+    }
+
+    if (invalid) {
+      if (annotationCString.startswith(SOAAP_FD)) {
+        annotationData.access = InputAccess::Copy;
+        annotationData.type = InputType::FileDescriptor;
+      } else {
+        // error
+        outs() << "\n";
+        outs() << " *** Found an unsupported input annotation \"" <<
+          annotationCString.str() << "\" for argument \"" << annotatedArgName <<
+          "\" in function \"" << funcName << "\n";
+        exit(1);
+      }
+    }
+
+    for (Argument& A : F->getArgumentList()) {
+      std::string argName = A.getName().str();
+      if (argName == annotatedArgName) {
+        annotatedArg = dyn_cast<Value>(&A);
+      } else if (argName == linkedArgName) {
+        linkedArg = dyn_cast<Value>(&A);
+      }
+    }
+
+    if (annotatedArg == NULL) {
+      // error
+      outs() << "\n";
+      outs() << " *** Function \"" << funcName << "\" has no argument named \"" <<
+        annotatedArgName << "\n";
+      return;
+    }
+
+    if (annotationData.type == InputType::Buffer ||
+        annotationData.type == InputType::ByteBuffer) {
+      if (linkedArg == NULL) {
+        // error
+        outs() << "\n";
+        outs() << " *** Invalid annotation \"" << annotationCString.str() <<
+          "\": Function \"" << funcName << "\" has no argument named \"" <<
+          linkedArgName << "\n";
+        return;
+      }
+
+      annotationData.linkedArg = linkedArg;
+    }
+
+    annotatedInputs[annotatedArg] = annotationData;
+  }
+}
+
+void Sandbox::findObjectInputTypes() {
+  for (const auto& i : annotatedInputs) {
+    Type* valTy = i.first->getType();
+    if (!valTy->isPointerTy()) continue;
+    Type* elemTy = valTy->getPointerElementType();
+    if (!isa<StructType>(elemTy)) continue;
+    /* TODO check if the struct is a class. */
+    objectInputTypes.push_back(dyn_cast<StructType>(elemTy));
+  }
 }
 
 ValueSet Sandbox::getPrivateData() {
@@ -778,4 +1024,12 @@ InstVector Sandbox::getRegion() {
 
 bool Sandbox::isEntryPoint(Function* F) {
   return entryPoints.count(F) == 1;
+}
+
+void Sandbox::buildEntryPointsToIdxMap() {
+  unsigned idx = 0;
+  for (Function* F : entryPoints) {
+    entryPointToIdxMap[F] = idx;
+    ++idx;
+  }
 }

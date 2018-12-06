@@ -45,24 +45,36 @@ namespace soaap {
   typedef map<GlobalVariable*,int> GlobalVariableIntMap;
   class Sandbox : public Context {
     public:
-      Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c);
+      Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c,
+          FunctionSet internalFuncs, ValueSet internalGlobals);
       Sandbox(string n, int i, InstVector& region, bool p, Module& m);
       string getName();
       int getNameIdx();
-      FunctionSet getEntryPoints();
+      FunctionSet& getEntryPoints();
+      InputAnnotationMap getAnnotatedInputs();
+      StructVector getObjectInputTypes();
       Function* getEnclosingFunc();
       bool isRegionWithin(Function* F);
       FunctionVector getFunctions();
+      FunctionSet getInternalFunctions();
+      ValueSet getInternalGlobals();
+      /* Functions which are stored in pointers in the sbox. */
+      // FunctionVector getReferencedFunctions();
       CallInstVector getCalls();
       CallInstVector getTopLevelCalls();
       InstVector getRegion();
       GlobalVariableIntMap getGlobalVarPerms();
+      ValueSet getLoadedGlobalVars();
+      ValueSet getStoredGlobalVars();
       ValueFunctionSetMap getCapabilities();
+      map<const Value*, StringSet> getCapStrings();
       bool isAllowedToReadGlobalVar(GlobalVariable* gv);
       FunctionVector getCallgates();
       bool isCallgate(Function* F);
       bool isEntryPoint(Function* F);
       int getClearances();
+      map<Function*, unsigned>& getEntryPointToIdxMap();
+      unsigned getIDForEntryPoint(Function* entry);
       int getOverhead();
       bool isPersistent();
       CallInstVector getCreationPoints();
@@ -72,6 +84,8 @@ namespace soaap {
       bool containsFunction(Function* F);
       bool containsInstruction(Instruction* I);
       bool hasCallgate(Function* F);
+      bool loadsGlobalVar(GlobalVariable* G);
+      bool storesGlobalVar(GlobalVariable* G);
       void validateCreationPoints();
       void reinit();
       static bool classof(const Context* C) { return C->getKind() == CK_SANDBOX; }
@@ -81,11 +95,17 @@ namespace soaap {
       string name;
       int nameIdx;
       FunctionSet entryPoints;
+      FunctionSet internalFuncs;
+      ValueSet internalGlobs;
+      map<Function*, unsigned> entryPointToIdxMap;
+      InputAnnotationMap annotatedInputs;
+      StructVector objectInputTypes;
       InstVector region;
       bool persistent;
       int clearances;
       FunctionVector callgates;
       FunctionVector functionsVec;
+      // FunctionVector refFunctions;
       DenseSet<Function*> functionsSet;
       CallInstVector tlCallInsts;
       CallInstVector callInsts;
@@ -93,20 +113,28 @@ namespace soaap {
       CallInstVector sysCallLimitPoints;
       map<CallInst*,FunctionSet> sysCallLimitPointToAllowedSysCalls;
       GlobalVariableIntMap sharedVarToPerms;
+      ValueSet loadedGlobals;
+      ValueSet storedGlobals;
       ValueFunctionSetMap caps;
+      map<const Value*, StringSet> capsStrings;
       int overhead;
       ValueSet privateData;
       
       void init();
       void findSandboxedFunctions();
       void findSandboxedFunctionsHelper(FunctionSet funcs);
+      // void findReferencedFunctions();
       void findSandboxedCalls();
       void findSharedGlobalVariables();
+      void findUsedGlobalVariables();
       void findCallgates();
       void findCapabilities();
       void findAllowedSysCalls();
       void findCreationPoints();
       void findPrivateData();
+      void findAnnotatedInputs();
+      void findObjectInputTypes();
+      void buildEntryPointsToIdxMap();
       bool validateCreationPointsHelper(BasicBlock* BB, BasicBlockVector& visited, InstTrace& trace);
   };
   typedef SmallVector<Sandbox*,16> SandboxVector;

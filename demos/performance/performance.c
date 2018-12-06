@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
 __soaap_sandbox_persistent("session")
 __soaap_overhead(20)
 void accept_connection() {
-  static int id = 1;
+  int id = 1;
   int i;
   for (i = 0; i < 100; i++) {
     printf("[%d] Hello\n", id);
