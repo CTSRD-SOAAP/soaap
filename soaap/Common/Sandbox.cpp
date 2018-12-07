@@ -968,12 +968,12 @@ void Sandbox::findAnnotatedInputs() {
       }
     }
 
-    for (Argument& A : F->getArgumentList()) {
-      std::string argName = A.getName().str();
+    for (auto A = F->arg_begin(); A != F->arg_end(); A++) {
+      std::string argName = A->getName().str();
       if (argName == annotatedArgName) {
-        annotatedArg = dyn_cast<Value>(&A);
+        annotatedArg = dyn_cast<Value>(A);
       } else if (argName == linkedArgName) {
-        linkedArg = dyn_cast<Value>(&A);
+        linkedArg = dyn_cast<Value>(A);
       }
     }
 

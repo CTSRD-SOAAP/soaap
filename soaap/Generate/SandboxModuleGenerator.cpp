@@ -434,9 +434,9 @@ void SandboxModuleGenerator::generateDispatchFunction() {
   /* Allocate space for all arguments except for buffers. */
   std::map<Value*, Value*> allocatedArgs;
   for (Function* F : S.getEntryPoints()) {
-    for (Argument& A : F->getArgumentList()) {
-      Value* argVal = dyn_cast<Value>(&A);
-      Type* argTy = A.getType();
+      for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* argVal = dyn_cast<Value>(A);
+      Type* argTy = A->getType();
       if (!inputMap.count(argVal) && argTy->isIntegerTy() &&
           argTy->getIntegerBitWidth() < 64) {
         allocatedArgs[argVal] = B.CreateAlloca(i64);
@@ -471,8 +471,8 @@ void SandboxModuleGenerator::generateDispatchFunction() {
 
     /* Build a map of pointers from linked args to ints */
     std::set<Value*> linkedArgs;
-    for (Argument& A : F->getArgumentList()) {
-      Value* V = dyn_cast<Value>(&A);
+    for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* V = dyn_cast<Value>(A);
       if (inputMap.count(V) && inputMap[V].type == InputType::Buffer) {
         linkedArgs.insert(inputMap[V].linkedArg);
       }
@@ -480,8 +480,8 @@ void SandboxModuleGenerator::generateDispatchFunction() {
 
     std::map<Value*, unsigned> linkedArgIdxs;
     unsigned argIdx = 0;
-    for (Argument& A : F->getArgumentList()) {
-      Value* V = dyn_cast<Value>(&A);
+    for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* V = dyn_cast<Value>(A);
       if (linkedArgs.count(V)) {
         linkedArgIdxs[V] = argIdx;
       }
@@ -491,8 +491,8 @@ void SandboxModuleGenerator::generateDispatchFunction() {
     /* TODO skip linked arguments (unless the linked idx < current idx), in
      * which case skip loading a linked arg. */
     argIdx = 0;
-    for (Argument& A : F->getArgumentList()) {
-      Value* V = dyn_cast<Value>(&A);
+    for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* V = dyn_cast<Value>(A);
       if (inputMap.count(V) && inputMap[V].access == InputAccess::Out) {
         ++argIdx;
         continue;
@@ -561,21 +561,21 @@ void SandboxModuleGenerator::generateDispatchFunction() {
       ++argIdx;
     }
 
-    for (Argument& A : F->getArgumentList()) {
-      Value* argVal = dyn_cast<Value>(&A);
+    for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* argVal = dyn_cast<Value>(A);
       if (inputMap.count(argVal) && inputMap[argVal].access == InputAccess::Out) {
         Value* lenVal = inputMap[argVal].linkedArg;
         Value* len = B.CreateLoad(allocatedArgs[lenVal]);
-        Value* arr = B.CreateAlloca(A.getType()->getArrayElementType(), len);
+        Value* arr = B.CreateAlloca(A->getType()->getArrayElementType(), len);
         B.CreateStore(arr, allocatedArgs[argVal]);
       }
     }
 
     std::vector<Value*> args = {};
-    for (Argument& A : F->getArgumentList()) {
-      Value* argVal = dyn_cast<Value>(&A);
+    for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* argVal = dyn_cast<Value>(A);
       Value* arg = B.CreateLoad(allocatedArgs[argVal]);
-      Type* argTy = A.getType();
+      Type* argTy = A->getType();
       if (!inputMap.count(argVal) && argTy->getIntegerBitWidth() < 64) {
         arg = B.CreateIntCast(arg, argTy, false);
       }
@@ -592,8 +592,8 @@ void SandboxModuleGenerator::generateDispatchFunction() {
     Value* retVal = B.CreateCall(dyn_cast<Function>(VMap[F]), ArrayRef<Value*>(args));
 
     argIdx = 0;
-    for (Argument& A : F->getArgumentList()) {
-      Value* V = dyn_cast<Value>(&A);
+    for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+      Value* V = dyn_cast<Value>(A);
       Type* valTy = V->getType();
       if (!valTy->isPointerTy()) {
         ++argIdx;
@@ -733,8 +733,8 @@ Function* SandboxModuleGenerator::generateStructMethod(StructType* ST, unsigned 
   B.CreateStore(nvl, nvlAddr);
 
   unsigned I = 0;
-  for (Argument& A : F->getArgumentList()) {
-    Value* V = dyn_cast<Value>(&A);
+  for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+    Value* V = dyn_cast<Value>(A);
     Value* arg = B.CreateLoad(allocatedArgs[V]);
     R.serializeArgument(B, F, I, arg, nvlAddr, NULL, allocatedArgs);
     ++I;

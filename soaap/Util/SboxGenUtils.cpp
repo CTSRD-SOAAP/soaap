@@ -185,17 +185,17 @@ void SboxGenUtils::insertSandboxFunctions(Module& M) {
 
 std::map<Value*, Value*> SboxGenUtils::allocateArguments(IRBuilder<>& B, Function* F) {
   std::map<Value*, Value*> args;
-  for (Argument& A : F->getArgumentList()) {
-    Value* V = dyn_cast<Value>(&A);
-    args[V] = B.CreateAlloca(A.getType());
+  for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+    Value* V = dyn_cast<Value>(A);
+    args[V] = B.CreateAlloca(A->getType());
   }
   return args;
 }
 
 void SboxGenUtils::storeArguments(IRBuilder<>& B, Function* F,
     std::map<Value*, Value*>& ptrs) {
-  for (Argument& A : F->getArgumentList()) {
-    Value* V = dyn_cast<Value>(&A);
+  for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+    Value* V = dyn_cast<Value>(A);
     B.CreateStore(V, ptrs[V]);
   }
 }

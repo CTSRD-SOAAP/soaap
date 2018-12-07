@@ -122,9 +122,9 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
 
       /* Marshal input arguments. */
       unsigned argIdx = 0;
-      for (auto& A : F->getArgumentList()) {
+      for (auto A = F->arg_begin(); A != F->arg_end(); A++) {
         /* Don't marshall output buffers. */
-        Value* V = dyn_cast<Value>(&A);
+        Value* V = dyn_cast<Value>(A);
         if (inputMap.count(V) && inputMap[V].access == InputAccess::Out) {
           argIdx++;
           continue;
@@ -185,9 +185,9 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
       B.CreateStore(nvl, nvlAddr);
 
       unsigned numStructs = 0;
-      for (Argument& A : F->getArgumentList()) {
-        Value* V = dyn_cast<Value>(&A);
-        Type* argTy = SboxGenUtils::stripPointerType(A.getType());
+      for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+        Value* V = dyn_cast<Value>(A);
+        Type* argTy = SboxGenUtils::stripPointerType(A->getType());
         /* TODO check that it's not a buffer */
         if (argTy->isStructTy() &&
             (!inputMap.count(V) || inputMap[V].type != InputType::FileDescriptor)) {
@@ -229,9 +229,9 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
         B.CreateUnreachable();
 
         unsigned idx = 0;
-        for (Argument& A : F->getArgumentList()) {
-          Value* V = dyn_cast<Value>(&A);
-          Type* argTy = A.getType();
+	for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+          Value* V = dyn_cast<Value>(A);
+          Type* argTy = A->getType();
           if (!argTy->isPointerTy() || !argTy->getPointerElementType()->isStructTy() ||
               (inputMap.count(V) && inputMap[V].type == InputType::FileDescriptor)) {
             ++idx;
@@ -350,8 +350,8 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
       }
 
       std::set<Value*> linkedArgs;
-      for (Argument& A : F->getArgumentList()) {
-        Value* V = dyn_cast<Value>(&A);
+      for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+        Value* V = dyn_cast<Value>(A);
         if (inputMap.count(V) && inputMap[V].type == InputType::Buffer) {
           linkedArgs.insert(inputMap[V].linkedArg);
         }
@@ -359,8 +359,8 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
 
       std::map<Value*, unsigned> linkedArgIdxs;
       argIdx = 0;
-      for (Argument& A : F->getArgumentList()) {
-        Value* V = dyn_cast<Value>(&A);
+      for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+        Value* V = dyn_cast<Value>(A);
         if (linkedArgs.count(V)) {
           linkedArgIdxs[V] = argIdx;
         }
@@ -370,8 +370,8 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
       nvl = B.CreateLoad(nvlAddr);
       /* Retrieve any out buffers. */
       argIdx = 0;
-      for (Argument& A : F->getArgumentList()) {
-        Value* V = dyn_cast<Value>(&A);
+      for (Argument* A = F->arg_begin(); A != F->arg_end(); A++) {
+        Value* V = dyn_cast<Value>(A);
         Type* valTy = V->getType();
         if (!valTy->isPointerTy()) {
           ++argIdx;
