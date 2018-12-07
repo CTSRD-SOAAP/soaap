@@ -202,7 +202,7 @@ void SandboxModuleGenerator::generate() {
     aliasesToCopy.pop_back();
     if (!copiedAliases.count(I)) {
       PointerType* PTy = cast<PointerType>(I->getType());
-      GlobalAlias* GA = GlobalAlias::create(PTy, I->getLinkage(), I->getName(), M);
+      GlobalAlias* GA = GlobalAlias::create(I->getType(), PTy->getAddressSpace(), I->getLinkage(), I->getName(), M);
       GA->copyAttributesFrom(I);
       copiedAliases.insert(I);
       VMap[I] = GA;
