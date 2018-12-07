@@ -155,7 +155,6 @@ int main(int argc, char **argv) {
   legacy::PassManager Passes;
   soaap::Soaap* soaapPass = new soaap::Soaap;
 
-  LLVMContext &ctx = getGlobalContext();
   std::vector<Module*> modules;
   soaapPass->generateSandboxingModules(&modules);
 
