@@ -56,7 +56,7 @@
 using namespace soaap;
 
 Sandbox::Sandbox(string n, int i, FunctionSet entries, bool p, Module& m, int o, int c,
-    FunctionSet internalFunctions, ValueSet internalGlobals) 
+    FunctionSet internalFunctions, ValueSet internalGlobals)
   : Context(CK_SANDBOX), name(n), nameIdx(i), entryPoints(entries), persistent(p), module(m), overhead(o), clearances(c), internalFuncs(internalFunctions), internalGlobs(internalGlobals) {
 }
 
@@ -303,7 +303,6 @@ void Sandbox::findSandboxedFunctionsHelper(FunctionSet fringe) {
     for (Function* SuccFunc : CallGraphUtils::getCallees(F, this, module)) {
       SDEBUG("soaap.util.sandbox", 4, dbgs() << "succ: " << SuccFunc->getName() << "\n");
       // check if entry point to another sandbox
-    
       if (SandboxUtils::isSandboxEntryPoint(module, SuccFunc) && !isEntryPoint(SuccFunc)) {
         continue;
       }

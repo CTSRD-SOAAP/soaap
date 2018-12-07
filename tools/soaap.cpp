@@ -89,10 +89,6 @@ OutputAssembly("S", cl::desc("Write output as LLVM assembly"));
 static cl::opt<bool>
 Verify("verify", cl::desc("Verify result module"), cl::Hidden);
 
-void printTestingMessage() {
-  printf("Testing message was printed.");
-}
-
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal(argv[0]);
   llvm::PrettyStackTraceProgram X(argc, argv);
