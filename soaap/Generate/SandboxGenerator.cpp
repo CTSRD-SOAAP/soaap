@@ -69,6 +69,9 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
   /* Useful functions. */
   Function* exitFunc = M.getFunction("exit");
 
+  assert(M.getFunction("nvlist_create") != nullptr &&
+      "The function nvlist_create does not exist; did you forgot to #include <soaap_gen>?");
+
   /* Useful types. */
   Type* nvlistPtrTy = M.getFunction("nvlist_create")->getReturnType();
   Type* i64 = Type::getInt64Ty(C);
