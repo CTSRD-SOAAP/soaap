@@ -44,6 +44,7 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/TypeBuilder.h"
 #include "llvm/IR/ValueMap.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
@@ -105,6 +106,7 @@ void SandboxGenerator::generate(Module& M, SandboxVector& sandboxes,
     }
 
     for (Function* F : S->getEntryPoints()) {
+      assert(verifyModule(M, &errs()) == false);
       F->deleteBody();
       Type* retTy = F->getReturnType();
 
